@@ -160,6 +160,7 @@ class SearchResponse(StrictBaseModel):
     results: list[SearchResult]
     cached: bool
     error: str | None
+    provider_attempts: list[str] = Field(default_factory=list)
 
 
 class FetchResponse(StrictBaseModel):
@@ -171,6 +172,8 @@ class FetchResponse(StrictBaseModel):
     cached: bool
     success: bool
     error: str | None
+    truncated: bool = False
+    fetched_bytes: int = 0
 
 
 class DeepSearchPage(StrictBaseModel):

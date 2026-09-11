@@ -460,7 +460,7 @@ class JsonFileCache:
             return False
         return True
 
-    def get(self, payload: Any) -> dict[str, Any] | None:
+    def get(self, payload: Any, ttl_seconds: int | None = None) -> dict[str, Any] | None:
         if self.disabled_reason is not None:
             return None
         path = self.path_for(payload)
@@ -474,7 +474,8 @@ class JsonFileCache:
         value = envelope.get("value")
         if not isinstance(created_at, int | float) or not isinstance(value, dict):
             return None
-        if time.time() - float(created_at) > self.ttl_seconds:
+        effective_ttl = self.ttl_seconds if ttl_seconds is None else ttl_seconds
+        if time.time() - float(created_at) > effective_ttl:
             return None
         return value
 

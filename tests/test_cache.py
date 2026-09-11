@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+import mcp_ddg_research.search as search_module
 from mcp_ddg_research.cache import (
     CACHE_NAMESPACES,
     CachePruneConfig,
@@ -238,8 +239,9 @@ def test_search_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None
         cached=False,
         error=None,
     )
-    payload = request.model_dump(mode="json")
-    payload["_provider"] = "duckduckgo_html"
+    payload = search_module._cache_payload(
+        request, provider="duckduckgo_html", ddgs_backend=None
+    )
     cache.set(payload, response.model_dump(mode="json"))
 
     def fail_prune(*args, **kwargs):
@@ -271,7 +273,8 @@ def test_fetch_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None:
         success=True,
         error=None,
     )
-    cache.set(request.model_dump(mode="json"), response.model_dump(mode="json"))
+    payload = request.model_dump(mode="json") | {"_max_bytes": 5242880}
+    cache.set(payload, response.model_dump(mode="json"))
 
     async def validate_without_dns(url: str) -> None:
         return None

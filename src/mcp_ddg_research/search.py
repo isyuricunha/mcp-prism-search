@@ -7,6 +7,7 @@ import importlib
 import inspect
 import logging
 import os
+import re
 from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
@@ -116,6 +117,54 @@ def has_domain_controls(request: SearchRequest) -> bool:
         or request.blocked_domains
         or request.preferred_domains
     )
+
+
+NEWS_HINT_TOKENS = {
+    "news", "latest", "breaking", "today", "current", "updates", "happening",
+}
+NEWS_SEARCH_TTL_SECONDS = 1800
+_TRUSTED_DOMAINS = {
+    "apnews.com", "reuters.com", "bbc.com", "bbc.co.uk", "theguardian.com",
+    "nytimes.com", "washingtonpost.com", "dw.com", "euronews.com",
+    "wikipedia.org",
+}
+
+
+def search_ttl_for_query(query: str) -> int | None:
+    """Shorter cache TTL for freshness-looking queries (news-style tokens).
+
+    Returns None to use the cache instance default TTL.
+    """
+    tokens = set(re.findall(r"\w+", query.lower()))
+    if tokens & NEWS_HINT_TOKENS:
+        return NEWS_SEARCH_TTL_SECONDS
+    return None
+
+
+def _trusted_domain_score(hostname: str) -> float:
+    if hostname.endswith(".gov") or hostname.endswith(".edu"):
+        return 1.0
+    if hostname == "wikipedia.org" or hostname.endswith(".wikipedia.org"):
+        return 0.9
+    if hostname.endswith(".org"):
+        return 0.7
+    return 0.4
+
+
+def rank_results(results: list[SearchResult], query: str) -> list[SearchResult]:
+    """Stable deterministic ranking: title/snippet term coverage plus domain
+    trust. No ML, no external services."""
+    terms = {token for token in re.findall(r"\w+", query.lower()) if len(token) >= 2}
+
+    def score(result: SearchResult) -> float:
+        title_tokens = set(re.findall(r"\w+", result.title.lower()))
+        snippet_tokens = set(re.findall(r"\w+", result.snippet.lower()))
+        title_score = len(title_tokens & terms) / len(terms) if terms else 0.0
+        snippet_score = len(snippet_tokens & terms) / len(terms) if terms else 0.0
+        hostname = urlparse(result.url).hostname or ""
+        return 2.0 * title_score + 1.0 * snippet_score + 1.5 * _trusted_domain_score(hostname)
+
+    return sorted(results, key=score, reverse=True)
 
 
 def provider_request_size(request: SearchRequest) -> int:
@@ -290,11 +339,7 @@ def _cache_payload(
     provider: str,
     ddgs_backend: str | None,
 ) -> dict[str, Any]:
-    payload = request.model_dump(mode="json")
-    payload["_provider"] = provider
-    if ddgs_backend is not None:
-        payload["_ddgs_backend"] = ddgs_backend
-    return payload
+    return request.to_cache_payload(_provider=provider, _ddgs_backend=ddgs_backend)
 
 
 def _cacheable_search_response(response: SearchResponse) -> dict[str, Any]:
@@ -341,7 +386,7 @@ async def ddg_search(
     provider = cast(SearchProvider, get_search_provider())
     ddgs_backend = get_ddgs_backend() if provider in {"ddgs", "auto"} else None
     payload = _cache_payload(request, provider=provider, ddgs_backend=ddgs_backend)
-    cached_value = cache.get(payload)
+    cached_value = cache.get(payload, ttl_seconds=search_ttl_for_query(request.query))
     if cached_value is not None:
         try:
             return SearchResponse.model_validate(cached_value).model_copy(
@@ -352,6 +397,7 @@ async def ddg_search(
 
     timeout_seconds = get_ddg_timeout_seconds()
     provider_errors: list[str] = []
+    provider_attempts: list[str] = []
 
     if provider in {"duckduckgo_html", "auto"}:
         try:
@@ -364,14 +410,17 @@ async def ddg_search(
                 response = SearchResponse(
                     query=request.query,
                     provider="duckduckgo_html",
-                    results=html_results,
+                    results=rank_results(html_results, request.query),
                     cached=False,
                     error=None,
+                    provider_attempts=[f"duckduckgo_html: ok ({len(html_results)})"],
                 )
                 cache.set(payload, _cacheable_search_response(response))
                 return response
+            provider_attempts.append("duckduckgo_html: empty")
             provider_errors.append("duckduckgo_html returned no results")
         except Exception as exc:  # noqa: BLE001 - provider failures must not crash the server.
+            provider_attempts.append("duckduckgo_html: error")
             provider_errors.append(f"duckduckgo_html failed: {exc}")
 
     if provider in {"ddgs", "auto"}:
@@ -385,14 +434,20 @@ async def ddg_search(
                 response = SearchResponse(
                     query=request.query,
                     provider="ddgs",
-                    results=ddgs_results,
+                    results=rank_results(ddgs_results, request.query),
                     cached=False,
                     error=None,
+                    provider_attempts=[
+                        *provider_attempts,
+                        f"ddgs ({backend}): ok ({len(ddgs_results)})",
+                    ],
                 )
                 cache.set(payload, _cacheable_search_response(response))
                 return response
+            provider_attempts.append(f"ddgs ({backend}): empty")
             provider_errors.append(f"ddgs backend {backend} returned no results")
         except Exception as exc:  # noqa: BLE001 - provider failures must not crash the server.
+            provider_attempts.append(f"ddgs ({backend}): error")
             provider_errors.append(f"ddgs backend {backend} failed: {exc}")
 
     return SearchResponse(
@@ -401,4 +456,5 @@ async def ddg_search(
         results=[],
         cached=False,
         error="; ".join(provider_errors) or "Search failed",
+        provider_attempts=provider_attempts,
     )

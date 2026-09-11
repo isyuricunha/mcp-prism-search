@@ -105,10 +105,10 @@ def test_search_poisoned_cache_is_invalidated(tmp_path) -> None:
 
 def test_fetch_poisoned_cache_is_invalidated(tmp_path) -> None:
     cache = JsonFileCache(tmp_path, "fetch", 3600)
-    cache.set(
-        FetchRequest(url="https://example.com/", max_chars=12000).model_dump(mode="json"),
-        {"wrong": True},
+    payload = FetchRequest(url="https://example.com/", max_chars=12000).to_cache_payload(
+        _max_bytes=fetch_module.get_fetch_max_bytes()
     )
+    cache.set(payload, {"wrong": True})
     assert list(tmp_path.glob("fetch/*.json"))
 
     async def fake_validate(url: str) -> None:
@@ -162,8 +162,11 @@ def test_fetch_byte_cap_aborts_large_body() -> None:
         )
         result = asyncio.run(fetch_module.web_fetch(url="https://example.com/", max_chars=1000))
 
-    assert not result.success
-    assert "safety limit" in (result.error or "")
+    # the oversized body is truncated with an actionable notice, not an error
+    assert result.success
+    assert result.truncated is True
+    assert result.fetched_bytes <= 1024 * 1024
+    assert "PARTIAL CONTENT" in result.content
     assert captured["host"] == "example.com"  # Host header preserved during pinning
 
 

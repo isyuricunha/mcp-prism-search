@@ -41,6 +41,8 @@ FETCH_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
     "Accept-Language": "en-US,en;q=0.9",
+    # Without this a compressed body cannot be size-capped reliably.
+    "Accept-Encoding": "identity",
 }
 
 
@@ -59,7 +61,7 @@ def get_max_concurrency(max_concurrency: int | None = None) -> int:
 
 
 def _cache_payload(request: FetchRequest) -> dict[str, Any]:
-    return request.model_dump(mode="json")
+    return request.to_cache_payload()
 
 
 def _cacheable_fetch_response(response: FetchResponse) -> dict[str, Any]:
@@ -89,9 +91,13 @@ class RawFetchedResponse:
         content: bytes,
         logical_url: str,
         charset: str | None,
+        truncated: bool = False,
+        fetched_bytes: int = 0,
     ) -> None:
         self.status_code = status_code
         self.headers = headers
+        self.truncated = truncated
+        self.fetched_bytes = fetched_bytes
         self.content = content
         self.logical_url = logical_url
         self.charset = charset
@@ -137,6 +143,14 @@ async def _get_with_validated_redirects(
         )
         response = await client.send(request, stream=True)
 
+        content_encoding = response.headers.get("content-encoding", "identity")
+        if content_encoding.lower() not in {"identity", ""}:
+            # A compressed body cannot be size-capped reliably while streaming.
+            await response.aclose()
+            raise UnsafeUrlError(
+                f"Server ignored Accept-Encoding: identity (returned {content_encoding!r})"
+            )
+
         if response.status_code in {301, 302, 303, 307, 308}:
             location = response.headers.get("location")
             if location:
@@ -148,15 +162,16 @@ async def _get_with_validated_redirects(
             break
 
         chunks: list[bytes] = []
+        kept = 0
         total = 0
+        truncated = False
         async for chunk in response.aiter_bytes():
             total += len(chunk)
             if total > max_bytes:
-                await response.aclose()
-                raise UnsafeUrlError(
-                    f"Response body exceeds the {max_bytes} byte safety limit"
-                )
+                truncated = True
+                break
             chunks.append(chunk)
+            kept += len(chunk)
         await response.aclose()
         return RawFetchedResponse(
             status_code=response.status_code,
@@ -164,6 +179,8 @@ async def _get_with_validated_redirects(
             content=b"".join(chunks),
             logical_url=current_url,
             charset=response.encoding,
+            truncated=truncated,
+            fetched_bytes=kept,
         )
 
     if response is not None:
@@ -192,6 +209,12 @@ def _response_to_fetch_response(
 
     charset = response.charset or "utf-8"
     text = response.content.decode(charset, errors="replace")
+    if response.truncated:
+        text = (
+            f"[PARTIAL CONTENT: download stopped at the {len(response.content)} byte "
+            "safety limit (FETCH_MAX_BYTES). The page continues beyond this point; "
+            "raise FETCH_MAX_BYTES or fetch a narrower page if you need the rest.] "
+        ) + text
 
     lowered_content_type = content_type.lower()
     if "html" in lowered_content_type:
@@ -205,6 +228,8 @@ def _response_to_fetch_response(
             cached=False,
             success=True,
             error=None,
+            truncated=response.truncated,
+            fetched_bytes=response.fetched_bytes,
         )
 
     if is_plain_text_content(content_type, final_url):
@@ -217,6 +242,8 @@ def _response_to_fetch_response(
             cached=False,
             success=True,
             error=None,
+            truncated=response.truncated,
+            fetched_bytes=response.fetched_bytes,
         )
 
     return FetchResponse(
@@ -245,7 +272,7 @@ async def web_fetch(
         return _error_response(request.url, str(exc))
 
     cache = cache or build_fetch_cache()
-    payload = _cache_payload(request)
+    payload = _cache_payload(request) | {"_max_bytes": get_fetch_max_bytes()}
     cached_value = cache.get(payload)
     if cached_value is not None:
         try:
