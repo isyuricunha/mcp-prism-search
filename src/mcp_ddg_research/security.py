@@ -70,19 +70,24 @@ def validate_url_shape(url: str) -> None:
         raise UnsafeUrlError(f"Blocked unsafe IP address: {hostname}")
 
 
-def _resolve_hostname(hostname: str, port: int) -> set[str]:
+def _resolve_hostname(hostname: str, port: int) -> list[str]:
     try:
         records = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
         raise UnsafeUrlError(f"DNS resolution failed for {hostname}") from exc
 
-    addresses: set[str] = set()
+    addresses: list[str] = []
     for record in records:
         sockaddr = record[4]
         if sockaddr:
-            addresses.add(str(sockaddr[0]))
+            address = str(sockaddr[0])
+            if address not in addresses:
+                addresses.append(address)
     if not addresses:
         raise UnsafeUrlError(f"DNS resolution returned no addresses for {hostname}")
+    # Prefer IPv4: many egress networks have no working IPv6 route, and a
+    # pinned IPv6 connection would then fail even though the host is reachable.
+    addresses.sort(key=lambda address: ":" in address)
     return addresses
 
 

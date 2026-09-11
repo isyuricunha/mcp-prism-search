@@ -8,20 +8,33 @@ from mcp_ddg_research.server import (
 )
 
 
-def test_configure_http_settings_defaults_to_wildcard_hosts(monkeypatch) -> None:
-    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
-    monkeypatch.setenv("MCP_PORT", "8000")
+def test_configure_http_settings_defaults_are_fail_closed(monkeypatch) -> None:
+    monkeypatch.delenv("MCP_HOST", raising=False)
+    monkeypatch.delenv("MCP_PORT", raising=False)
     monkeypatch.delenv("MCP_ALLOWED_HOSTS", raising=False)
     monkeypatch.delenv("MCP_ALLOWED_ORIGINS", raising=False)
 
-    _configure_http_settings()
+    settings = _configure_http_settings()
 
-    assert mcp.settings.host == "0.0.0.0"
-    assert mcp.settings.port == 8000
-    assert mcp.settings.transport_security is not None
-    assert mcp.settings.transport_security.enable_dns_rebinding_protection is False
-    assert mcp.settings.transport_security.allowed_hosts == ["*"]
-    assert mcp.settings.transport_security.allowed_origins == ["*"]
+    assert settings.host == "127.0.0.1"
+    assert settings.port == 8000
+    assert settings.transport_security is not None
+    assert settings.transport_security.enable_dns_rebinding_protection is True
+    assert settings.transport_security.allowed_hosts == ["localhost", "127.0.0.1"]
+
+
+def test_configure_http_settings_wildcard_is_explicit_opt_out(monkeypatch) -> None:
+    monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("MCP_PORT", "9000")
+    monkeypatch.setenv("MCP_ALLOWED_HOSTS", "*")
+    monkeypatch.setenv("MCP_ALLOWED_ORIGINS", "*")
+
+    settings = _configure_http_settings()
+
+    assert settings.host == "0.0.0.0"
+    assert settings.port == 9000
+    assert settings.transport_security.enable_dns_rebinding_protection is False
+    assert settings.transport_security.allowed_hosts == ["*"]
 
 
 def test_explicit_hosts_keep_dns_rebinding_protection_enabled() -> None:
@@ -113,7 +126,15 @@ def test_cache_tools_are_listed_with_described_arguments() -> None:
 
 async def _tool_schemas_by_name() -> dict:
     tools = await mcp.list_tools()
-    return {tool.name: tool.inputSchema for tool in tools}
+    if isinstance(tools, tuple):
+        tools = tools[0]
+    schemas = {}
+    for tool in tools:
+        schema = getattr(tool, "input_schema", None) or getattr(
+            tool, "inputSchema", None
+        )
+        schemas[tool.name] = schema
+    return schemas
 
 
 async def _call_middleware(middleware, headers):

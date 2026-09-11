@@ -514,7 +514,7 @@ mount used for `/data` must be writable by the container uid 10001:
 The server defaults `MCP_ALLOWED_HOSTS=*` and `MCP_ALLOWED_ORIGINS=*` so the
 same container can run behind a LAN IP, hostname, domain, reverse proxy, or
 HTTPS endpoint. The compose file documents these optional variables as commented
-examples. The MCP SDK Host/Origin allowlist does not support bare wildcards,
+examples. The MCP SDK (2.x) Host/Origin allowlist does not support bare wildcards,
 so wildcard mode disables the SDK rebinding checks and relies on the bearer
 token. Prefer exact comma-separated values and keep the default loopback-only
 port mapping. To enable strict Host/Origin checks,
@@ -707,6 +707,8 @@ Authorization header, `ListTools` and `CallTool` should work for `ddg_search`,
 | `MCP_TRANSPORT` | `stdio` | MCP transport. `stdio` is the default. `http` uses streamable HTTP when supported by the installed SDK. |
 | `MCP_HOST` | `0.0.0.0` | Host used for optional streamable HTTP mode. |
 | `MCP_PORT` | `8000` | Port used for optional streamable HTTP mode. |
+| `MCP_LOG_LEVEL` | `INFO` | Server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
+| `FETCH_MAX_BYTES` | `5242880` | Hard cap on downloaded response body size before extraction. |
 | `MCP_AUTH_TOKEN` | unset | Bearer token for HTTP mode. HTTP mode refuses to start without it (unless `MCP_ALLOW_UNAUTHENTICATED_HTTP=1`) and rejects known placeholder values. |
 | `MCP_ALLOWED_HOSTS` | `*` | Comma-separated Host allowlist for HTTP mode. `*` supports arbitrary deployment hosts by disabling SDK Host/Origin rebinding checks; prefer exact values. |
 | `MCP_ALLOWED_ORIGINS` | `*` | Comma-separated Origin allowlist for HTTP mode. `*` supports arbitrary origins by disabling SDK Host/Origin rebinding checks; prefer exact values. |

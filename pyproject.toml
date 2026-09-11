@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-ddg-research"
-version = "0.5.2"
+version = "0.6.0"
 description = "Lightweight MCP server for DuckDuckGo HTML search with optional ddgs mode, safe webpage fetching, caching, and clean text extraction."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,7 +16,7 @@ dependencies = [
   "beautifulsoup4>=4.12",
   "ddgs>=9.0",
   "httpx>=0.27",
-  "mcp>=1.27.2,<2",
+  "mcp>=2.2,<3",
   "pydantic>=2.7",
 ]
 

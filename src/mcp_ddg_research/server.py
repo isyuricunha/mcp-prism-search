@@ -1,14 +1,16 @@
-"""FastMCP server entrypoint."""
+"""MCP server entrypoint (mcp SDK 2.x, MCPServer API)."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from hmac import compare_digest
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from mcp_ddg_research import cache as cache_ops
@@ -25,20 +27,47 @@ from mcp_ddg_research.search import ddg_search as perform_ddg_search
 
 LOGGER = logging.getLogger(__name__)
 
-mcp = FastMCP(
-    name="mcp-ddg-research",
-    instructions=(
-        "Deterministic DuckDuckGo search and safe webpage fetching tools. "
-        "This server does not call LLMs, summarize, or generate reports."
-    ),
-)
+KNOWN_PLACEHOLDER_TOKENS = {"change-me-now", "changeme", "secret", "token"}
+ACCEPTED_TRANSPORTS = {"stdio", "http", "streamable-http"}
 
 
 class KnownPlaceholderTokenError(RuntimeError):
     """Raised when MCP_AUTH_TOKEN is a publicly known placeholder."""
 
 
-KNOWN_PLACEHOLDER_TOKENS = {"change-me-now", "changeme", "secret", "token"}
+def _tool_annotations(
+    *, read_only: bool = False, destructive: bool = False
+) -> ToolAnnotations:
+    return ToolAnnotations(
+        read_only_hint=read_only,
+        destructive_hint=destructive,
+        idempotent_hint=destructive,
+        open_world_hint=True,
+    )
+
+
+ACCEPTED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+
+
+def _validated_log_level() -> str:
+    level = os.getenv("MCP_LOG_LEVEL", "INFO").strip().upper()
+    if level not in ACCEPTED_LOG_LEVELS:
+        raise RuntimeError(
+            f"Invalid MCP_LOG_LEVEL={level!r}; accepted values are "
+            + ", ".join(sorted(ACCEPTED_LOG_LEVELS))
+        )
+    return cast(Any, level)
+
+
+mcp = MCPServer(
+    name="mcp-ddg-research",
+    version="0.5.1",
+    instructions=(
+        "Deterministic DuckDuckGo search and safe webpage fetching tools. "
+        "This server does not call LLMs, summarize, or generate reports."
+    ),
+    log_level=_validated_log_level(),
+)
 
 
 class BearerTokenAuthMiddleware:
@@ -116,6 +145,18 @@ def _http_auth_token() -> str | None:
     return token.strip()
 
 
+class HttpSettings:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        transport_security: TransportSecuritySettings,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self.transport_security = transport_security
+
+
 def _build_transport_security_settings(
     allowed_hosts: list[str],
     allowed_origins: list[str],
@@ -128,8 +169,8 @@ def _build_transport_security_settings(
     )
 
 
-def _configure_http_settings() -> None:
-    host = os.getenv("MCP_HOST", "0.0.0.0")
+def _configure_http_settings() -> HttpSettings:
+    host = os.getenv("MCP_HOST", "127.0.0.1")
     raw_port = os.getenv("MCP_PORT", "8000")
     try:
         port = int(raw_port)
@@ -139,20 +180,24 @@ def _configure_http_settings() -> None:
         ) from exc
     if not 1 <= port <= 65535:
         raise RuntimeError(f"Invalid MCP_PORT={raw_port!r}; out of range")
-    allowed_hosts = _csv_env("MCP_ALLOWED_HOSTS", ["*"])
-    allowed_origins = _csv_env("MCP_ALLOWED_ORIGINS", ["*"])
-
-    mcp.settings.host = host
-    mcp.settings.port = port
-    mcp.settings.transport_security = _build_transport_security_settings(
-        allowed_hosts=allowed_hosts,
-        allowed_origins=allowed_origins,
+    allowed_hosts = _csv_env("MCP_ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
+    allowed_origins = _csv_env("MCP_ALLOWED_ORIGINS", ["http://localhost:5173"])
+    return HttpSettings(
+        host=host,
+        port=port,
+        transport_security=_build_transport_security_settings(
+            allowed_hosts=allowed_hosts,
+            allowed_origins=allowed_origins,
+        ),
     )
 
 
-async def _run_http_async() -> None:
+async def _run_http_async(
+    settings: HttpSettings | None = None,
+) -> None:
     import uvicorn
 
+    settings = settings or _configure_http_settings()
     auth_token = _http_auth_token()
     if auth_token is None:
         if not _get_env_bool("MCP_ALLOW_UNAUTHENTICATED_HTTP", False):
@@ -171,21 +216,24 @@ async def _run_http_async() -> None:
             "Set a strong random token before exposing the server over HTTP."
         )
 
-    starlette_app = mcp.streamable_http_app()
+    starlette_app = mcp.streamable_http_app(
+        transport_security=settings.transport_security,
+        host=settings.host,
+    )
     if auth_token is not None:
         starlette_app.add_middleware(BearerTokenAuthMiddleware, token=auth_token)
 
     config = uvicorn.Config(
         starlette_app,
-        host=mcp.settings.host,
-        port=mcp.settings.port,
-        log_level=mcp.settings.log_level.lower(),
+        host=settings.host,
+        port=settings.port,
+        log_level=os.getenv("MCP_LOG_LEVEL", "INFO").lower(),
     )
     server = uvicorn.Server(config)
     await server.serve()
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+@mcp.tool(annotations=_tool_annotations(read_only=True))
 async def ddg_search(
     query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
     max_results: Annotated[
@@ -232,7 +280,7 @@ async def ddg_search(
     return response.model_dump(mode="json")
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+@mcp.tool(annotations=_tool_annotations(read_only=True))
 async def web_fetch(
     url: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["url"])],
     max_chars: Annotated[
@@ -246,7 +294,7 @@ async def web_fetch(
     return response.model_dump(mode="json")
 
 
-@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+@mcp.tool(annotations=_tool_annotations(read_only=True))
 async def ddg_deep_search(
     query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
     max_results: Annotated[
@@ -308,14 +356,14 @@ async def ddg_deep_search(
     return response.model_dump(mode="json")
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=_tool_annotations(read_only=True))
 async def cache_stats() -> dict:
     """Return cache file counts and byte totals for each cache namespace."""
 
     return cache_ops.get_cache_stats().to_dict()
 
 
-@mcp.tool(annotations={"destructiveHint": True, "idempotentHint": True})
+@mcp.tool(annotations=_tool_annotations(destructive=True))
 async def cache_prune(
     expired_only: Annotated[
         bool,
@@ -331,7 +379,7 @@ async def cache_prune(
     return cache_ops.prune_cache(expired_only=expired_only, dry_run=dry_run).to_dict()
 
 
-@mcp.tool(annotations={"destructiveHint": True})
+@mcp.tool(annotations=_tool_annotations(destructive=True))
 async def cache_clear(
     namespace: Annotated[
         CacheNamespace,
@@ -365,10 +413,10 @@ def main() -> None:
     _prune_cache_on_startup()
     transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
     if transport in {"http", "streamable-http"}:
-        import asyncio
-
-        _configure_http_settings()
-        asyncio.run(_run_http_async())
+        # NOTE: mcp.run("streamable-http") cannot inject the bearer-token
+        # middleware, so HTTP mode wires the Starlette app by hand here.
+        settings = _configure_http_settings()
+        asyncio.run(_run_http_async(settings))
         return
     if transport != "stdio":
         raise RuntimeError(
