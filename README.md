@@ -6,6 +6,17 @@ Lightweight MCP server for DuckDuckGo HTML search with optional ddgs mode, safe 
 
 The MCP client or agent is responsible for reasoning over the returned data. This server only returns structured search results and fetched page text.
 
+**Version 0.7.0 runs on the mcp SDK 2.x (`MCPServer` API).** Fresh installs
+resolve the latest stable dependencies from `requirements-lock.txt`.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Module map, request flow, the layered SSRF/security model, cache design, release automation |
+| [docs/development.md](docs/development.md) | Dev setup, test suite layout, commands, conventions, conventional commits and semantic-release, dependency policy |
+| [docs/deployment.md](docs/deployment.md) | Docker and docker-compose operation, HTTP hardening, health checks, full environment variable reference, updates and rollback |
+
 ## What This Project Does
 
 - Searches DuckDuckGo through the DuckDuckGo HTML endpoint by default.
@@ -473,6 +484,8 @@ docker run --rm -i -v "$PWD/data:/data" mcp-ddg-research:local
 
 ## docker-compose Usage
 
+> Operation, health checks, and hardening reference: [docs/deployment.md](docs/deployment.md).
+
 The included compose file starts the server in streamable HTTP mode on `/mcp`.
 It maps host port `49317` to container port `8000` and requires
 `Authorization: Bearer change-me-now` by default.
@@ -812,6 +825,8 @@ This project does not rotate proxies, bypass captchas, or attempt to evade rate 
 
 ## SSRF and Security Protections
 
+> Full layered defense model: [docs/architecture.md](docs/architecture.md#security-model).
+
 `web_fetch` only allows `http` and `https` URLs. It blocks known local or internal hostnames, including:
 
 - `localhost`
@@ -836,6 +851,8 @@ DNS is resolved before fetching. If any resolved address is unsafe, the request 
 Unsupported schemes such as `file://`, `ftp://`, `ssh://`, `gopher://`, and `data:` are never fetched.
 
 ## Development Setup
+
+> Test suite layout and conventions: [docs/development.md](docs/development.md).
 
 Python 3.12 is required.
 
