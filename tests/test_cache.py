@@ -23,6 +23,10 @@ def _write_cache_file(path, *, created_at: float, value: dict | None = None) -> 
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"created_at": created_at, "value": value or {"ok": True}}
     path.write_text(json.dumps(payload), encoding="utf-8")
+    # prune reads creation time from the file mtime (written once at creation)
+    import os
+
+    os.utime(path, (created_at, created_at))
     return path.stat().st_size
 
 
@@ -99,10 +103,16 @@ def test_cache_stats_reports_namespace_and_total_sizes(tmp_path) -> None:
     assert payload["total_bytes"] == search_size + fetch_size
 
 
-def test_prune_deletes_corrupt_json_files(tmp_path) -> None:
+def test_prune_deletes_unreadable_files_by_age(tmp_path) -> None:
+    # cache files are written atomically, so unreadable files only appear via
+    # external interference; prune removes them by age (mtime), not by parsing.
     path = tmp_path / "fetch" / "corrupt.json"
     path.parent.mkdir(parents=True)
     path.write_text("{not-json", encoding="utf-8")
+    old_time = time.time() - 3600
+    import os
+
+    os.utime(path, (old_time, old_time))
 
     stats = prune_cache(config=_prune_config(tmp_path))
 

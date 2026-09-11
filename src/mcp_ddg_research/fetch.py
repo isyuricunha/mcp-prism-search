@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 from urllib.parse import urljoin, urlparse, urlunparse
 
@@ -25,6 +26,8 @@ from mcp_ddg_research.security import (
     validate_url_shape,
 )
 from mcp_ddg_research.text import extract_html_text, is_plain_text_content, truncate_text
+
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_FETCH_TIMEOUT_SECONDS = 15
 DEFAULT_MAX_CONCURRENCY = 5
@@ -283,6 +286,7 @@ async def ddg_deep_search(
     allowed_domains: list[str] | None = None,
     preferred_domains: list[str] | None = None,
     max_concurrency: int | None = None,
+    progress_callback: Any = None,
 ) -> DeepSearchResponse:
     request = DeepSearchRequest(
         query=query,
@@ -297,6 +301,18 @@ async def ddg_deep_search(
         preferred_domains=preferred_domains or [],
         max_concurrency=max_concurrency,
     )
+
+    async def _safe_progress(progress: float, total: float) -> None:
+        if progress_callback is None:
+            return
+        try:
+            await progress_callback(progress, total)
+        except Exception:  # noqa: BLE001 - progress reporting must not break the call.
+            LOGGER.debug("deep search progress callback failed", exc_info=True)
+
+    total_steps = float(request.max_pages + 1)
+    await _safe_progress(0, total_steps)
+
     search_response = await ddg_search(
         query=request.query,
         max_results=request.max_results,
@@ -315,11 +331,15 @@ async def ddg_deep_search(
             return await web_fetch(source_url, max_chars=request.max_chars_per_page)
 
     fetched_pages = await asyncio.gather(*(fetch_source(source.url) for source in selected_sources))
+    await _safe_progress(1, total_steps)
     pages: list[DeepSearchPage] = []
     failed_pages: list[FailedPage] = []
     cached_flags = [search_response.cached]
 
-    for source, page in zip(selected_sources, fetched_pages, strict=True):
+    for index, (source, page) in enumerate(
+        zip(selected_sources, fetched_pages, strict=True), start=2
+    ):
+        await _safe_progress(float(index), total_steps)
         cached_flags.append(page.cached)
         if page.success:
             pages.append(

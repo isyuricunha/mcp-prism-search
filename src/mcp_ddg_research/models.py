@@ -1,6 +1,6 @@
 """Typed request and response models for MCP tools."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -59,8 +59,15 @@ class StrictBaseModel(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    def to_cache_payload(self, **extra: Any) -> dict[str, Any]:
+        payload = self.model_dump(mode="json")
+        payload.update(extra)
+        return payload
 
-class SearchRequest(StrictBaseModel):
+
+class SearchRequestBase(StrictBaseModel):
+    """Fields shared by ddg_search and ddg_deep_search requests."""
+
     query: str = Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])
     max_results: int = Field(
         default=10,
@@ -96,6 +103,10 @@ class SearchRequest(StrictBaseModel):
     @classmethod
     def normalize_domain_options(cls, values: list[str]) -> list[str]:
         return normalize_domains(values)
+
+
+class SearchRequest(SearchRequestBase):
+    """ddg_search request: all fields come from SearchRequestBase."""
 
 
 class FetchRequest(StrictBaseModel):
@@ -108,20 +119,7 @@ class FetchRequest(StrictBaseModel):
     )
 
 
-class DeepSearchRequest(StrictBaseModel):
-    query: str = Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])
-    max_results: int = Field(
-        default=10,
-        ge=1,
-        le=30,
-        description=ARGUMENT_DESCRIPTIONS["max_results"],
-    )
-    search_window: int | None = Field(
-        default=None,
-        ge=1,
-        le=100,
-        description=ARGUMENT_DESCRIPTIONS["search_window"],
-    )
+class DeepSearchRequest(SearchRequestBase):
     max_pages: int = Field(default=5, ge=1, le=10, description=ARGUMENT_DESCRIPTIONS["max_pages"])
     max_chars_per_page: int = Field(
         default=12000,
@@ -129,34 +127,12 @@ class DeepSearchRequest(StrictBaseModel):
         le=50000,
         description=ARGUMENT_DESCRIPTIONS["max_chars_per_page"],
     )
-    safe_search: SafeSearch = Field(default="off", description=ARGUMENT_DESCRIPTIONS["safe_search"])
-    time_filter: TimeFilter | None = Field(
-        default=None,
-        description=ARGUMENT_DESCRIPTIONS["time_filter"],
-    )
-    blocked_domains: list[str] = Field(
-        default_factory=list,
-        description=ARGUMENT_DESCRIPTIONS["blocked_domains"],
-    )
-    allowed_domains: list[str] = Field(
-        default_factory=list,
-        description=ARGUMENT_DESCRIPTIONS["allowed_domains"],
-    )
-    preferred_domains: list[str] = Field(
-        default_factory=list,
-        description=ARGUMENT_DESCRIPTIONS["preferred_domains"],
-    )
     max_concurrency: int | None = Field(
         default=None,
         ge=1,
         le=12,
         description=ARGUMENT_DESCRIPTIONS["max_concurrency"],
     )
-
-    @field_validator("blocked_domains", "allowed_domains", "preferred_domains")
-    @classmethod
-    def normalize_domain_options(cls, values: list[str]) -> list[str]:
-        return normalize_domains(values)
 
 
 class CachePruneRequest(StrictBaseModel):

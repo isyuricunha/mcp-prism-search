@@ -220,20 +220,10 @@ def _iter_cache_files(root_dir: Path) -> list[_CacheFile]:
     return files
 
 
-def _read_cache_created_at(path: Path) -> float | None:
-    try:
-        with path.open("r", encoding="utf-8") as cache_file:
-            envelope = json.load(cache_file)
-    except (json.JSONDecodeError, OSError, TypeError):
-        return None
-
-    if not isinstance(envelope, dict):
-        return None
-    created_at = envelope.get("created_at")
-    value = envelope.get("value")
-    if not isinstance(created_at, int | float) or not isinstance(value, dict):
-        return None
-    return float(created_at)
+def _read_cache_created_at(cache_file: _CacheFile) -> float:
+    """Creation time from the file mtime: each cache file is written exactly
+    once at creation, so pruning needs no JSON parsing (stat is already done)."""
+    return cache_file.mtime
 
 
 def _delete_cache_file(path: Path) -> bool:
@@ -295,10 +285,7 @@ def prune_cache(
                 delete_candidates[cache_file.path] = cache_file.size
             continue
 
-        created_at = _read_cache_created_at(cache_file.path)
-        if created_at is None:
-            delete_candidates[cache_file.path] = cache_file.size
-            continue
+        created_at = _read_cache_created_at(cache_file)
 
         namespace_ttl = prune_config.namespace_ttls[cache_file.namespace]
         if now - created_at > namespace_ttl:
@@ -476,7 +463,6 @@ class JsonFileCache:
     def get(self, payload: Any) -> dict[str, Any] | None:
         if self.disabled_reason is not None:
             return None
-        maybe_prune_cache(root_dir=self.root_dir)
         path = self.path_for(payload)
         try:
             with path.open("r", encoding="utf-8") as cache_file:
@@ -495,7 +481,6 @@ class JsonFileCache:
     def set(self, payload: Any, value: dict[str, Any]) -> None:
         if self.disabled_reason is not None:
             return
-        maybe_prune_cache(root_dir=self.root_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         path = self.path_for(payload)
         envelope = {"created_at": time.time(), "value": value}
@@ -513,7 +498,8 @@ class JsonFileCache:
                 temp_path = temp_file.name
                 json.dump(envelope, temp_file, ensure_ascii=False, sort_keys=True)
                 temp_file.flush()
-                os.fsync(temp_file.fileno())
+            # fsync is intentionally skipped: the cache is ephemeral, and
+            # os.replace keeps every write atomic without the disk sync cost.
             os.replace(temp_path, path)
         finally:
             if temp_path is not None:

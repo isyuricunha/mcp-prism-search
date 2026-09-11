@@ -301,3 +301,133 @@ def test_deep_search_surfaces_search_error() -> None:
         result = asyncio.run(fetch_module.ddg_deep_search(query="anything"))
     assert result.search_error == "provider exploded"
     assert result.sources == []
+
+# --- improvement pass: structured output, /health, ToolError, progress --------
+
+
+async def _tool_output_schemas_by_name() -> dict:
+    tools = await server_module.mcp.list_tools()
+    if isinstance(tools, tuple):
+        tools = tools[0]
+    schemas = {}
+    for tool in tools:
+        schema = getattr(tool, "output_schema", None) or getattr(
+            tool, "outputSchema", None
+        )
+        schemas[tool.name] = schema
+    return schemas
+
+
+def test_tools_publish_typed_output_schema() -> None:
+    schemas = asyncio.run(_tool_output_schemas_by_name())
+    for name in ("ddg_search", "web_fetch", "ddg_deep_search"):
+        assert schemas.get(name), f"{name} has no output schema"
+
+
+def test_health_path_bypasses_auth() -> None:
+    called = False
+
+    async def app(scope, receive, send) -> None:
+        nonlocal called
+        called = True
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    middleware = server_module.BearerTokenAuthMiddleware(app, token="secret")
+    status = asyncio.run(
+        _run_middleware(
+            middleware,
+            {"type": "http", "method": "GET", "path": "/health", "headers": []},
+        )
+    )
+
+    assert called is True  # inner app (route) ran without auth
+    assert status == 200
+
+
+def test_ddg_search_tool_raises_tool_error_on_provider_failure() -> None:
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    from mcp_ddg_research.models import SearchResponse
+
+    async def failing_provider(**_kwargs):
+        return SearchResponse(
+            query="q", provider="duckduckgo_html", results=[], cached=False,
+            error="duckduckgo_html failed: timeout",
+        )
+
+    with patch.object(server_module, "perform_ddg_search", failing_provider), pytest.raises(
+        ToolError, match="timeout"
+    ):
+        asyncio.run(server_module.ddg_search(query="q"))
+
+
+def test_web_fetch_tool_raises_tool_error_on_failure() -> None:
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    from mcp_ddg_research.models import FetchResponse
+
+    async def failing_provider(**_kwargs):
+        return FetchResponse(
+            url="https://example.com/", final_url="", title="", content="",
+            content_type="", cached=False, success=False, error="boom",
+        )
+
+    with patch.object(server_module, "perform_web_fetch", failing_provider), pytest.raises(
+        ToolError, match="boom"
+    ):
+        asyncio.run(server_module.web_fetch(url="https://example.com/"))
+
+
+def test_deep_search_reports_progress() -> None:
+    from mcp_ddg_research.models import (
+        DeepSearchPage,
+        DeepSearchResponse,
+        SearchResult,
+    )
+
+    async def fake_deep(**_kwargs):
+        return DeepSearchResponse(
+            query="q",
+            search_provider="duckduckgo_html",
+            sources=[SearchResult(title="T", url="https://a.example/", snippet="s")],
+            pages=[
+                DeepSearchPage(
+                    title="T", url="https://a.example/",
+                    final_url="https://a.example/", content="c",
+                )
+            ],
+            failed_pages=[],
+            cached=False,
+            search_error=None,
+        )
+
+    progress_calls: list[tuple[float, float | None]] = []
+
+    async def progress_callback(progress: float, total: float | None) -> None:
+        progress_calls.append((progress, total))
+
+    with patch.object(fetch_module, "ddg_search", return_value=SimpleNamespace(
+        query="q", provider="duckduckgo_html",
+        results=[SearchResult(title="T", url="https://a.example/", snippet="s")],
+        cached=False, error=None,
+    )), patch.object(
+        fetch_module, "web_fetch",
+        side_effect=lambda *a, **k: _fake_fetch_result(),
+    ):
+        result = asyncio.run(
+            fetch_module.ddg_deep_search(query="q", progress_callback=progress_callback)
+        )
+
+    assert result.pages  # fetched page present
+    assert progress_calls, "progress callback was never called"
+    assert progress_calls[0][1] == 6.0  # total = max_pages(5) + search(1)
+
+
+def _fake_fetch_result():
+    from mcp_ddg_research.models import FetchResponse
+
+    return FetchResponse(
+        url="https://a.example/", final_url="https://a.example/", title="T",
+        content="c", content_type="text/html", cached=False, success=True, error=None,
+    )

@@ -692,6 +692,47 @@ Authorization header, `ListTools` and `CallTool` should work for `ddg_search`,
 `web_fetch`, `ddg_deep_search`, `cache_stats`, `cache_prune`, and
 `cache_clear`.
 
+## Tool Response Examples
+
+All tools publish typed `outputSchema` and return `structuredContent`
+(validated by the client). Provider failures surface as MCP `isError` results
+(`ToolError`), not as success payloads with an error field.
+
+`ddg_search` returns:
+
+```json
+{
+  "query": "example",
+  "provider": "duckduckgo_html",
+  "results": [
+    {"title": "Example Domain", "url": "https://example.com/", "snippet": "This domain is for use in examples."}
+  ],
+  "cached": false,
+  "error": null
+}
+```
+
+`web_fetch` returns:
+
+```json
+{
+  "url": "https://example.com/",
+  "final_url": "https://example.com/",
+  "title": "Example Domain",
+  "content": "This domain is for use in illustrative examples...",
+  "content_type": "text/html",
+  "cached": false,
+  "success": true,
+  "error": null
+}
+```
+
+`ddg_deep_search` returns sources, fetched pages, failed pages, a
+`search_error` field for total provider failures, and `cached`.
+
+`cache_stats`, `cache_prune`, and `cache_clear` return per-namespace file
+counts and byte totals (`deleted_files`, `remaining_files`, and so on).
+
 ## Environment Variables
 
 | Variable | Default | Description |

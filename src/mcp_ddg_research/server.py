@@ -9,18 +9,27 @@ from hmac import compare_digest
 from typing import Annotated, Any, cast
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.context import Context
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from mcp_ddg_research import cache as cache_ops
-from mcp_ddg_research.cache import _get_env_bool
+from mcp_ddg_research.cache import (
+    _get_env_bool,
+    get_cache_prune_config,
+    prune_cache,
+)
 from mcp_ddg_research.fetch import ddg_deep_search as perform_deep_search
 from mcp_ddg_research.fetch import web_fetch as perform_web_fetch
 from mcp_ddg_research.models import (
     ARGUMENT_DESCRIPTIONS,
     CacheNamespace,
+    DeepSearchResponse,
+    FetchResponse,
     SafeSearch,
+    SearchResponse,
     TimeFilter,
 )
 from mcp_ddg_research.search import ddg_search as perform_ddg_search
@@ -29,6 +38,8 @@ LOGGER = logging.getLogger(__name__)
 
 KNOWN_PLACEHOLDER_TOKENS = {"change-me-now", "changeme", "secret", "token"}
 ACCEPTED_TRANSPORTS = {"stdio", "http", "streamable-http"}
+HEALTH_PATH = "/health"
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class KnownPlaceholderTokenError(RuntimeError):
@@ -61,13 +72,21 @@ def _validated_log_level() -> str:
 
 mcp = MCPServer(
     name="mcp-ddg-research",
-    version="0.5.1",
+    version="0.6.0",
     instructions=(
         "Deterministic DuckDuckGo search and safe webpage fetching tools. "
         "This server does not call LLMs, summarize, or generate reports."
     ),
     log_level=_validated_log_level(),
 )
+
+
+@mcp.custom_route(HEALTH_PATH, methods=["GET"])
+async def _health_route(_request: Any) -> Any:
+    from starlette.responses import JSONResponse
+
+    return JSONResponse({"ok": True})
+
 
 
 class BearerTokenAuthMiddleware:
@@ -80,6 +99,10 @@ class BearerTokenAuthMiddleware:
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         scope_type = scope.get("type")
         if scope_type == "lifespan":
+            await self.app(scope, receive, send)
+            return
+        if scope_type == "http" and scope.get("path") == HEALTH_PATH:
+            # Unauthenticated liveness endpoint for load balancers and monitors.
             await self.app(scope, receive, send)
             return
         if scope_type != "http":
@@ -192,12 +215,27 @@ def _configure_http_settings() -> HttpSettings:
     )
 
 
+async def _cache_prune_loop() -> None:
+    """Periodic cache pruning in a worker thread: keeps the event loop free
+    and replaces the old on-access synchronous prune."""
+    interval = max(
+        60, get_cache_prune_config().prune_interval_seconds
+    )
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await asyncio.to_thread(prune_cache)
+        except Exception:  # noqa: BLE001 - pruning must never break the server.
+            LOGGER.warning("Background cache pruning failed", exc_info=True)
+
+
 async def _run_http_async(
     settings: HttpSettings | None = None,
 ) -> None:
     import uvicorn
 
     settings = settings or _configure_http_settings()
+    _BACKGROUND_TASKS.add(asyncio.create_task(_cache_prune_loop()))
     auth_token = _http_auth_token()
     if auth_token is None:
         if not _get_env_bool("MCP_ALLOW_UNAUTHENTICATED_HTTP", False):
@@ -264,7 +302,7 @@ async def ddg_search(
         list[str] | None,
         Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
-) -> dict:
+) -> SearchResponse:
     """Search DuckDuckGo using the configured provider mode."""
 
     response = await perform_ddg_search(
@@ -277,7 +315,9 @@ async def ddg_search(
         allowed_domains=allowed_domains,
         preferred_domains=preferred_domains,
     )
-    return response.model_dump(mode="json")
+    if response.error:
+        raise ToolError(response.error)
+    return response
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
@@ -287,11 +327,13 @@ async def web_fetch(
         int,
         Field(ge=1000, le=50000, description=ARGUMENT_DESCRIPTIONS["max_chars"]),
     ] = 12000,
-) -> dict:
+) -> FetchResponse:
     """Fetch one HTTP(S) page safely and return extracted text."""
 
     response = await perform_web_fetch(url=url, max_chars=max_chars)
-    return response.model_dump(mode="json")
+    if not response.success:
+        raise ToolError(response.error or "Fetch failed")
+    return response
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
@@ -337,8 +379,13 @@ async def ddg_deep_search(
         int | None,
         Field(ge=1, le=12, description=ARGUMENT_DESCRIPTIONS["max_concurrency"]),
     ] = None,
-) -> dict:
+    ctx: Context | None = None,
+) -> DeepSearchResponse:
     """Search once, fetch top pages in parallel, and return raw page text."""
+
+    async def _report_progress(progress: float, total: float | None) -> None:
+        if ctx is not None:
+            await ctx.report_progress(progress=progress, total=total)
 
     response = await perform_deep_search(
         query=query,
@@ -352,8 +399,11 @@ async def ddg_deep_search(
         allowed_domains=allowed_domains,
         preferred_domains=preferred_domains,
         max_concurrency=max_concurrency,
+        progress_callback=_report_progress,
     )
-    return response.model_dump(mode="json")
+    if response.search_error and not response.pages:
+        raise ToolError(response.search_error)
+    return response
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
