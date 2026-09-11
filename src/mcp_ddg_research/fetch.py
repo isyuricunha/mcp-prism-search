@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 
@@ -18,12 +18,18 @@ from mcp_ddg_research.models import (
     FetchResponse,
 )
 from mcp_ddg_research.search import ddg_search
-from mcp_ddg_research.security import UnsafeUrlError, validate_fetch_url, validate_url_shape
+from mcp_ddg_research.security import (
+    UnsafeUrlError,
+    resolve_safe_address,
+    validate_fetch_url,
+    validate_url_shape,
+)
 from mcp_ddg_research.text import extract_html_text, is_plain_text_content, truncate_text
 
 DEFAULT_FETCH_TIMEOUT_SECONDS = 15
 DEFAULT_MAX_CONCURRENCY = 5
 MAX_REDIRECTS = 5
+DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 FETCH_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -37,6 +43,10 @@ FETCH_HEADERS = {
 
 def get_fetch_timeout_seconds() -> int:
     return get_env_int("FETCH_TIMEOUT_SECONDS", DEFAULT_FETCH_TIMEOUT_SECONDS)
+
+
+def get_fetch_max_bytes() -> int:
+    return get_env_int("FETCH_MAX_BYTES", DEFAULT_MAX_RESPONSE_BYTES)
 
 
 def get_max_concurrency(max_concurrency: int | None = None) -> int:
@@ -66,33 +76,104 @@ def _error_response(url: str, error: str) -> FetchResponse:
     )
 
 
+class RawFetchedResponse:
+    """Fully-read response body with the logical (pre-pinning) URL."""
+
+    def __init__(
+        self,
+        status_code: int,
+        headers: httpx.Headers,
+        content: bytes,
+        logical_url: str,
+        charset: str | None,
+    ) -> None:
+        self.status_code = status_code
+        self.headers = headers
+        self.content = content
+        self.logical_url = logical_url
+        self.charset = charset
+
+
+def _pinned_request_url(url: str, safe_ip: str) -> str:
+    parsed = urlparse(url)
+    host_part = f"[{safe_ip}]" if ":" in safe_ip else safe_ip
+    port = parsed.port
+    default_port = port in (None, 80) and parsed.scheme == "http"
+    default_port = default_port or (port in (None, 443) and parsed.scheme == "https")
+    netloc = host_part if default_port else f"{host_part}:{port}"
+    path = parsed.path or "/"
+    return urlunparse((parsed.scheme, netloc, path, parsed.params, parsed.query, parsed.fragment))
+
+
+def _original_host_header(url: str) -> str:
+    parsed = urlparse(url)
+    return parsed.netloc
+
+
 async def _get_with_validated_redirects(
     client: httpx.AsyncClient,
     url: str,
-) -> httpx.Response:
+    max_bytes: int,
+) -> RawFetchedResponse:
+    """Fetch while validating every hop and pinning the connection to the IP
+    resolved during validation, so a rebinding DNS answer cannot redirect the
+    connection to an internal address. The body is streamed and hard-capped."""
+
     current_url = url
+    response: httpx.Response | None = None
     for _ in range(MAX_REDIRECTS + 1):
         await validate_fetch_url(current_url)
-        response = await client.get(current_url)
-        if response.status_code not in {301, 302, 303, 307, 308}:
-            return response
+        safe_ip, _port = await resolve_safe_address(current_url)
+        parsed = urlparse(current_url)
+        hostname = parsed.hostname or ""
+        request = client.build_request(
+            "GET",
+            _pinned_request_url(current_url, safe_ip),
+            headers={**FETCH_HEADERS, "host": _original_host_header(current_url)},
+            extensions={"sni_hostname": hostname} if parsed.scheme == "https" else None,
+        )
+        response = await client.send(request, stream=True)
 
-        location = response.headers.get("location")
-        if not location:
-            return response
-        next_url = urljoin(str(response.url), location)
-        validate_url_shape(next_url)
-        current_url = next_url
+        if response.status_code in {301, 302, 303, 307, 308}:
+            location = response.headers.get("location")
+            if location:
+                await response.aclose()
+                next_url = urljoin(current_url, location)
+                validate_url_shape(next_url)
+                current_url = next_url
+                continue
+            break
 
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in response.aiter_bytes():
+            total += len(chunk)
+            if total > max_bytes:
+                await response.aclose()
+                raise UnsafeUrlError(
+                    f"Response body exceeds the {max_bytes} byte safety limit"
+                )
+            chunks.append(chunk)
+        await response.aclose()
+        return RawFetchedResponse(
+            status_code=response.status_code,
+            headers=response.headers,
+            content=b"".join(chunks),
+            logical_url=current_url,
+            charset=response.encoding,
+        )
+
+    if response is not None:
+        await response.aclose()
     raise UnsafeUrlError(f"Too many redirects; maximum is {MAX_REDIRECTS}")
 
 
 def _response_to_fetch_response(
     request_url: str,
-    response: httpx.Response,
+    response: RawFetchedResponse,
     max_chars: int,
 ) -> FetchResponse:
-    final_url = str(response.url)
+    final_url = response.logical_url
     content_type = response.headers.get("content-type", "")
     if response.status_code >= 400:
         return FetchResponse(
@@ -106,9 +187,12 @@ def _response_to_fetch_response(
             error=f"HTTP {response.status_code}",
         )
 
+    charset = response.charset or "utf-8"
+    text = response.content.decode(charset, errors="replace")
+
     lowered_content_type = content_type.lower()
     if "html" in lowered_content_type:
-        extracted = extract_html_text(response.text, max_chars)
+        extracted = extract_html_text(text, max_chars)
         return FetchResponse(
             url=request_url,
             final_url=final_url,
@@ -125,7 +209,7 @@ def _response_to_fetch_response(
             url=request_url,
             final_url=final_url,
             title="",
-            content=truncate_text(response.text, max_chars),
+            content=truncate_text(text, max_chars),
             content_type=content_type,
             cached=False,
             success=True,
@@ -161,7 +245,12 @@ async def web_fetch(
     payload = _cache_payload(request)
     cached_value = cache.get(payload)
     if cached_value is not None:
-        return FetchResponse.model_validate(cached_value).model_copy(update={"cached": True})
+        try:
+            return FetchResponse.model_validate(cached_value).model_copy(
+                update={"cached": True}
+            )
+        except Exception:  # noqa: BLE001 - poisoned/stale cache must not break the tool.
+            cache.delete(payload)
 
     try:
         async with httpx.AsyncClient(
@@ -169,8 +258,12 @@ async def web_fetch(
             follow_redirects=False,
             headers=FETCH_HEADERS,
         ) as client:
-            response = await _get_with_validated_redirects(client, request.url)
-        fetch_response = _response_to_fetch_response(request.url, response, request.max_chars)
+            response = await _get_with_validated_redirects(
+                client, request.url, get_fetch_max_bytes()
+            )
+        fetch_response = _response_to_fetch_response(
+            request.url, response, request.max_chars
+        )
         if fetch_response.success:
             cache.set(payload, _cacheable_fetch_response(fetch_response))
         return fetch_response
@@ -247,4 +340,5 @@ async def ddg_deep_search(
         pages=pages,
         failed_pages=failed_pages,
         cached=bool(cached_flags) and all(cached_flags),
+        search_error=search_response.error,
     )

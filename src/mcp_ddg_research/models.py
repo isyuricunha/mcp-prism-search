@@ -216,3 +216,4 @@ class DeepSearchResponse(StrictBaseModel):
     pages: list[DeepSearchPage]
     failed_pages: list[FailedPage]
     cached: bool
+    search_error: str | None = None

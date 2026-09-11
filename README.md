@@ -505,17 +505,19 @@ SEARCH_PROVIDER: duckduckgo_html
 DDGS_BACKEND: duckduckgo
 ```
 
-The checked-in compose token is the placeholder `change-me-now`. It is
-acceptable for local smoke tests only. Replace `MCP_AUTH_TOKEN` in
-`docker-compose.yml` before using LAN, VPN, reverse-proxy, or Cloudflare Tunnel
-deployments.
+The compose file requires a real `MCP_AUTH_TOKEN` (it uses `${MCP_AUTH_TOKEN:?}`
+and the server refuses to start with the known placeholder `change-me-now`).
+Generate one with `openssl rand -hex 32` before starting the stack. The bind
+mount used for `/data` must be writable by the container uid 10001:
+`sudo chown -R 10001:10001 ~/docker/docker-data/mcp-ddg-research`.
 
 The server defaults `MCP_ALLOWED_HOSTS=*` and `MCP_ALLOWED_ORIGINS=*` so the
 same container can run behind a LAN IP, hostname, domain, reverse proxy, or
 HTTPS endpoint. The compose file documents these optional variables as commented
-examples. In MCP SDK `1.27.2`, wildcard Host/Origin validation is not supported
-by the DNS rebinding middleware, so wildcard mode disables the SDK Host/Origin
-allowlist and relies on the bearer token. To enable strict Host/Origin checks,
+examples. The MCP SDK Host/Origin allowlist does not support bare wildcards,
+so wildcard mode disables the SDK rebinding checks and relies on the bearer
+token. Prefer exact comma-separated values and keep the default loopback-only
+port mapping. To enable strict Host/Origin checks,
 uncomment the variables in `docker-compose.yml` and set exact comma-separated
 values such as:
 
@@ -705,9 +707,9 @@ Authorization header, `ListTools` and `CallTool` should work for `ddg_search`,
 | `MCP_TRANSPORT` | `stdio` | MCP transport. `stdio` is the default. `http` uses streamable HTTP when supported by the installed SDK. |
 | `MCP_HOST` | `0.0.0.0` | Host used for optional streamable HTTP mode. |
 | `MCP_PORT` | `8000` | Port used for optional streamable HTTP mode. |
-| `MCP_AUTH_TOKEN` | unset | Bearer token for HTTP mode. The included compose file sets this to `change-me-now`; replace it before real deployments. If unset, HTTP mode logs a warning and runs without auth. |
-| `MCP_ALLOWED_HOSTS` | `*` | Comma-separated Host allowlist for HTTP mode. `*` supports arbitrary deployment hosts by disabling SDK Host/Origin rebinding checks. |
-| `MCP_ALLOWED_ORIGINS` | `*` | Comma-separated Origin allowlist for HTTP mode. `*` supports arbitrary origins by disabling SDK Host/Origin rebinding checks. |
+| `MCP_AUTH_TOKEN` | unset | Bearer token for HTTP mode. HTTP mode refuses to start without it (unless `MCP_ALLOW_UNAUTHENTICATED_HTTP=1`) and rejects known placeholder values. |
+| `MCP_ALLOWED_HOSTS` | `*` | Comma-separated Host allowlist for HTTP mode. `*` supports arbitrary deployment hosts by disabling SDK Host/Origin rebinding checks; prefer exact values. |
+| `MCP_ALLOWED_ORIGINS` | `*` | Comma-separated Origin allowlist for HTTP mode. `*` supports arbitrary origins by disabling SDK Host/Origin rebinding checks; prefer exact values. |
 | `CACHE_PRUNE_ON_START` | `true` | Run cache pruning once when the MCP server starts. |
 | `CACHE_PRUNE_INTERVAL_SECONDS` | `3600` | Minimum interval between opportunistic runtime prune attempts triggered by cache access/write. |
 | `CACHE_MAX_AGE_SECONDS` | unset | Optional maximum cache file age in seconds. If unset, invalid, or `0`, max-age pruning is disabled. The compose file sets `604800` (7 days). |

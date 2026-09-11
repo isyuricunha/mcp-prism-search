@@ -12,6 +12,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field
 
 from mcp_ddg_research import cache as cache_ops
+from mcp_ddg_research.cache import _get_env_bool
 from mcp_ddg_research.fetch import ddg_deep_search as perform_deep_search
 from mcp_ddg_research.fetch import web_fetch as perform_web_fetch
 from mcp_ddg_research.models import (
@@ -33,6 +34,13 @@ mcp = FastMCP(
 )
 
 
+class KnownPlaceholderTokenError(RuntimeError):
+    """Raised when MCP_AUTH_TOKEN is a publicly known placeholder."""
+
+
+KNOWN_PLACEHOLDER_TOKENS = {"change-me-now", "changeme", "secret", "token"}
+
+
 class BearerTokenAuthMiddleware:
     """ASGI middleware that requires one configured bearer token."""
 
@@ -41,19 +49,31 @@ class BearerTokenAuthMiddleware:
         self.expected_authorization = f"Bearer {token}"
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
-        if scope.get("type") != "http":
+        scope_type = scope.get("type")
+        if scope_type == "lifespan":
             await self.app(scope, receive, send)
             return
+        if scope_type != "http":
+            # Fail closed: unknown or websocket scopes never bypass the token.
+            raise RuntimeError(
+                f"BearerTokenAuthMiddleware refuses to serve scope type {scope_type!r}"
+            )
 
         authorization = _authorization_header(scope)
-        if authorization is None or not compare_digest(
-            authorization,
-            self.expected_authorization,
+        if authorization is None or not _safe_token_match(
+            authorization, self.expected_authorization
         ):
             await _send_unauthorized(send)
             return
 
         await self.app(scope, receive, send)
+
+
+def _safe_token_match(left: str, right: str) -> bool:
+    try:
+        return compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+    except (TypeError, UnicodeEncodeError):
+        return False
 
 
 def _authorization_header(scope: dict[str, Any]) -> str | None:
@@ -110,7 +130,15 @@ def _build_transport_security_settings(
 
 def _configure_http_settings() -> None:
     host = os.getenv("MCP_HOST", "0.0.0.0")
-    port = int(os.getenv("MCP_PORT", "8000"))
+    raw_port = os.getenv("MCP_PORT", "8000")
+    try:
+        port = int(raw_port)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Invalid MCP_PORT={raw_port!r}; expected an integer port number"
+        ) from exc
+    if not 1 <= port <= 65535:
+        raise RuntimeError(f"Invalid MCP_PORT={raw_port!r}; out of range")
     allowed_hosts = _csv_env("MCP_ALLOWED_HOSTS", ["*"])
     allowed_origins = _csv_env("MCP_ALLOWED_ORIGINS", ["*"])
 
@@ -127,9 +155,20 @@ async def _run_http_async() -> None:
 
     auth_token = _http_auth_token()
     if auth_token is None:
+        if not _get_env_bool("MCP_ALLOW_UNAUTHENTICATED_HTTP", False):
+            raise RuntimeError(
+                "MCP HTTP transport requires MCP_AUTH_TOKEN to be set. "
+                "Set a strong random token, or set MCP_ALLOW_UNAUTHENTICATED_HTTP=1 "
+                "to explicitly run without authentication."
+            )
         LOGGER.warning(
             "MCP HTTP transport is running without MCP_AUTH_TOKEN; "
             "all HTTP requests are unauthenticated."
+        )
+    elif auth_token.lower() in KNOWN_PLACEHOLDER_TOKENS:
+        raise KnownPlaceholderTokenError(
+            f"MCP_AUTH_TOKEN is set to the publicly known placeholder {auth_token!r}. "
+            "Set a strong random token before exposing the server over HTTP."
         )
 
     starlette_app = mcp.streamable_http_app()
@@ -146,7 +185,7 @@ async def _run_http_async() -> None:
     await server.serve()
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 async def ddg_search(
     query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
     max_results: Annotated[
@@ -193,7 +232,7 @@ async def ddg_search(
     return response.model_dump(mode="json")
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 async def web_fetch(
     url: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["url"])],
     max_chars: Annotated[
@@ -207,7 +246,7 @@ async def web_fetch(
     return response.model_dump(mode="json")
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 async def ddg_deep_search(
     query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
     max_results: Annotated[
@@ -269,14 +308,14 @@ async def ddg_deep_search(
     return response.model_dump(mode="json")
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True})
 async def cache_stats() -> dict:
     """Return cache file counts and byte totals for each cache namespace."""
 
     return cache_ops.get_cache_stats().to_dict()
 
 
-@mcp.tool()
+@mcp.tool(annotations={"destructiveHint": True, "idempotentHint": True})
 async def cache_prune(
     expired_only: Annotated[
         bool,
@@ -292,7 +331,7 @@ async def cache_prune(
     return cache_ops.prune_cache(expired_only=expired_only, dry_run=dry_run).to_dict()
 
 
-@mcp.tool()
+@mcp.tool(annotations={"destructiveHint": True})
 async def cache_clear(
     namespace: Annotated[
         CacheNamespace,
@@ -325,12 +364,16 @@ def _prune_cache_on_startup() -> None:
 def main() -> None:
     _prune_cache_on_startup()
     transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
-    if transport == "http":
+    if transport in {"http", "streamable-http"}:
         import asyncio
 
         _configure_http_settings()
         asyncio.run(_run_http_async())
         return
+    if transport != "stdio":
+        raise RuntimeError(
+            f"Invalid MCP_TRANSPORT={transport!r}; accepted values are 'stdio' and 'http'"
+        )
 
     mcp.run(transport="stdio")
 

@@ -13,11 +13,11 @@ authors = [
   { name = "mcp-ddg-research contributors" }
 ]
 dependencies = [
-  "beautifulsoup4",
-  "ddgs",
-  "httpx",
-  "mcp[cli]",
-  "pydantic",
+  "beautifulsoup4>=4.12",
+  "ddgs>=9.0",
+  "httpx>=0.27",
+  "mcp>=1.27.2,<2",
+  "pydantic>=2.7",
 ]
 
 [project.optional-dependencies]

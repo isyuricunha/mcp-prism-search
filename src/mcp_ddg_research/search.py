@@ -7,7 +7,7 @@ import importlib
 import inspect
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
 import httpx
@@ -15,7 +15,12 @@ from bs4 import BeautifulSoup
 
 from mcp_ddg_research.cache import JsonFileCache, build_search_cache, get_env_int
 from mcp_ddg_research.domains import apply_domain_controls
-from mcp_ddg_research.models import SearchRequest, SearchResponse, SearchResult
+from mcp_ddg_research.models import (
+    SearchProvider,
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+)
 from mcp_ddg_research.text import normalize_whitespace
 
 DUCKDUCKGO_HTML_URL = "https://html.duckduckgo.com/html/"
@@ -262,7 +267,13 @@ async def _search_with_duckduckgo_html(
     request: SearchRequest,
     timeout_seconds: int,
 ) -> list[SearchResult]:
-    params = {"q": request.query, "kp": HTML_SAFE_SEARCH[request.safe_search]}
+    params: dict[str, str | int] = {
+        "q": request.query,
+        "kp": HTML_SAFE_SEARCH[request.safe_search],
+    }
+    time_filter_code = TIME_FILTERS.get(request.time_filter or "")
+    if time_filter_code:
+        params["df"] = time_filter_code
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(timeout_seconds),
         follow_redirects=False,
@@ -327,12 +338,17 @@ async def ddg_search(
         preferred_domains=preferred_domains or [],
     )
     cache = cache or build_search_cache()
-    provider = get_search_provider()
+    provider = cast(SearchProvider, get_search_provider())
     ddgs_backend = get_ddgs_backend() if provider in {"ddgs", "auto"} else None
     payload = _cache_payload(request, provider=provider, ddgs_backend=ddgs_backend)
     cached_value = cache.get(payload)
     if cached_value is not None:
-        return SearchResponse.model_validate(cached_value).model_copy(update={"cached": True})
+        try:
+            return SearchResponse.model_validate(cached_value).model_copy(
+                update={"cached": True}
+            )
+        except Exception:  # noqa: BLE001 - poisoned/stale cache must not break the tool.
+            cache.delete(payload)
 
     timeout_seconds = get_ddg_timeout_seconds()
     provider_errors: list[str] = []
@@ -381,7 +397,7 @@ async def ddg_search(
 
     return SearchResponse(
         query=request.query,
-        provider="duckduckgo_html",
+        provider=provider,
         results=[],
         cached=False,
         error="; ".join(provider_errors) or "Search failed",

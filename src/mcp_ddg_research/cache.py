@@ -447,12 +447,35 @@ class JsonFileCache:
         self.namespace = namespace
         self.ttl_seconds = ttl_seconds
         self.cache_dir = self.root_dir / namespace
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.disabled_reason: str | None = None
+        try:
+            if self.cache_dir.is_symlink():
+                raise OSError(
+                    f"cache namespace {str(self.cache_dir)!r} must not be a symlink"
+                )
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            # A cache that cannot be created must never take down the tools:
+            # degrade to a no-op cache with a single logged warning.
+            self.disabled_reason = str(exc)
+            LOGGER.warning("Cache namespace %r is disabled: %s", namespace, exc)
 
     def path_for(self, payload: Any) -> Path:
         return self.cache_dir / f"{stable_cache_key(payload)}.json"
 
+    def delete(self, payload: Any) -> bool:
+        if self.disabled_reason is not None:
+            return False
+        path = self.path_for(payload)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            return False
+        return True
+
     def get(self, payload: Any) -> dict[str, Any] | None:
+        if self.disabled_reason is not None:
+            return None
         maybe_prune_cache(root_dir=self.root_dir)
         path = self.path_for(payload)
         try:
@@ -470,6 +493,8 @@ class JsonFileCache:
         return value
 
     def set(self, payload: Any, value: dict[str, Any]) -> None:
+        if self.disabled_reason is not None:
+            return
         maybe_prune_cache(root_dir=self.root_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         path = self.path_for(payload)

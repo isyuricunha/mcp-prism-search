@@ -5,8 +5,13 @@ services:
     container_name: mcp-ddg-research
     restart: unless-stopped
     ports:
-      - "49317:8000"
+      # Loopback only by default; the MCP_AUTH_TOKEN below gates the service.
+      - "127.0.0.1:49317:8000"
     volumes:
+      # The container runs as uid 10001:10001. On first run, make the bind
+      # mount writable by that uid:
+      #   mkdir -p ~/docker/docker-data/mcp-ddg-research
+      #   sudo chown -R 10001:10001 ~/docker/docker-data/mcp-ddg-research
       - ~/docker/docker-data/mcp-ddg-research:/data
     environment:
       # Required for Docker/LAN HTTP mode. The image defaults to stdio, so
@@ -19,9 +24,10 @@ services:
       SEARCH_PROVIDER: duckduckgo_html
       DDGS_BACKEND: duckduckgo
 
-      # Required for HTTP mode in this compose file. Replace before exposing
-      # the service outside a trusted local network.
-      MCP_AUTH_TOKEN: change-me-now
+      # Required. The server refuses to start without a real random token and
+      # rejects known placeholders at boot, so provide your own:
+      #   MCP_AUTH_TOKEN=$(openssl rand -hex 32) docker compose up -d
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN to a strong random token}
 
       # Cache pruning defaults for long-running deployments.
       CACHE_PRUNE_ON_START: "true"

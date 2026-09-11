@@ -72,6 +72,8 @@ def extract_html_text(html: str, max_chars: int) -> ExtractedText:
 
     if len(best_text) < 600:
         body = soup.body if soup.body else soup
-        best_text = _tag_text(body)
+        body_text = _tag_text(body)
+        if len(body_text) > len(best_text):
+            best_text = body_text
 
     return ExtractedText(title=title, content=truncate_text(best_text, max_chars))

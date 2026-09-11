@@ -12,6 +12,7 @@ BLOCKED_HOSTNAME_SUFFIXES = (".local", ".localhost", ".internal", ".lan", ".intr
 BLOCKED_NETWORKS: tuple[IPv4Network | IPv6Network, ...] = (
     ip_network("0.0.0.0/8"),
     ip_network("10.0.0.0/8"),
+    ip_network("100.64.0.0/10"),
     ip_network("127.0.0.0/8"),
     ip_network("169.254.0.0/16"),
     ip_network("172.16.0.0/12"),
@@ -100,3 +101,22 @@ def validate_resolved_addresses(url: str) -> None:
 async def validate_fetch_url(url: str) -> None:
     validate_url_shape(url)
     await asyncio.to_thread(validate_resolved_addresses, url)
+
+
+async def resolve_safe_address(url: str) -> tuple[str, int]:
+    """Resolve the hostname once and return a validated (ip, port) pair.
+
+    The caller must connect to this IP directly instead of letting the HTTP
+    client re-resolve DNS, otherwise a short-TTL rebinding record can pass
+    validation and point the connection at an internal address.
+    """
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if hostname is None:
+        raise UnsafeUrlError("URL must include a hostname")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    addresses = await asyncio.to_thread(_resolve_hostname, hostname, port)
+    for address in addresses:
+        if not is_unsafe_ip(address):
+            return address, port
+    raise UnsafeUrlError(f"DNS resolved only unsafe IP addresses for {hostname}")
