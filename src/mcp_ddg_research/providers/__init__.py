@@ -11,15 +11,21 @@ import os
 from mcp_ddg_research.models import SearchRequest, SearchResult
 from mcp_ddg_research.providers import (
     bing_html,
+    brave,
     ddg_html,
     ddgs_lib,
+    exa,
     fourget,
     freeserp,
     hackernews,
+    jina,
     keenable,
     mwmbl,
     searxng,
+    serper,
+    tavily,
     wikipedia,
+    youcom,
 )
 from mcp_ddg_research.providers.base import (  # noqa: F401
     ProviderHealth,
@@ -84,6 +90,26 @@ def build_registry() -> None:
     add("hackernews", "vertical", None,
         "HackerNews full-text search (Algolia API).",
         hackernews.search)
+    add("tavily", "general", None,
+        "Tavily search: 1,000 credits/month free, or keyless mode (rate-limited). "
+        "Set TAVILY_API_KEY for the authenticated tier.",
+        tavily.search)
+    add("exa", "general", "EXA_API_KEY",
+        "Exa neural/keyword search (~1,430 free searches/month, no card).",
+        exa.search)
+    add("brave", "general", "BRAVE_API_KEY",
+        "Brave Search API (~1,000 free searches/month via recurring credits; "
+        "card required at signup).",
+        brave.search)
+    add("youcom", "general", "YDC_API_KEY",
+        "You.com web search ($100 one-time free credit).",
+        youcom.search)
+    add("serper", "general", "SERPER_API_KEY",
+        "Serper Google SERP (2,500 free queries one-time).",
+        serper.search)
+    add("jina", "general", "JINA_API_KEY",
+        "Jina s.jina.ai search with full page content.",
+        jina.search)
 
 
 def available_providers(kind: str | None = None) -> dict[str, ProviderSpec]:
