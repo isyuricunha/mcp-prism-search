@@ -489,7 +489,6 @@ async def aggregated_search(
     )
     cache = cache or build_search_cache()
     attempts: list[str] = []
-    cache_enabled = cache.disabled_reason is None
 
     try:
         chain = resolve_chain(provider, kind)

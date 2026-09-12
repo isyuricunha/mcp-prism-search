@@ -18,7 +18,12 @@ def provider_request_size(request: SearchRequest) -> int:
     return request.max_results
 
 
-def _ddgs_text_kwargs(request: SearchRequest, backend: str, *, include_backend: bool) -> dict[str, Any]:
+def _ddgs_text_kwargs(
+    request: SearchRequest,
+    backend: str,
+    *,
+    include_backend: bool,
+) -> dict[str, Any]:
     timelimit = TIME_FILTERS.get(request.time_filter) if request.time_filter else None
     kwargs: dict[str, Any] = {
         "max_results": provider_request_size(request),
