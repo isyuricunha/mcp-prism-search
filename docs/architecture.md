@@ -103,3 +103,133 @@ by semantic-release from conventional commits.
 - `fix:` → patch, `feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major.
 - The release workflow runs ruff, pytest, a Docker build, and publishes the
   image and GitHub release/tag.
+
+
+## Domain controls (tools behavior)
+
+## Domain Controls
+
+Domain controls are opt-in. If you do not pass `blocked_domains`,
+`allowed_domains`, `preferred_domains`, or `search_window`, `ddg_search`
+requests exactly `max_results` from DuckDuckGo and preserves DuckDuckGo's
+default ranking order after URL deduplication. The server does not apply a
+built-in source bias, source boost, or domain blocklist.
+
+When any domain control is provided, the server requests a larger internal
+search result window from the provider before applying dedupe and domain
+controls. The default provider result window is:
+
+```text
+min(max_results * 3, 50)
+```
+
+The final response is still capped to `max_results`. You can override the
+provider result window with `search_window`, minimum `1`, maximum `100`. This is
+a count of search results requested from DuckDuckGo, not a recency or day range.
+It is useful when a desired allowed/preferred domain might appear outside the
+first `max_results` provider results.
+
+Domain inputs are normalized by lowercasing, removing URL schemes, removing
+paths and query strings, and stripping a leading `www.`. Matching supports exact
+domains and subdomains. For example, `docs.example.com` matches `example.com`,
+but `example.com.evil.com` does not.
+
+Filtering order:
+
+1. Apply `allowed_domains` if provided.
+2. Apply `blocked_domains` if provided.
+3. Apply `preferred_domains` if provided.
+
+`preferred_domains` performs a stable partition: preferred matches move earlier,
+relative order is preserved inside the preferred and non-preferred groups, and
+no numeric score is invented.
+
+Block domains:
+
+```json
+{
+  "query": "self hosted photo backup",
+  "blocked_domains": ["example.com", "old-docs.example.org"]
+}
+```
+
+Allow only specific domains:
+
+```json
+{
+  "query": "python mcp server",
+  "allowed_domains": ["github.com", "modelcontextprotocol.io"]
+}
+```
+
+Prefer domains without excluding others:
+
+```json
+{
+  "query": "duckduckgo html search endpoint",
+  "preferred_domains": ["duckduckgo.com", "github.com"]
+}
+```
+
+Search a larger internal search result window before applying domain controls:
+
+```json
+{
+  "query": "python mcp server",
+  "max_results": 10,
+  "search_window": 40,
+  "allowed_domains": ["github.com", "modelcontextprotocol.io"]
+}
+```
+
+Deep search with the same provider result window behavior:
+
+```json
+{
+  "query": "model context protocol python sdk",
+  "max_results": 10,
+  "max_pages": 5,
+  "search_window": 40,
+  "preferred_domains": ["github.com"]
+}
+```
+
+Limit deep-search fetch concurrency for one call:
+
+```json
+{
+  "query": "model context protocol python sdk",
+  "max_pages": 5,
+  "max_concurrency": 2
+}
+```
+
+
+## SSRF blocklists (reference)
+
+## SSRF and Security Protections
+
+> Full layered defense model: [docs/architecture.md](docs/architecture.md#security-model).
+
+`web_fetch` only allows `http` and `https` URLs. It blocks known local or internal hostnames, including:
+
+- `localhost`
+- `metadata`
+- `metadata.google.internal`
+- hostnames ending in `.local`, `.localhost`, `.internal`, `.lan`, `.intranet`
+
+It also rejects IP addresses in private, loopback, link-local, reserved, multicast, or unspecified ranges, including:
+
+- `0.0.0.0/8`
+- `10.0.0.0/8`
+- `127.0.0.0/8`
+- `169.254.0.0/16`
+- `172.16.0.0/12`
+- `192.168.0.0/16`
+- `::1/128`
+- `fc00::/7`
+- `fe80::/10`
+
+DNS is resolved before fetching. If any resolved address is unsafe, the request is rejected. Redirects are followed manually, and every redirect target is validated before the next request.
+
+Unsupported schemes such as `file://`, `ftp://`, `ssh://`, `gopher://`, and `data:` are never fetched.

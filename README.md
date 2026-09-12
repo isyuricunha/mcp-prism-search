@@ -2,980 +2,122 @@
 
 MCP search aggregator: one query, refracted across many keyless search engines.
 
-`mcp-prism-search` is a self-hosted Python MCP server that aggregates web search from multiple keyless engines — Bing, DuckDuckGo (HTML and lite), ddgs backends, FreeSerp, Keenable, Mwmbl, 4get, self-hosted SearXNG — with automatic fallback chains, deterministic ranking, parallel fan-out (`provider="all"`), TTL caching, and layered SSRF-safe webpage fetching. Keyed providers with free tiers (Tavily, Exa, Brave, You.com, Serper, Jina) plug in via env vars and are skipped when absent.
+`mcp-prism-search` is a self-hosted Python MCP server (mcp SDK 2.x) that
+aggregates web search from multiple keyless engines — Bing, DuckDuckGo
+(HTML + lite), ddgs backends, FreeSerp, Keenable, Mwmbl, 4get, self-hosted
+SearXNG — with automatic fallback chains, deterministic ranking, TTL caching,
+SSRF-safe webpage fetching, and keyless vertical sources (Wikipedia,
+HackerNews). Keyed providers with free tiers (Tavily, Exa, Brave, You.com,
+Serper, Jina) plug in via env vars and are skipped when absent.
 
-The MCP client or agent is responsible for reasoning over the returned data. This server only returns structured search results and fetched page text.
-
-**Version 0.7.0 runs on the mcp SDK 2.x (`MCPServer` API).** Fresh installs
-resolve the latest stable dependencies from `requirements-lock.txt`.
+The client or agent reasons over the returned data; the server never calls
+LLMs, summarizes, or generates reports.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | Module map, request flow, the layered SSRF/security model, cache design, release automation |
-| [docs/development.md](docs/development.md) | Dev setup, test suite layout, commands, conventions, conventional commits and semantic-release, dependency policy |
-| [docs/deployment.md](docs/deployment.md) | Docker and docker-compose operation, HTTP hardening, health checks, full environment variable reference, updates and rollback |
-
-## What This Project Does
-
-- Searches DuckDuckGo through the DuckDuckGo HTML endpoint by default.
-- Can optionally use `ddgs.DDGS().text(...)` when `SEARCH_PROVIDER=ddgs` or as a fallback when `SEARCH_PROVIDER=auto`.
-- Parses DuckDuckGo HTML results with BeautifulSoup.
-- Resolves DuckDuckGo redirect URLs such as `/l/?uddg=...`.
-- Deduplicates normalized result URLs.
-- Fetches webpages with strict URL and DNS safety checks.
-- Follows redirects manually and validates every redirect target.
-- Extracts clean text from HTML by removing script, style, navigation, footer, and similar boilerplate.
-- Caches search and fetch responses in a file-based JSON cache.
-- Prunes expired, corrupt, temporary, old, and oversized cache files.
-- Provides a simple deep search tool that searches once and fetches top result pages concurrently.
-
-## What This Project Does Not Do
-
-- No LLM integration.
-- No summarization.
-- No report generation.
-- No browser automation.
-- No proxy rotation.
-- No captcha bypassing.
-- No ranking with model endpoints.
-- No OpenAI, Anthropic, Ollama, LM Studio, or other model endpoint support.
-
-## Why DuckDuckGo HTML Is Default
-
-The project is DuckDuckGo-focused by default. `SEARCH_PROVIDER=duckduckgo_html`
-uses only:
-
-```text
-https://html.duckduckgo.com/html/
-```
-
-This keeps default behavior predictable and avoids surprising requests to other
-upstream search services. The HTML provider uses conservative request defaults,
-browser-like headers, and BeautifulSoup selectors for `.result`, `.result__a`,
-and `.result__snippet`.
-
-The `ddgs` package remains available as an opt-in provider. Current `ddgs`
-versions are broader metasearch libraries, not only DuckDuckGo clients. With
-`DDGS_BACKEND=auto`, `ddgs` may query multiple upstream services depending on
-the installed package, such as Brave, Google, Yahoo, Startpage, Yandex, Mojeek,
-Wikipedia, or Grokipedia. That can increase coverage, but it can also increase
-captcha or rate-limit noise. Use it only when broader search is intentional.
-
-## Search Provider Modes
-
-Default DuckDuckGo-only mode:
-
-```yaml
-SEARCH_PROVIDER: duckduckgo_html
-DDGS_BACKEND: duckduckgo
-```
-
-Behavior:
-
-- Uses only DuckDuckGo's HTML endpoint.
-- Does not import or call `ddgs`.
-- Returns `"provider": "duckduckgo_html"`.
-- This is the default and recommended mode for predictable DuckDuckGo-focused use.
-
-Optional `ddgs` mode using the DuckDuckGo backend:
-
-```yaml
-SEARCH_PROVIDER: ddgs
-DDGS_BACKEND: duckduckgo
-```
-
-Behavior:
-
-- Uses `DDGS().text(...)`.
-- Passes `backend="duckduckgo"` when supported by the installed `ddgs` package.
-- Returns `"provider": "ddgs"`.
-
-Optional broader metasearch mode:
-
-```yaml
-SEARCH_PROVIDER: ddgs
-DDGS_BACKEND: auto
-```
-
-Behavior:
-
-- Uses `DDGS().text(...)` with `backend="auto"`.
-- May query multiple upstream search providers depending on the installed `ddgs`
-  package.
-- Can increase coverage, but may also increase captcha/rate-limit noise.
-- This mode is always opt-in.
-
-Auto fallback mode:
-
-```yaml
-SEARCH_PROVIDER: auto
-DDGS_BACKEND: duckduckgo
-```
-
-Behavior:
-
-- Tries DuckDuckGo HTML first.
-- Falls back to `ddgs` only if DuckDuckGo HTML fails, times out, raises, or
-  returns no results.
-- The response `provider` reports the provider that returned results.
-
-## Aggregator Mode (new)
-
-The server is now a multi-source aggregator. `web_search` walks a fallback
-chain of keyless engines (Bing HTML, DuckDuckGo HTML, ddgs backends,
-FreeSerp, Mwmbl, 4get, Keenable, self-hosted SearXNG) and returns results
-from the first healthy source, with a `provider_attempts` tally for
-diagnostics. `vertical_search` queries keyless vertical sources
-(Wikipedia, HackerNews). Providers requiring configuration (SearXNG URL)
-are enabled via env vars and skipped when absent.
-
-```json
-{
-  "provider_attempts": ["bing_html: ok (5)"],
-  "results": [{"title": "...", "url": "...", "snippet": "..."}]
-}
-```
-
-## Available MCP Tools
-
-### `ddg_search`
-
-Search DuckDuckGo and return structured results.
-
-Arguments:
-
-```json
-{
-  "query": "python mcp server fastmcp",
-  "max_results": 10,
-  "search_window": null,
-  "safe_search": "off",
-  "time_filter": "month",
-  "blocked_domains": [],
-  "allowed_domains": [],
-  "preferred_domains": []
-}
-```
-
-Argument rules:
-
-- `query`: string, required.
-- `max_results`: integer, default `10`, minimum `1`, maximum `30`.
-- `search_window`: optional integer, minimum `1`, maximum `100`. If provided,
-  this is the internal search result window, meaning the provider result count
-  requested before dedupe/domain controls/final cap. It is not a time window.
-- `safe_search`: one of `off`, `moderate`, `strict`, default `off`.
-- `time_filter`: optional, one of `day`, `week`, `month`, `year`.
-- `blocked_domains`: optional list of domains to remove from results, default `[]`.
-- `allowed_domains`: optional list of domains to keep, default `[]`.
-- `preferred_domains`: optional list of domains to move earlier while preserving stable order, default `[]`.
-
-Response example:
-
-```json
-{
-  "query": "python mcp server fastmcp",
-  "provider": "duckduckgo_html",
-  "results": [
-    {
-      "title": "MCP Python SDK",
-      "url": "https://github.com/modelcontextprotocol/python-sdk",
-      "snippet": "Python SDK for Model Context Protocol servers and clients."
-    }
-  ],
-  "cached": false,
-  "error": null
-}
-```
-
-### `web_fetch`
-
-Fetch a single webpage and return clean text.
-
-Arguments:
-
-```json
-{
-  "url": "https://example.com/article",
-  "max_chars": 12000
-}
-```
-
-Argument rules:
-
-- `url`: HTTP or HTTPS URL.
-- `max_chars`: integer, default `12000`, minimum `1000`, maximum `50000`.
-
-Response example:
-
-```json
-{
-  "url": "https://example.com/article",
-  "final_url": "https://example.com/article",
-  "title": "Example Article",
-  "content": "Readable extracted page text...",
-  "content_type": "text/html; charset=utf-8",
-  "cached": false,
-  "success": true,
-  "error": null
-}
-```
-
-### `ddg_deep_search`
-
-Search once, fetch top result pages concurrently, and return sources plus page content.
-
-Arguments:
-
-```json
-{
-  "query": "model context protocol python sdk",
-  "max_results": 10,
-  "search_window": null,
-  "max_pages": 5,
-  "max_chars_per_page": 12000,
-  "safe_search": "off",
-  "time_filter": "year",
-  "blocked_domains": [],
-  "allowed_domains": [],
-  "preferred_domains": [],
-  "max_concurrency": null
-}
-```
-
-Argument rules:
-
-- `query`: string, required.
-- `max_results`: integer, default `10`, minimum `1`, maximum `30`.
-- `search_window`: optional integer, minimum `1`, maximum `100`. Passed through
-  to `ddg_search` as the internal search result window before final result
-  capping. It is not a time window.
-- `max_pages`: integer, default `5`, minimum `1`, maximum `10`.
-- `max_chars_per_page`: integer, default `12000`, minimum `1000`, maximum `50000`.
-- `safe_search`: one of `off`, `moderate`, `strict`, default `off`.
-- `time_filter`: optional, one of `day`, `week`, `month`, `year`.
-- `blocked_domains`: optional list of domains to remove from search results before fetching, default `[]`.
-- `allowed_domains`: optional list of domains to keep before fetching, default `[]`.
-- `preferred_domains`: optional list of domains to move earlier before fetching, default `[]`.
-- `max_concurrency`: optional per-call page fetch concurrency, minimum `1`, maximum `12`. If omitted, `MAX_CONCURRENCY` is used.
-
-Response example:
-
-```json
-{
-  "query": "model context protocol python sdk",
-  "search_provider": "duckduckgo_html",
-  "sources": [
-    {
-      "title": "MCP Python SDK",
-      "url": "https://github.com/modelcontextprotocol/python-sdk",
-      "snippet": "Python SDK for Model Context Protocol servers and clients."
-    }
-  ],
-  "pages": [
-    {
-      "title": "MCP Python SDK",
-      "url": "https://github.com/modelcontextprotocol/python-sdk",
-      "final_url": "https://github.com/modelcontextprotocol/python-sdk",
-      "content": "Extracted page text..."
-    }
-  ],
-  "failed_pages": [],
-  "cached": false
-}
-```
-
-### `cache_stats`
-
-Return current cache file counts and byte totals for each cache namespace.
-
-Arguments: none.
-
-Response example:
-
-```json
-{
-  "cache_dir": "/data/cache",
-  "namespaces": {
-    "search": {"files": 10, "bytes": 12345},
-    "fetch": {"files": 20, "bytes": 98765}
-  },
-  "total_files": 30,
-  "total_bytes": 111110
-}
-```
-
-### `cache_prune`
-
-Manually run cache pruning using the same rules as automatic pruning.
-
-Arguments:
-
-```json
-{
-  "expired_only": false,
-  "dry_run": false
-}
-```
-
-Argument rules:
-
-- `expired_only`: boolean, default `false`. When `true`, deletes expired,
-  corrupt, and temporary files but skips size-limit pruning.
-- `dry_run`: boolean, default `false`. When `true`, reports files that would be
-  deleted without deleting them.
-
-Response example:
-
-```json
-{
-  "deleted_files": 5,
-  "deleted_bytes": 123456,
-  "remaining_files": 25,
-  "remaining_bytes": 99999,
-  "dry_run": false
-}
-```
-
-### `cache_clear`
-
-Clear one cache namespace, or all cache namespaces, when explicitly confirmed.
-
-Arguments:
-
-```json
-{
-  "namespace": "fetch",
-  "confirm": true
-}
-```
-
-Argument rules:
-
-- `namespace`: one of `search`, `fetch`, or `all`.
-- `confirm`: must be `true` to delete files.
-
-Response example:
-
-```json
-{
-  "namespace": "fetch",
-  "deleted_files": 20,
-  "deleted_bytes": 98765
-}
-```
-
-## Domain Controls
-
-Domain controls are opt-in. If you do not pass `blocked_domains`,
-`allowed_domains`, `preferred_domains`, or `search_window`, `ddg_search`
-requests exactly `max_results` from DuckDuckGo and preserves DuckDuckGo's
-default ranking order after URL deduplication. The server does not apply a
-built-in source bias, source boost, or domain blocklist.
-
-When any domain control is provided, the server requests a larger internal
-search result window from the provider before applying dedupe and domain
-controls. The default provider result window is:
-
-```text
-min(max_results * 3, 50)
-```
-
-The final response is still capped to `max_results`. You can override the
-provider result window with `search_window`, minimum `1`, maximum `100`. This is
-a count of search results requested from DuckDuckGo, not a recency or day range.
-It is useful when a desired allowed/preferred domain might appear outside the
-first `max_results` provider results.
-
-Domain inputs are normalized by lowercasing, removing URL schemes, removing
-paths and query strings, and stripping a leading `www.`. Matching supports exact
-domains and subdomains. For example, `docs.example.com` matches `example.com`,
-but `example.com.evil.com` does not.
-
-Filtering order:
-
-1. Apply `allowed_domains` if provided.
-2. Apply `blocked_domains` if provided.
-3. Apply `preferred_domains` if provided.
-
-`preferred_domains` performs a stable partition: preferred matches move earlier,
-relative order is preserved inside the preferred and non-preferred groups, and
-no numeric score is invented.
-
-Block domains:
-
-```json
-{
-  "query": "self hosted photo backup",
-  "blocked_domains": ["example.com", "old-docs.example.org"]
-}
-```
-
-Allow only specific domains:
-
-```json
-{
-  "query": "python mcp server",
-  "allowed_domains": ["github.com", "modelcontextprotocol.io"]
-}
-```
-
-Prefer domains without excluding others:
-
-```json
-{
-  "query": "duckduckgo html search endpoint",
-  "preferred_domains": ["duckduckgo.com", "github.com"]
-}
-```
-
-Search a larger internal search result window before applying domain controls:
-
-```json
-{
-  "query": "python mcp server",
-  "max_results": 10,
-  "search_window": 40,
-  "allowed_domains": ["github.com", "modelcontextprotocol.io"]
-}
-```
-
-Deep search with the same provider result window behavior:
-
-```json
-{
-  "query": "model context protocol python sdk",
-  "max_results": 10,
-  "max_pages": 5,
-  "search_window": 40,
-  "preferred_domains": ["github.com"]
-}
-```
-
-Limit deep-search fetch concurrency for one call:
-
-```json
-{
-  "query": "model context protocol python sdk",
-  "max_pages": 5,
-  "max_concurrency": 2
-}
-```
-
-## Docker Stdio Usage
-
-Build the local image:
-
-```bash
-docker build -t mcp-prism-search:local .
-```
-
-Run the server over stdio. This mode is auth-free because the MCP client owns
-stdin/stdout and there is no listening network socket:
-
-```bash
-docker run --rm -i -v "$PWD/data:/data" mcp-prism-search:local
-```
-
-## Docker Stdio MCP Client Configuration
-
-```json
-{
-  "mcpServers": {
-    "ddg-research": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "-v",
-        "/opt/mcp-prism-search/data:/data",
-        "mcp-prism-search:local"
-      ]
-    }
-  }
-}
-```
-
-## docker-compose Usage
-
-> Operation, health checks, and hardening reference: [docs/deployment.md](docs/deployment.md).
-
-The included compose file starts the server in streamable HTTP mode on `/mcp`.
-It maps host port `49317` to container port `8000` and requires
-`Authorization: Bearer change-me-now` by default.
-
-Build and start the service:
-
-```bash
-docker compose up --build ddg-research
-```
-
-The compose file persists cache data at:
-
-```text
-~/docker/docker-data/mcp-prism-search/cache
-```
-
-It also enables conservative cache pruning defaults:
-
-```yaml
-CACHE_PRUNE_ON_START: "true"
-CACHE_PRUNE_INTERVAL_SECONDS: "3600"
-CACHE_MAX_AGE_SECONDS: "604800"
-CACHE_MAX_SIZE_MB: "512"
-```
-
-The compose file keeps search DuckDuckGo-only by default:
-
-```yaml
-SEARCH_PROVIDER: duckduckgo_html
-DDGS_BACKEND: duckduckgo
-```
-
-The compose file requires a real `MCP_AUTH_TOKEN` (it uses `${MCP_AUTH_TOKEN:?}`
-and the server refuses to start with the known placeholder `change-me-now`).
-Generate one with `openssl rand -hex 32` before starting the stack. The bind
-mount used for `/data` must be writable by the container uid 10001:
-`sudo chown -R 10001:10001 ~/docker/docker-data/mcp-prism-search`.
-
-The server defaults `MCP_ALLOWED_HOSTS=*` and `MCP_ALLOWED_ORIGINS=*` so the
-same container can run behind a LAN IP, hostname, domain, reverse proxy, or
-HTTPS endpoint. The compose file documents these optional variables as commented
-examples. The MCP SDK (2.x) Host/Origin allowlist does not support bare wildcards,
-so wildcard mode disables the SDK rebinding checks and relies on the bearer
-token. Prefer exact comma-separated values and keep the default loopback-only
-port mapping. To enable strict Host/Origin checks,
-uncomment the variables in `docker-compose.yml` and set exact comma-separated
-values such as:
-
-```bash
-MCP_ALLOWED_HOSTS="example.com,example.com:443,localhost:49317"
-MCP_ALLOWED_ORIGINS="https://example.com,http://localhost:*"
-```
-
-### LAN HTTP Example
-
-Set a real token in `docker-compose.yml` and start the server:
-
-```bash
-docker compose up -d --build
-```
-
-Use your server's LAN IP in the client URL:
-
-```text
-http://YOUR_SERVER_IP:49317/mcp
-```
-
-OpenCode remote MCP configuration for a LAN deployment:
-
-```json
-{
-  "mcp": {
-    "ddg-research": {
-      "type": "remote",
-      "enabled": true,
-      "url": "http://YOUR_SERVER_IP:49317/mcp",
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer change-me-now"
-      }
-    }
-  }
-}
-```
-
-### HTTPS Reverse Proxy Example
-
-Run the container on the server and terminate TLS in a reverse proxy. The proxy
-should forward `/mcp` to `http://127.0.0.1:49317/mcp` and preserve standard
-upgrade/streaming behavior.
-
-Minimal Nginx-style location:
-
-```nginx
-location /mcp {
-    proxy_pass http://127.0.0.1:49317/mcp;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_buffering off;
-}
-```
-
-OpenCode configuration for the HTTPS endpoint:
-
-```json
-{
-  "mcp": {
-    "ddg-research": {
-      "type": "remote",
-      "enabled": true,
-      "url": "https://your-domain.example/mcp",
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer change-me-now"
-      }
-    }
-  }
-}
-```
-
-### Cloudflare Tunnel Example
-
-Cloudflare Tunnel lets `cloudflared` make outbound-only connections from your
-server to Cloudflare, so you can publish the MCP HTTP endpoint without opening
-an inbound router/firewall port.
-
-In the Cloudflare dashboard, create a tunnel and add a public hostname such as:
-
-```text
-https://mcp.example.com
-```
-
-If `cloudflared` runs on the host, set the tunnel service URL to:
-
-```text
-http://127.0.0.1:49317
-```
-
-If `cloudflared` runs as another service in the same compose project/network,
-set the tunnel service URL to the container service name and internal port:
-
-```text
-http://ddg-research:8000
-```
-
-Minimal compose service example for token-managed tunnels:
-
-```yaml
-cloudflared:
-  image: cloudflare/cloudflared:latest
-  restart: unless-stopped
-  command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-  depends_on:
-    - ddg-research
-```
-
-Keep `CLOUDFLARE_TUNNEL_TOKEN` outside version control. In OpenCode, use the
-public HTTPS URL and keep the MCP bearer token header:
-
-```json
-{
-  "mcp": {
-    "ddg-research": {
-      "type": "remote",
-      "enabled": true,
-      "url": "https://mcp.example.com/mcp",
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer change-me-now"
-      }
-    }
-  }
-}
-```
-
-For production, replace `change-me-now` with a long random token. Cloudflare
-Tunnel protects the network path, but the MCP server should still require its
-own bearer token.
-
-Do not expose HTTP mode to an untrusted network without HTTPS and a strong
-`MCP_AUTH_TOKEN`. If `MCP_AUTH_TOKEN` is unset in HTTP mode, the server logs a
-warning and accepts unauthenticated HTTP requests.
-
-For MCP stdio clients, direct `docker run -i` is usually simpler than compose because the client owns stdin/stdout.
-
-## HTTP Smoke Tests
-
-Raw `curl` is useful for checking HTTP authentication and Host handling, but it
-does not perform a complete MCP streamable HTTP session. A request with the
-correct bearer token may therefore return `406 Not Acceptable` because curl did
-not send the MCP client's expected `Accept: text/event-stream` negotiation
-headers. That still proves the request passed bearer-token auth and Host
-validation.
-
-With the compose server running and the default compose token:
-
-```bash
-curl -i http://127.0.0.1:49317/mcp
-```
-
-Expected: `401 Unauthorized`.
-
-```bash
-curl -i \
-  -H "Host: YOUR_SERVER_IP:49317" \
-  -H "Authorization: Bearer change-me-now" \
-  http://127.0.0.1:49317/mcp
-```
-
-Expected: usually `406 Not Acceptable` from raw curl, but not `401 Unauthorized`
-and not `421 Misdirected Request`.
-
-With a real MCP client, such as OpenCode configured with the same URL and
-Authorization header, `ListTools` and `CallTool` should work for `ddg_search`,
-`web_fetch`, `ddg_deep_search`, `cache_stats`, `cache_prune`, and
-`cache_clear`.
-
-## Tool Response Examples
-
-All tools publish typed `outputSchema` and return `structuredContent`
-(validated by the client). Provider failures surface as MCP `isError` results
-(`ToolError`), not as success payloads with an error field.
-
-`ddg_search` returns:
-
-```json
-{
-  "query": "example",
-  "provider": "duckduckgo_html",
-  "results": [
-    {"title": "Example Domain", "url": "https://example.com/", "snippet": "This domain is for use in examples."}
-  ],
-  "cached": false,
-  "error": null
-}
-```
-
-`web_fetch` returns:
-
-```json
-{
-  "url": "https://example.com/",
-  "final_url": "https://example.com/",
-  "title": "Example Domain",
-  "content": "This domain is for use in illustrative examples...",
-  "content_type": "text/html",
-  "cached": false,
-  "success": true,
-  "error": null
-}
-```
-
-`ddg_deep_search` returns sources, fetched pages, failed pages, a
-`search_error` field for total provider failures, and `cached`.
-
-`cache_stats`, `cache_prune`, and `cache_clear` return per-namespace file
-counts and byte totals (`deleted_files`, `remaining_files`, and so on).
-
-## Environment Variables
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `MCP_CACHE_DIR` | `/data/cache` | Directory for JSON cache files. |
-| `SEARCH_PROVIDER` | `duckduckgo_html` | Search provider mode: `duckduckgo_html`, `ddgs`, or `auto`. Invalid values safely fall back to `duckduckgo_html`. |
-| `DDGS_BACKEND` | `duckduckgo` | Backend passed to `DDGS().text(...)` when `SEARCH_PROVIDER=ddgs` or `SEARCH_PROVIDER=auto`. `duckduckgo` keeps `ddgs` DuckDuckGo-focused when supported. `auto` is broader metasearch mode and may query multiple upstream providers. Invalid values safely fall back to `duckduckgo`. |
-| `DDG_CACHE_TTL_SECONDS` | `21600` | Search cache TTL in seconds. |
-| `FETCH_CACHE_TTL_SECONDS` | `7200` | Web fetch cache TTL in seconds. |
-| `DDG_TIMEOUT_SECONDS` | `15` | DuckDuckGo HTML and optional `ddgs` provider timeout in seconds. |
-| `FETCH_TIMEOUT_SECONDS` | `15` | Web fetch timeout in seconds. |
-| `MAX_CONCURRENCY` | `5` | Default deep search page fetch concurrency limit when `max_concurrency` is omitted. Runtime caps this at `12`. |
-| `MCP_TRANSPORT` | `stdio` | MCP transport. `stdio` is the default. `http` uses streamable HTTP when supported by the installed SDK. |
-| `MCP_HOST` | `0.0.0.0` | Host used for optional streamable HTTP mode. |
-| `MCP_PORT` | `8000` | Port used for optional streamable HTTP mode. |
-| `MCP_LOG_LEVEL` | `INFO` | Server log level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
-| `FETCH_MAX_BYTES` | `5242880` | Hard cap on downloaded response body size before extraction. |
-| `MCP_AUTH_TOKEN` | unset | Bearer token for HTTP mode. HTTP mode refuses to start without it (unless `MCP_ALLOW_UNAUTHENTICATED_HTTP=1`) and rejects known placeholder values. |
-| `MCP_ALLOWED_HOSTS` | `*` | Comma-separated Host allowlist for HTTP mode. `*` supports arbitrary deployment hosts by disabling SDK Host/Origin rebinding checks; prefer exact values. |
-| `MCP_ALLOWED_ORIGINS` | `*` | Comma-separated Origin allowlist for HTTP mode. `*` supports arbitrary origins by disabling SDK Host/Origin rebinding checks; prefer exact values. |
-| `CACHE_PRUNE_ON_START` | `true` | Run cache pruning once when the MCP server starts. |
-| `CACHE_PRUNE_INTERVAL_SECONDS` | `3600` | Minimum interval between opportunistic runtime prune attempts triggered by cache access/write. |
-| `CACHE_MAX_AGE_SECONDS` | unset | Optional maximum cache file age in seconds. If unset, invalid, or `0`, max-age pruning is disabled. The compose file sets `604800` (7 days). |
-| `CACHE_MAX_SIZE_MB` | unset | Optional total cache size limit in MiB. If unset, invalid, or `0`, size-based pruning is disabled. The compose file sets `512`. |
-
-## Cache Behavior
-
-Search results are cached under the `search` cache namespace. Fetch responses are cached under the `fetch` cache namespace. Cache keys are SHA256 hashes of stable JSON payloads, so equivalent tool arguments map to the same file path.
-
-Cache files are written atomically by writing a temporary file in the target cache directory and then renaming it into place. Corrupt, malformed, or expired cache files are ignored safely.
-
-TTL checks on read prevent stale cache values from being returned, but TTL on
-read alone does not remove old files from disk. Long-running deployments can
-therefore accumulate expired cache files unless pruning deletes them. This
-server prunes cache files on startup when `CACHE_PRUNE_ON_START=true` and also
-opportunistically during cache access/write, throttled by
-`CACHE_PRUNE_INTERVAL_SECONDS`.
-
-Pruning covers both known cache namespaces:
-
-- `search`
-- `fetch`
-
-Pruning deletes:
-
-- corrupt or malformed `.json` cache files
-- leftover `.tmp` files from interrupted atomic writes
-- files expired by `DDG_CACHE_TTL_SECONDS` or `FETCH_CACHE_TTL_SECONDS`
-- files older than `CACHE_MAX_AGE_SECONDS`, when set
-- oldest cache files first when total cache size exceeds `CACHE_MAX_SIZE_MB`
-
-If `CACHE_MAX_AGE_SECONDS` is unset, invalid, or `0`, max-age pruning is
-disabled. If `CACHE_MAX_SIZE_MB` is unset, invalid, or `0`, size-based pruning
-is disabled. Pruning errors are logged and do not fail search or fetch requests.
-
-Manual cache tools are available:
-
-- `cache_stats`: inspect current file counts and byte totals.
-- `cache_prune`: run pruning manually, with optional `dry_run`.
-- `cache_clear`: clear `search`, `fetch`, or `all` after `confirm=true`.
-
-The default compose configuration persists cache files in `/data/cache`, with
-`~/docker/docker-data/mcp-prism-search` mounted into the container.
-
-## Rate Limit Notes
-
-Defaults are intentionally conservative:
-
-- `ddg_search` defaults to 10 results and caps at 30.
-- `ddg_deep_search` defaults to 5 fetched pages and caps at 10.
-- Deep search concurrency defaults to 5.
-- Search and fetch results are cached to reduce repeated DuckDuckGo and website hits.
-- Search defaults to DuckDuckGo HTML only. `DDGS_BACKEND=auto` is broader
-  metasearch and can generate requests to additional upstream services.
-
-This project does not rotate proxies, bypass captchas, or attempt to evade rate limits. If DuckDuckGo blocks or rate limits requests, the tool returns structured errors instead of retrying aggressively.
-
-## SSRF and Security Protections
-
-> Full layered defense model: [docs/architecture.md](docs/architecture.md#security-model).
-
-`web_fetch` only allows `http` and `https` URLs. It blocks known local or internal hostnames, including:
-
-- `localhost`
-- `metadata`
-- `metadata.google.internal`
-- hostnames ending in `.local`, `.localhost`, `.internal`, `.lan`, `.intranet`
-
-It also rejects IP addresses in private, loopback, link-local, reserved, multicast, or unspecified ranges, including:
-
-- `0.0.0.0/8`
-- `10.0.0.0/8`
-- `127.0.0.0/8`
-- `169.254.0.0/16`
-- `172.16.0.0/12`
-- `192.168.0.0/16`
-- `::1/128`
-- `fc00::/7`
-- `fe80::/10`
-
-DNS is resolved before fetching. If any resolved address is unsafe, the request is rejected. Redirects are followed manually, and every redirect target is validated before the next request.
-
-Unsupported schemes such as `file://`, `ftp://`, `ssh://`, `gopher://`, and `data:` are never fetched.
-
-## Development Setup
-
-> Test suite layout and conventions: [docs/development.md](docs/development.md).
-
-Python 3.12 is required.
-
-Create and activate a virtual environment:
+| [docs/architecture.md](docs/architecture.md) | Module map, request flow, layered SSRF/security model, domain controls, cache design |
+| [docs/development.md](docs/development.md) | Dev setup, test suite layout, commands, conventions, semantic-release, dependency policy |
+| [docs/deployment.md](docs/deployment.md) | Docker and docker-compose operation, HTTP hardening, health checks, LAN/proxy/tunnel examples, full env var reference |
+
+## Tools
+
+| Tool | Description |
+|---|---|
+| `web_search` | Aggregated web search. `provider="auto"` walks the healthy fallback chain; `provider="all"` fans out to every provider in parallel and merges results; or pin one provider by name. |
+| `web_fetch` | SSRF-safe webpage fetch with IP pinning, redirect validation, streamed byte cap, and clean text extraction. |
+| `ddg_deep_search` | Search once, fetch the top pages concurrently, return raw page text with progress notifications. |
+| `vertical_search` | Search keyless vertical sources: `wikipedia`, `hackernews`. |
+| `ddg_search` | Legacy single-provider DuckDuckGo search (kept for compatibility). |
+| `cache_stats` / `cache_prune` / `cache_clear` | Cache inspection, pruning, and clearing. |
+
+All tools publish typed `outputSchema` and return validated
+`structuredContent`. Provider failures surface as MCP `isError` results
+(`ToolError`), with a `provider_attempts` tally for diagnostics.
+
+## Providers
+
+**Keyless (no configuration needed):**
+
+| Provider | What it is |
+|---|---|
+| `bing_html` | Bing SERP scraping — the most permissive engine from datacenter IPs |
+| `ddg_html` / `ddg_lite` | DuckDuckGo HTML and lite endpoints (IP-reputation dependent) |
+| `ddgs:bing` / `ddgs:yahoo` / `ddgs:brave` / `ddgs:yandex` | ddgs library multi-backend |
+| `freeserp` | FreeSerp own-index SERP (keyless JSON API) |
+| `keenable` | Keenable web search with extracted text |
+| `mwmbl` | Mwmbl community index (keyless, AGPL) |
+| `wikipedia` / `hackernews` | Keyless vertical sources |
+
+**Keyed (free tiers verified against official docs):**
+
+| Provider | Free tier | Env var |
+|---|---|---|
+| `tavily` | 1,000 credits/month, or keyless mode | `TAVILY_API_KEY` (optional — works keyless) |
+| `exa` | ~1,430 searches/month (no card) | `EXA_API_KEY` |
+| `brave` | ~1,000 searches/month (card required at signup, prepay $0) | `BRAVE_API_KEY` |
+| `youcom` | $100 one-time credit | `YDC_API_KEY` |
+| `serper` | 2,500 Google SERP queries one-time | `SERPER_API_KEY` |
+| `jina` | Search with full page content (10M token grant) | `JINA_API_KEY` |
+| `searxng` | Unlimited (self-hosted) | `SEARXNG_URL` |
+
+Providers whose key is missing are skipped automatically; only the keyless
+ones run.
+
+## Quick start
+
+stdio (desktop MCP clients — no network, no token):
 
 ```bash
 python3.12 -m venv .venv
-source .venv/bin/activate
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m mcp_prism_search.server
 ```
 
-Install the package with development tools:
+Streamable HTTP (Docker compose — loopback-only by default):
 
 ```bash
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+MCP_AUTH_TOKEN=$(openssl rand -hex 32) docker compose up -d --build
+curl -s http://127.0.0.1:49317/health   # -> {"ok": true}
 ```
 
-Run the MCP server locally:
+Then call it from any MCP client at `http://127.0.0.1:49317/mcp` with
+`Authorization: Bearer <token>`.
+
+Search across every keyless engine at once:
+
+```json
+{"query": "model context protocol", "provider": "all", "max_results": 15}
+```
+
+## Security
+
+Layered SSRF defenses on every fetch: scheme allowlist, hostname and literal
+IP blocklists (private, loopback, CGNAT, link-local, metadata), DNS
+resolution checks with IP pinning (the validate-then-connect TOCTOU window is
+closed), per-hop redirect re-validation with a 5-hop cap, streamed bodies
+hard-capped at `FETCH_MAX_BYTES`, and `Accept-Encoding: identity` enforcement.
+HTTP mode requires a bearer token and rejects known placeholder tokens at
+startup. Full model: [docs/architecture.md](docs/architecture.md#security-model).
+
+The server does not rotate proxies, bypass captchas, or attempt to evade
+rate limits: upstream blocks surface as structured errors instead.
+
+## Development
+
+Python 3.12+, `pytest` (offline, 100+ tests), `ruff`. Conventional commits
+drive semantic-release (automatic versioning, tags, releases, and
+multi-arch Docker images).
 
 ```bash
-python -m mcp_prism_search.server
+python3.12 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m pytest -q
+.venv/bin/python -m ruff check src tests
 ```
 
-## Test Commands
+Details: [docs/development.md](docs/development.md).
 
-Run tests:
+## License
 
-```bash
-python -m pytest
-```
-
-Run lint:
-
-```bash
-python -m ruff check .
-```
-
-Build a wheel/sdist using the configured build backend:
-
-```bash
-python -m pip install build
-python -m build
-```
-
-## Release Automation
-
-Releases are automated by `.github/workflows/release.yml` when commits or
-release tags are pushed. The workflow is Python-native:
-
-1. Install the project with development dependencies.
-2. Run Ruff, pytest, compile checks, Python package build, and a Docker build.
-3. On `main` branch pushes, use Python Semantic Release to create the next
-   GitHub release from conventional commits.
-4. On `v*` tag pushes, treat the pushed tag as the release tag.
-5. If a release or release tag is present, build and push multi-architecture
-   Docker images for `linux/amd64` and `linux/arm64`.
-
-The workflow publishes these image tags:
-
-```text
-DOCKERHUB_USERNAME/mcp-prism-search:latest
-DOCKERHUB_USERNAME/mcp-prism-search:vX.Y.Z
-ghcr.io/isyuricunha/mcp-prism-search:latest
-ghcr.io/isyuricunha/mcp-prism-search:vX.Y.Z
-```
-
-Required repository secrets:
-
-| Secret | Purpose |
-| --- | --- |
-| `DOCKERHUB_USERNAME` | Docker Hub namespace for the published image. |
-| `DOCKERHUB_TOKEN` | Docker Hub access token used by `docker/login-action`. |
-| `GITHUB_TOKEN` | Provided automatically by GitHub Actions for GitHub releases and GHCR publishing. |
-
-Use conventional commits to drive release versions:
-
-- `fix: ...` and `perf: ...` create patch releases.
-- `feat: ...` creates minor releases while the project is in `0.x`.
-- Breaking changes are capped to a minor release while the project is in `0.x`;
-  after `1.0.0`, they create major releases.
-- `docs:`, `ci:`, `chore:`, `test:`, `style:`, and `refactor:` do not create a
-  release by default.
-
-The release workflow updates `pyproject.toml` and
-`src/mcp_prism_search/__init__.py` during semantic-release commits. It does not
-maintain a changelog file. It is intentionally skipped for documentation-only
-pushes and compose-file-only pushes.
-
-Manual milestone releases are also supported. Create and push a `vX.Y.Z` tag
-that points at the intended release commit, and the tag workflow publishes the
-same Docker Hub and GHCR tags.
-
-## Limitations
-
-- DuckDuckGo HTML mode does not support every option exposed by DuckDuckGo's full web interface.
-- `time_filter` is applied to the `ddgs` provider. DuckDuckGo HTML mode only sends the query and safe-search parameter.
-- PDF parsing is not implemented in v1.
-- JavaScript-rendered pages are not rendered because there is no browser automation.
-- Some websites block automated HTTP clients or return incomplete content.
-- DNS safety checks reduce SSRF risk but cannot make arbitrary third-party fetching risk-free.
-
-## Optional Future Roadmap
-
-These are optional future improvements, not current behavior:
-
-- Add configurable per-domain fetch throttling.
-- Add optional robots.txt awareness.
-- Add additional text extraction heuristics for common article layouts.
-- Add more integration tests around redirect chains and text content types.
+AGPL-3.0 — see [LICENSE](LICENSE).
