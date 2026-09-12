@@ -1,10 +1,10 @@
-from mcp_ddg_research.domains import (
+from mcp_prism_search.domains import (
     apply_domain_controls,
     domain_matches,
     normalize_domain,
 )
-from mcp_ddg_research.models import SearchResult
-from mcp_ddg_research.search import apply_search_domain_controls
+from mcp_prism_search.models import SearchResult
+from mcp_prism_search.search import apply_search_domain_controls
 
 
 def _result(title: str, url: str) -> SearchResult:
@@ -101,7 +101,7 @@ def test_empty_domain_controls_preserve_original_order() -> None:
 
 
 def test_search_domain_controls_apply_allowed_then_blocked_then_preferred() -> None:
-    from mcp_ddg_research.models import SearchRequest
+    from mcp_prism_search.models import SearchRequest
 
     request = SearchRequest(
         query="example",

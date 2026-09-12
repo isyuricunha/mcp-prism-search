@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcp-ddg-research"
+name = "mcp-prism-search"
 version = "0.12.0"
-description = "Lightweight MCP server for DuckDuckGo HTML search with optional ddgs mode, safe webpage fetching, caching, and clean text extraction."
+description = "MCP search aggregator: multi-provider keyless web search (Bing, DuckDuckGo, SearXNG, 4get, FreeSerp, Keenable, Mwmbl) with keyed free-tier providers (Tavily, Exa, Brave, You.com, Serper, Jina), fallback chains, deterministic ranking, caching, and SSRF-safe fetching."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
 authors = [
-  { name = "mcp-ddg-research contributors" }
+  { name = "mcp-prism-search contributors" }
 ]
 dependencies = [
   "beautifulsoup4>=4.12",
@@ -28,10 +28,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/isyuricunha/mcp-ddg-research"
+Homepage = "https://github.com/isyuricunha/mcp-prism-search"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcp_ddg_research"]
+packages = ["src/mcp_prism_search"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,7 +51,7 @@ commit_parser = "conventional"
 major_on_zero = false
 tag_format = "v{version}"
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["src/mcp_ddg_research/__init__.py:__version__"]
+version_variables = ["src/mcp_prism_search/__init__.py:__version__"]
 
 [tool.semantic_release.branches.main]
 match = "main"

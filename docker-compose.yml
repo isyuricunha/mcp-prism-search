@@ -1,8 +1,8 @@
 services:
   ddg-research:
     build: .
-    image: mcp-ddg-research:local
-    container_name: mcp-ddg-research
+    image: mcp-prism-search:local
+    container_name: mcp-prism-search
     restart: unless-stopped
     ports:
       # Loopback only by default; the MCP_AUTH_TOKEN below gates the service.
@@ -10,9 +10,9 @@ services:
     volumes:
       # The container runs as uid 10001:10001. On first run, make the bind
       # mount writable by that uid:
-      #   mkdir -p ~/docker/docker-data/mcp-ddg-research
-      #   sudo chown -R 10001:10001 ~/docker/docker-data/mcp-ddg-research
-      - ~/docker/docker-data/mcp-ddg-research:/data
+      #   mkdir -p ~/docker/docker-data/mcp-prism-search
+      #   sudo chown -R 10001:10001 ~/docker/docker-data/mcp-prism-search
+      - ~/docker/docker-data/mcp-prism-search:/data
     environment:
       # Required for Docker/LAN HTTP mode. The image defaults to stdio, so
       # compose explicitly enables streamable HTTP and binds inside the container.

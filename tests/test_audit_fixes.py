@@ -7,13 +7,13 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-import mcp_ddg_research.fetch as fetch_module
-import mcp_ddg_research.search as search_module
-import mcp_ddg_research.server as server_module
-from mcp_ddg_research.cache import JsonFileCache
-from mcp_ddg_research.models import FetchRequest, SearchRequest
-from mcp_ddg_research.search import _search_with_duckduckgo_html, ddg_search
-from mcp_ddg_research.text import extract_html_text
+import mcp_prism_search.fetch as fetch_module
+import mcp_prism_search.search as search_module
+import mcp_prism_search.server as server_module
+from mcp_prism_search.cache import JsonFileCache
+from mcp_prism_search.models import FetchRequest, SearchRequest
+from mcp_prism_search.search import _search_with_duckduckgo_html, ddg_search
+from mcp_prism_search.text import extract_html_text
 
 REAL_ASYNC_CLIENT = httpx.AsyncClient
 
@@ -207,7 +207,7 @@ def test_small_body_succeeds_with_host_preserved_in_pin() -> None:
 
 
 def test_cgnat_range_is_blocked() -> None:
-    from mcp_ddg_research.security import is_unsafe_ip
+    from mcp_prism_search.security import is_unsafe_ip
 
     assert is_unsafe_ip("100.64.0.1")
     assert is_unsafe_ip("100.100.200.200")
@@ -351,7 +351,7 @@ def test_health_path_bypasses_auth() -> None:
 def test_ddg_search_tool_raises_tool_error_on_provider_failure() -> None:
     from mcp.server.mcpserver.exceptions import ToolError
 
-    from mcp_ddg_research.models import SearchResponse
+    from mcp_prism_search.models import SearchResponse
 
     async def failing_provider(**_kwargs):
         return SearchResponse(
@@ -368,7 +368,7 @@ def test_ddg_search_tool_raises_tool_error_on_provider_failure() -> None:
 def test_web_fetch_tool_raises_tool_error_on_failure() -> None:
     from mcp.server.mcpserver.exceptions import ToolError
 
-    from mcp_ddg_research.models import FetchResponse
+    from mcp_prism_search.models import FetchResponse
 
     async def failing_provider(**_kwargs):
         return FetchResponse(
@@ -383,7 +383,7 @@ def test_web_fetch_tool_raises_tool_error_on_failure() -> None:
 
 
 def test_deep_search_reports_progress() -> None:
-    from mcp_ddg_research.models import (
+    from mcp_prism_search.models import (
         DeepSearchPage,
         DeepSearchResponse,
         SearchResult,
@@ -428,7 +428,7 @@ def test_deep_search_reports_progress() -> None:
 
 
 def _fake_fetch_result():
-    from mcp_ddg_research.models import FetchResponse
+    from mcp_prism_search.models import FetchResponse
 
     return FetchResponse(
         url="https://a.example/", final_url="https://a.example/", title="T",

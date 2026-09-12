@@ -5,8 +5,8 @@ import time
 
 import pytest
 
-import mcp_ddg_research.search as search_module
-from mcp_ddg_research.cache import (
+import mcp_prism_search.search as search_module
+from mcp_prism_search.cache import (
     CACHE_NAMESPACES,
     CachePruneConfig,
     JsonFileCache,
@@ -15,9 +15,9 @@ from mcp_ddg_research.cache import (
     maybe_prune_cache,
     prune_cache,
 )
-from mcp_ddg_research.fetch import web_fetch
-from mcp_ddg_research.models import FetchRequest, FetchResponse, SearchRequest, SearchResponse
-from mcp_ddg_research.search import ddg_search
+from mcp_prism_search.fetch import web_fetch
+from mcp_prism_search.models import FetchRequest, FetchResponse, SearchRequest, SearchResponse
+from mcp_prism_search.search import ddg_search
 
 
 def _write_cache_file(path, *, created_at: float, value: dict | None = None) -> int:
@@ -219,8 +219,8 @@ def test_maybe_prune_cache_does_not_run_more_often_than_interval(monkeypatch, tm
         calls.append((config.root_dir, expired_only, dry_run))
         return None
 
-    monkeypatch.setattr("mcp_ddg_research.cache.prune_cache", fake_prune_cache)
-    monkeypatch.setattr("mcp_ddg_research.cache._LAST_PRUNE_TIMES", {})
+    monkeypatch.setattr("mcp_prism_search.cache.prune_cache", fake_prune_cache)
+    monkeypatch.setattr("mcp_prism_search.cache._LAST_PRUNE_TIMES", {})
     monkeypatch.setenv("CACHE_PRUNE_INTERVAL_SECONDS", "3600")
 
     maybe_prune_cache(root_dir=tmp_path)
@@ -250,9 +250,9 @@ def test_search_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None
     async def fail_html(*args, **kwargs):
         raise AssertionError("search provider should not run on cache hit")
 
-    monkeypatch.setattr("mcp_ddg_research.cache.prune_cache", fail_prune)
-    monkeypatch.setattr("mcp_ddg_research.cache._LAST_PRUNE_TIMES", {})
-    monkeypatch.setattr("mcp_ddg_research.search._search_with_duckduckgo_html", fail_html)
+    monkeypatch.setattr("mcp_prism_search.cache.prune_cache", fail_prune)
+    monkeypatch.setattr("mcp_prism_search.cache._LAST_PRUNE_TIMES", {})
+    monkeypatch.setattr("mcp_prism_search.search._search_with_duckduckgo_html", fail_html)
 
     cached_response = asyncio.run(ddg_search(query="example", cache=cache))
 
@@ -282,9 +282,9 @@ def test_fetch_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None:
     def fail_prune(*args, **kwargs):
         raise OSError("prune failed")
 
-    monkeypatch.setattr("mcp_ddg_research.fetch.validate_fetch_url", validate_without_dns)
-    monkeypatch.setattr("mcp_ddg_research.cache.prune_cache", fail_prune)
-    monkeypatch.setattr("mcp_ddg_research.cache._LAST_PRUNE_TIMES", {})
+    monkeypatch.setattr("mcp_prism_search.fetch.validate_fetch_url", validate_without_dns)
+    monkeypatch.setattr("mcp_prism_search.cache.prune_cache", fail_prune)
+    monkeypatch.setattr("mcp_prism_search.cache._LAST_PRUNE_TIMES", {})
 
     cached_response = asyncio.run(web_fetch(url="https://example.com", cache=cache))
 

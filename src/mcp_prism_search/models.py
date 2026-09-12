@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from mcp_ddg_research.domains import normalize_domains
+from mcp_prism_search.domains import normalize_domains
 
 SafeSearch = Literal["off", "moderate", "strict"]
 TimeFilter = Literal["day", "week", "month", "year"]

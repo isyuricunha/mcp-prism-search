@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from mcp_ddg_research.models import SearchRequest, SearchResult
+from mcp_prism_search.models import SearchRequest, SearchResult
 
 ProviderFn = Callable[
     [SearchRequest, int, int],

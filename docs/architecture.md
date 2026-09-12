@@ -1,6 +1,6 @@
 # Architecture
 
-`mcp-ddg-research` is a Python 3.12 MCP server built on the official
+`mcp-prism-search` is a Python 3.12 MCP server built on the official
 `mcp` SDK (2.x, `MCPServer` API) with FastMCP-style tool decorators.
 It exposes deterministic research primitives over stdio or streamable HTTP.
 The agent/client reasons over the returned data; the server never calls models.
@@ -96,7 +96,7 @@ data and returns it verbatim to the client.
 ## Release format
 
 `translate`-style corpus releases are not part of this project; published
-artifacts are the Docker images (`ghcr.io/isyuricunha/mcp-ddg-research`)
+artifacts are the Docker images (`ghcr.io/isyuricunha/mcp-prism-search`)
 built from `requirements-lock.txt` + source, plus GitHub releases generated
 by semantic-release from conventional commits.
 

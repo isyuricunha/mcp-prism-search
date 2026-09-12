@@ -31,11 +31,11 @@ The `[dev]` extra installs `pytest` and `ruff`.
 .venv/bin/python -m ruff check src tests
 
 # run the server locally over stdio
-.venv/bin/python -m mcp_ddg_research.server
+.venv/bin/python -m mcp_prism_search.server
 
 # run the server over streamable HTTP
 MCP_TRANSPORT=http MCP_AUTH_TOKEN=$(openssl rand -hex 32) MCP_PORT=8000 \
-  .venv/bin/python -m mcp_ddg_research.server
+  .venv/bin/python -m mcp_prism_search.server
 ```
 
 ## Test layout

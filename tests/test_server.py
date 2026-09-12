@@ -1,6 +1,6 @@
 import asyncio
 
-from mcp_ddg_research.server import (
+from mcp_prism_search.server import (
     BearerTokenAuthMiddleware,
     _build_transport_security_settings,
     _configure_http_settings,

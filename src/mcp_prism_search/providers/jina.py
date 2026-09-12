@@ -10,8 +10,8 @@ import os
 
 import httpx
 
-from mcp_ddg_research.models import SearchRequest, SearchResult
-from mcp_ddg_research.text import normalize_whitespace
+from mcp_prism_search.models import SearchRequest, SearchResult
+from mcp_prism_search.text import normalize_whitespace
 
 SEARCH_URL = "https://s.jina.ai/"
 

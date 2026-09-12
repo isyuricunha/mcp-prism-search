@@ -6,7 +6,7 @@ import asyncio
 import inspect
 from typing import Any
 
-from mcp_ddg_research.models import SearchRequest, SearchResult
+from mcp_prism_search.models import SearchRequest, SearchResult
 
 DDGS_SAFE_SEARCH = {"off": "off", "moderate": "moderate", "strict": "on"}
 TIME_FILTERS = {"day": "d", "week": "w", "month": "m", "year": "y"}
@@ -36,7 +36,7 @@ def _ddgs_text_kwargs(
 
 
 def _result_from_payload(payload: dict[str, Any]) -> SearchResult | None:
-    from mcp_ddg_research.text import normalize_whitespace
+    from mcp_prism_search.text import normalize_whitespace
 
     title = normalize_whitespace(str(payload.get("title") or ""))
     url = str(payload.get("href") or payload.get("url") or "")

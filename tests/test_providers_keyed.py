@@ -6,8 +6,8 @@ import contextlib
 import httpx
 import pytest
 
-from mcp_ddg_research.models import SearchRequest
-from mcp_ddg_research.providers import brave, exa, jina, serper, tavily, youcom
+from mcp_prism_search.models import SearchRequest
+from mcp_prism_search.providers import brave, exa, jina, serper, tavily, youcom
 
 
 def _request(query: str = "test") -> SearchRequest:

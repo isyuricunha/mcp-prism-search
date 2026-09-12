@@ -11,7 +11,7 @@ Two supported modes:
 ## Docker
 
 ```bash
-docker build -t mcp-ddg-research:local .
+docker build -t mcp-prism-search:local .
 ```
 
 The image:
@@ -24,8 +24,8 @@ The image:
 ## docker-compose (HTTP mode)
 
 ```bash
-mkdir -p ~/docker/docker-data/mcp-ddg-research
-sudo chown -R 10001:10001 ~/docker/docker-data/mcp-ddg-research   # container uid
+mkdir -p ~/docker/docker-data/mcp-prism-search
+sudo chown -R 10001:10001 ~/docker/docker-data/mcp-prism-search   # container uid
 MCP_AUTH_TOKEN=$(openssl rand -hex 32) docker compose up -d
 ```
 

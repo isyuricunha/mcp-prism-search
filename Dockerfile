@@ -27,4 +27,4 @@ USER 10001:10001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import socket,sys; s=socket.socket(); s.settimeout(4); s.connect(('127.0.0.1', int(__import__('os').getenv('MCP_PORT','8000'))))" || exit 1
 
-ENTRYPOINT ["python", "-m", "mcp_ddg_research.server"]
+ENTRYPOINT ["python", "-m", "mcp_prism_search.server"]

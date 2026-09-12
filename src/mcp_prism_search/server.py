@@ -15,15 +15,15 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from mcp_ddg_research import cache as cache_ops
-from mcp_ddg_research.cache import (
+from mcp_prism_search import cache as cache_ops
+from mcp_prism_search.cache import (
     _get_env_bool,
     get_cache_prune_config,
     prune_cache,
 )
-from mcp_ddg_research.fetch import ddg_deep_search as perform_deep_search
-from mcp_ddg_research.fetch import web_fetch as perform_web_fetch
-from mcp_ddg_research.models import (
+from mcp_prism_search.fetch import ddg_deep_search as perform_deep_search
+from mcp_prism_search.fetch import web_fetch as perform_web_fetch
+from mcp_prism_search.models import (
     ARGUMENT_DESCRIPTIONS,
     CacheNamespace,
     DeepSearchResponse,
@@ -32,9 +32,9 @@ from mcp_ddg_research.models import (
     SearchResponse,
     TimeFilter,
 )
-from mcp_ddg_research.providers import available_providers
-from mcp_ddg_research.search import aggregated_search as perform_aggregated_search
-from mcp_ddg_research.search import ddg_search as perform_ddg_search
+from mcp_prism_search.providers import available_providers
+from mcp_prism_search.search import aggregated_search as perform_aggregated_search
+from mcp_prism_search.search import ddg_search as perform_ddg_search
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def _validated_log_level() -> str:
 
 
 mcp = MCPServer(
-    name="mcp-ddg-research",
+    name="mcp-prism-search",
     version="0.6.0",
     instructions=(
         "Deterministic DuckDuckGo search and safe webpage fetching tools. "

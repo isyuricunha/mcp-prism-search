@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 
-from mcp_ddg_research.models import SearchRequest, SearchResult
-from mcp_ddg_research.providers import (  # noqa: F401
+from mcp_prism_search.models import SearchRequest, SearchResult
+from mcp_prism_search.providers import (  # noqa: F401
     bing_html,
     bing_rss,
     brave,
@@ -30,7 +30,7 @@ from mcp_ddg_research.providers import (  # noqa: F401
     yandex_tr,
     youcom,
 )
-from mcp_ddg_research.providers.base import (  # noqa: F401
+from mcp_prism_search.providers.base import (  # noqa: F401
     ProviderHealth,
     ProviderSpec,
     build_chain,

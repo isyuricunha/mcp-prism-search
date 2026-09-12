@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-import mcp_ddg_research.search as search_module
-from mcp_ddg_research.cache import JsonFileCache
-from mcp_ddg_research.fetch import ddg_deep_search, get_max_concurrency
-from mcp_ddg_research.models import (
+import mcp_prism_search.search as search_module
+from mcp_prism_search.cache import JsonFileCache
+from mcp_prism_search.fetch import ddg_deep_search, get_max_concurrency
+from mcp_prism_search.models import (
     DeepSearchRequest,
     FetchRequest,
     FetchResponse,
@@ -17,7 +17,7 @@ from mcp_ddg_research.models import (
     SearchResponse,
     SearchResult,
 )
-from mcp_ddg_research.search import (
+from mcp_prism_search.search import (
     _search_with_ddgs,
     ddg_search,
     get_ddgs_backend,
@@ -392,8 +392,8 @@ def test_deep_search_still_fetches_pages(monkeypatch) -> None:
             error=None,
         )
 
-    monkeypatch.setattr("mcp_ddg_research.fetch.ddg_search", fake_search)
-    monkeypatch.setattr("mcp_ddg_research.fetch.web_fetch", fake_fetch)
+    monkeypatch.setattr("mcp_prism_search.fetch.ddg_search", fake_search)
+    monkeypatch.setattr("mcp_prism_search.fetch.web_fetch", fake_fetch)
 
     response = asyncio.run(ddg_deep_search(query="example"))
 
@@ -504,7 +504,7 @@ def test_deep_search_passes_search_window_to_search(monkeypatch) -> None:
             error=None,
         )
 
-    monkeypatch.setattr("mcp_ddg_research.fetch.ddg_search", fake_search)
+    monkeypatch.setattr("mcp_prism_search.fetch.ddg_search", fake_search)
 
     asyncio.run(ddg_deep_search(query="example", search_window=8))
 

@@ -9,8 +9,8 @@ from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 
-from mcp_ddg_research.cache import JsonFileCache, build_fetch_cache, get_env_int
-from mcp_ddg_research.models import (
+from mcp_prism_search.cache import JsonFileCache, build_fetch_cache, get_env_int
+from mcp_prism_search.models import (
     DeepSearchPage,
     DeepSearchRequest,
     DeepSearchResponse,
@@ -18,14 +18,14 @@ from mcp_ddg_research.models import (
     FetchRequest,
     FetchResponse,
 )
-from mcp_ddg_research.search import ddg_search
-from mcp_ddg_research.security import (
+from mcp_prism_search.search import ddg_search
+from mcp_prism_search.security import (
     UnsafeUrlError,
     resolve_safe_address,
     validate_fetch_url,
     validate_url_shape,
 )
-from mcp_ddg_research.text import extract_html_text, is_plain_text_content, truncate_text
+from mcp_prism_search.text import extract_html_text, is_plain_text_content, truncate_text
 
 LOGGER = logging.getLogger(__name__)
 

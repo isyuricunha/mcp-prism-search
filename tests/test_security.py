@@ -1,7 +1,7 @@
 import pytest
 
-from mcp_ddg_research.security import UnsafeUrlError, validate_url_shape
-from mcp_ddg_research.text import extract_html_text
+from mcp_prism_search.security import UnsafeUrlError, validate_url_shape
+from mcp_prism_search.text import extract_html_text
 
 
 @pytest.mark.parametrize(

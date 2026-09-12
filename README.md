@@ -1,8 +1,8 @@
-# mcp-ddg-research
+# mcp-prism-search
 
-Lightweight MCP server for DuckDuckGo HTML search with optional ddgs mode, safe webpage fetching, caching, and clean text extraction.
+MCP search aggregator: one query, refracted across many keyless search engines.
 
-`mcp-ddg-research` is a self-hosted Python MCP server that exposes deterministic research primitives to MCP clients. By default it searches DuckDuckGo through DuckDuckGo's lightweight HTML endpoint, fetches webpages with SSRF protections, caches search/fetch responses, deduplicates URLs, and extracts readable text from HTML pages. The optional `ddgs` provider can be enabled explicitly for DuckDuckGo-backed or broader metasearch behavior.
+`mcp-prism-search` is a self-hosted Python MCP server that aggregates web search from multiple keyless engines — Bing, DuckDuckGo (HTML and lite), ddgs backends, FreeSerp, Keenable, Mwmbl, 4get, self-hosted SearXNG — with automatic fallback chains, deterministic ranking, parallel fan-out (`provider="all"`), TTL caching, and layered SSRF-safe webpage fetching. Keyed providers with free tiers (Tavily, Exa, Brave, You.com, Serper, Jina) plug in via env vars and are skipped when absent.
 
 The MCP client or agent is responsible for reasoning over the returned data. This server only returns structured search results and fetched page text.
 
@@ -469,14 +469,14 @@ Limit deep-search fetch concurrency for one call:
 Build the local image:
 
 ```bash
-docker build -t mcp-ddg-research:local .
+docker build -t mcp-prism-search:local .
 ```
 
 Run the server over stdio. This mode is auth-free because the MCP client owns
 stdin/stdout and there is no listening network socket:
 
 ```bash
-docker run --rm -i -v "$PWD/data:/data" mcp-ddg-research:local
+docker run --rm -i -v "$PWD/data:/data" mcp-prism-search:local
 ```
 
 ## Docker Stdio MCP Client Configuration
@@ -491,8 +491,8 @@ docker run --rm -i -v "$PWD/data:/data" mcp-ddg-research:local
         "--rm",
         "-i",
         "-v",
-        "/opt/mcp-ddg-research/data:/data",
-        "mcp-ddg-research:local"
+        "/opt/mcp-prism-search/data:/data",
+        "mcp-prism-search:local"
       ]
     }
   }
@@ -516,7 +516,7 @@ docker compose up --build ddg-research
 The compose file persists cache data at:
 
 ```text
-~/docker/docker-data/mcp-ddg-research/cache
+~/docker/docker-data/mcp-prism-search/cache
 ```
 
 It also enables conservative cache pruning defaults:
@@ -539,7 +539,7 @@ The compose file requires a real `MCP_AUTH_TOKEN` (it uses `${MCP_AUTH_TOKEN:?}`
 and the server refuses to start with the known placeholder `change-me-now`).
 Generate one with `openssl rand -hex 32` before starting the stack. The bind
 mount used for `/data` must be writable by the container uid 10001:
-`sudo chown -R 10001:10001 ~/docker/docker-data/mcp-ddg-research`.
+`sudo chown -R 10001:10001 ~/docker/docker-data/mcp-prism-search`.
 
 The server defaults `MCP_ALLOWED_HOSTS=*` and `MCP_ALLOWED_ORIGINS=*` so the
 same container can run behind a LAN IP, hostname, domain, reverse proxy, or
@@ -825,7 +825,7 @@ Manual cache tools are available:
 - `cache_clear`: clear `search`, `fetch`, or `all` after `confirm=true`.
 
 The default compose configuration persists cache files in `/data/cache`, with
-`~/docker/docker-data/mcp-ddg-research` mounted into the container.
+`~/docker/docker-data/mcp-prism-search` mounted into the container.
 
 ## Rate Limit Notes
 
@@ -890,7 +890,7 @@ python -m pip install -e ".[dev]"
 Run the MCP server locally:
 
 ```bash
-python -m mcp_ddg_research.server
+python -m mcp_prism_search.server
 ```
 
 ## Test Commands
@@ -930,10 +930,10 @@ release tags are pushed. The workflow is Python-native:
 The workflow publishes these image tags:
 
 ```text
-DOCKERHUB_USERNAME/mcp-ddg-research:latest
-DOCKERHUB_USERNAME/mcp-ddg-research:vX.Y.Z
-ghcr.io/isyuricunha/mcp-ddg-research:latest
-ghcr.io/isyuricunha/mcp-ddg-research:vX.Y.Z
+DOCKERHUB_USERNAME/mcp-prism-search:latest
+DOCKERHUB_USERNAME/mcp-prism-search:vX.Y.Z
+ghcr.io/isyuricunha/mcp-prism-search:latest
+ghcr.io/isyuricunha/mcp-prism-search:vX.Y.Z
 ```
 
 Required repository secrets:
@@ -954,7 +954,7 @@ Use conventional commits to drive release versions:
   release by default.
 
 The release workflow updates `pyproject.toml` and
-`src/mcp_ddg_research/__init__.py` during semantic-release commits. It does not
+`src/mcp_prism_search/__init__.py` during semantic-release commits. It does not
 maintain a changelog file. It is intentionally skipped for documentation-only
 pushes and compose-file-only pushes.
 

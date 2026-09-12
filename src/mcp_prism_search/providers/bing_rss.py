@@ -5,8 +5,8 @@ from __future__ import annotations
 import defusedxml.ElementTree as ET  # untrusted feed: XXE-safe parser
 import httpx
 
-from mcp_ddg_research.models import SearchRequest, SearchResult
-from mcp_ddg_research.text import normalize_whitespace
+from mcp_prism_search.models import SearchRequest, SearchResult
+from mcp_prism_search.text import normalize_whitespace
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:

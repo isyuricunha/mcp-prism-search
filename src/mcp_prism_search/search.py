@@ -14,15 +14,15 @@ from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 import httpx
 from bs4 import BeautifulSoup
 
-from mcp_ddg_research.cache import JsonFileCache, build_search_cache, get_env_int
-from mcp_ddg_research.domains import apply_domain_controls
-from mcp_ddg_research.models import (
+from mcp_prism_search.cache import JsonFileCache, build_search_cache, get_env_int
+from mcp_prism_search.domains import apply_domain_controls
+from mcp_prism_search.models import (
     SearchProvider,
     SearchRequest,
     SearchResponse,
     SearchResult,
 )
-from mcp_ddg_research.text import normalize_whitespace
+from mcp_prism_search.text import normalize_whitespace
 
 DUCKDUCKGO_HTML_URL = "https://html.duckduckgo.com/html/"
 DDGS_SAFE_SEARCH = {"off": "off", "moderate": "moderate", "strict": "on"}
@@ -474,7 +474,7 @@ async def _aggregate_all(
     """
     import asyncio
 
-    from mcp_ddg_research.providers import run_provider
+    from mcp_prism_search.providers import run_provider
 
     window = max(request.max_results, request.search_window or 0) or request.max_results
     tasks = {
@@ -552,7 +552,7 @@ async def aggregated_search(
     cache: JsonFileCache | None = None,
 ) -> SearchResponse:
     """Aggregate across providers: fallback chain + ranking + tally."""
-    from mcp_ddg_research.providers import record, resolve_chain, run_provider
+    from mcp_prism_search.providers import record, resolve_chain, run_provider
 
     request = SearchRequest(
         query=query,
