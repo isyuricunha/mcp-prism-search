@@ -153,4 +153,6 @@ def resolve_chain(requested: str, kind: str | None = None) -> list[str]:
     if not SPECS:
         build_registry()
     avail = available_providers(kind)
+    if requested == "all":
+        return build_chain("auto", avail)
     return build_chain(requested, avail)

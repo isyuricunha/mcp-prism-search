@@ -326,7 +326,7 @@ async def web_search(
     available = sorted(available_providers("general"))
     response = await perform_aggregated_search(
         query=query,
-        provider=provider if provider in {"auto", *available} else "auto",
+        provider=provider if provider in {"auto", "all", *available} else "auto",
         max_results=max_results,
         safe_search=safe_search,
         time_filter=time_filter,

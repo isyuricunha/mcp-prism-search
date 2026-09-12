@@ -12,6 +12,7 @@ SearchProvider = Literal[
     "ddgs",
     "duckduckgo_html",
     "auto",
+    "all",
     "bing_html",
     "4get",
     "mwmbl",

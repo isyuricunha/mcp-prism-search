@@ -460,6 +460,83 @@ async def ddg_search(
     )
 
 
+async def _aggregate_all(
+    chain: list[str],
+    request: SearchRequest,
+    timeout_seconds: int,
+    cache: JsonFileCache | None,
+) -> SearchResponse:
+    """Fan out to every provider in the chain concurrently and merge results.
+
+    Round-robin interleaving preserves per-provider diversity; dedupe by
+    normalized URL drops repeats. At least one provider must return results
+    for the call to be considered a success.
+    """
+    import asyncio
+
+    from mcp_ddg_research.providers import run_provider
+
+    window = max(request.max_results, request.search_window or 0) or request.max_results
+    tasks = {
+        name: asyncio.ensure_future(run_provider(name, request, window, timeout_seconds))
+        for name in chain
+    }
+
+    per_provider: dict[str, list[SearchResult]] = {}
+    errors: list[str] = []
+    done_set: set = set()
+    pending = set(tasks.values())
+    while pending:
+        done_set, pending = await asyncio.wait(pending, timeout=timeout_seconds)
+        for task in done_set:
+            name = next(n for n, t in tasks.items() if t is task)
+            try:
+                per_provider[name] = task.result()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{name}: error: {exc}")
+                per_provider[name] = []
+    # tasks that never completed within the timeout
+    for name, task in tasks.items():
+        if task not in done_set and not task.done():
+            task.cancel()
+            per_provider[name] = []
+            errors.append(f"{name}: timeout")
+
+    attempts = []
+    for name in chain:
+        if name in per_provider:
+            attempts.append(f"{name}: ok ({len(per_provider[name])})")
+        elif any(name in error for error in errors):
+            attempts.append(f"{name}: error")
+        else:
+            attempts.append(f"{name}: empty")
+    for error in errors:
+        attempts.append(error)
+
+    merged: list[SearchResult] = []
+    seen: set[str] = set()
+    max_len = max((len(v) for v in per_provider.values()), default=0)
+    for index in range(max_len):
+        for name in chain:
+            provider_results = per_provider.get(name) or []
+            if index < len(provider_results):
+                item = provider_results[index]
+                key = item.url.rstrip("/").lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                merged.append(item)
+
+    return SearchResponse(
+        query=request.query,
+        provider="all",
+        results=merged[: request.max_results],
+        cached=False,
+        error=None if merged else ("; ".join(errors) or "All providers returned no results"),
+        provider_attempts=attempts,
+    )
+
+
 async def aggregated_search(
     query: str,
     *,
@@ -511,6 +588,10 @@ async def aggregated_search(
         )
 
     timeout_seconds = get_ddg_timeout_seconds()
+
+    if provider == "all":
+        return await _aggregate_all(chain, request, timeout_seconds, cache)
+
     for name in chain:
         count = max(request.max_results, request.search_window or 0) or request.max_results
         try:

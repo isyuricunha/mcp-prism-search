@@ -46,12 +46,15 @@ class ProviderHealth:
             self.errors += 1
 
     @property
+    def total(self) -> int:
+        return self.ok + self.empty + self.errors
+
+    @property
     def score(self) -> float:
         """Simple health score used to order the auto fallback chain."""
-        total = self.ok + self.empty + self.errors
-        if total == 0:
+        if self.total == 0:
             return 1.0  # untried providers start optimistic
-        return self.ok / total
+        return self.ok / self.total
 
 
 HEALTH: dict[str, ProviderHealth] = {}
@@ -73,14 +76,36 @@ def record(name: str, results: list[SearchResult] | None, error: str | None) -> 
         health.bump("ok")
 
 
+# Explicit preference order from live testing on the target deployment.
+# Providers not listed here go last, alphabetically.
+PREFERRED_ORDER = [
+    "bing_html",
+    "ddg_html",
+    "ddgs:bing",
+    "ddgs:brave",
+    "ddgs:yahoo",
+    "ddgs:yandex",
+    "freeserp",
+    "keenable",
+    "mwmbl",
+    "4get",
+    "searxng",
+]
+
+
 def build_chain(requested: str, available: dict[str, ProviderSpec]) -> list[str]:
     """Order providers for a search: requested first, then healthy ones."""
     if requested != "auto":
         if requested not in available:
             raise ValueError(f"Unknown provider {requested!r}")
         return [requested]
+
+    preference_rank = {name: index for index, name in enumerate(PREFERRED_ORDER)}
     ordered = sorted(
         available,
-        key=lambda name: (-health_for(name).score, name),
+        key=lambda name: (
+            preference_rank.get(name, len(preference_rank)),
+            -health_for(name).score,
+        ),
     )
-    return list(ordered)
+    return ordered
