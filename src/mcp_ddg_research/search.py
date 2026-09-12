@@ -458,3 +458,86 @@ async def ddg_search(
         error="; ".join(provider_errors) or "Search failed",
         provider_attempts=provider_attempts,
     )
+
+
+async def aggregated_search(
+    query: str,
+    *,
+    provider: str = "auto",
+    max_results: int = 10,
+    search_window: int | None = None,
+    safe_search: str = "off",
+    time_filter: str | None = None,
+    blocked_domains: list[str] | None = None,
+    allowed_domains: list[str] | None = None,
+    preferred_domains: list[str] | None = None,
+    kind: str = "general",
+    cache: JsonFileCache | None = None,
+) -> SearchResponse:
+    """Aggregate across providers: fallback chain + ranking + tally."""
+    from mcp_ddg_research.providers import record, resolve_chain, run_provider
+
+    request = SearchRequest(
+        query=query,
+        max_results=max_results,
+        search_window=search_window,
+        safe_search=safe_search,
+        time_filter=time_filter,
+        blocked_domains=blocked_domains or [],
+        allowed_domains=allowed_domains or [],
+        preferred_domains=preferred_domains or [],
+    )
+    cache = cache or build_search_cache()
+    attempts: list[str] = []
+    cache_enabled = cache.disabled_reason is None
+
+    try:
+        chain = resolve_chain(provider, kind)
+    except Exception as exc:  # noqa: BLE001 - unknown provider is a clean error.
+        return SearchResponse(
+            query=request.query,
+            provider=provider,
+            results=[],
+            cached=False,
+            error=str(exc),
+        )
+
+    if not chain:
+        return SearchResponse(
+            query=request.query,
+            provider=provider,
+            results=[],
+            cached=False,
+            error="No search providers configured for this environment",
+        )
+
+    timeout_seconds = get_ddg_timeout_seconds()
+    for name in chain:
+        count = max(request.max_results, request.search_window or 0) or request.max_results
+        try:
+            results = await run_provider(name, request, count, timeout_seconds)
+        except Exception as exc:  # noqa: BLE001 - provider failures must not crash the server.
+            attempts.append(f"{name}: error: {exc}")
+            continue
+        record(name, results, None)
+        if results:
+            attempts.append(f"{name}: ok ({len(results)})")
+            return SearchResponse(
+                query=request.query,
+                provider=provider,
+                results=results[: request.max_results],
+                cached=False,
+                error=None,
+                provider_attempts=attempts,
+            )
+        attempts.append(f"{name}: empty")
+
+    record(provider, None, "all failed")
+    return SearchResponse(
+        query=request.query,
+        provider=provider,
+        results=[],
+        cached=False,
+        error="; ".join(attempts) or "All search providers failed",
+        provider_attempts=attempts,
+    )

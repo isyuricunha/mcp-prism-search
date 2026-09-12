@@ -8,7 +8,19 @@ from mcp_ddg_research.domains import normalize_domains
 
 SafeSearch = Literal["off", "moderate", "strict"]
 TimeFilter = Literal["day", "week", "month", "year"]
-SearchProvider = Literal["ddgs", "duckduckgo_html"]
+SearchProvider = Literal[
+    "ddgs",
+    "duckduckgo_html",
+    "auto",
+    "bing_html",
+    "4get",
+    "mwmbl",
+    "freeserp",
+    "keenable",
+    "searxng",
+    "wikipedia",
+    "hackernews",
+]
 CacheNamespace = Literal["search", "fetch", "all"]
 
 ARGUMENT_DESCRIPTIONS = {

@@ -32,6 +32,8 @@ from mcp_ddg_research.models import (
     SearchResponse,
     TimeFilter,
 )
+from mcp_ddg_research.providers import available_providers
+from mcp_ddg_research.search import aggregated_search as perform_aggregated_search
 from mcp_ddg_research.search import ddg_search as perform_ddg_search
 
 LOGGER = logging.getLogger(__name__)
@@ -269,6 +271,104 @@ async def _run_http_async(
     )
     server = uvicorn.Server(config)
     await server.serve()
+
+
+@mcp.tool(annotations=_tool_annotations(read_only=True))
+async def web_search(
+    query: Annotated[
+        str,
+        Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"]),
+    ],
+    provider: Annotated[
+        str,
+        Field(
+            default="auto",
+            description=(
+                "Search provider name, or 'auto' to walk the fallback chain. "
+                "General providers: bing_html, ddg_html, ddgs:bing, ddgs:brave, "
+                "ddgs:yahoo, ddgs:yandex, 4get (needs FOURGET_BASE), mwmbl, "
+                "freeserp, keenable, searxng (needs SEARXNG_URL). Vertical: "
+                "wikipedia, hackernews."
+            ),
+        ),
+    ] = "auto",
+    max_results: Annotated[
+        int,
+        Field(default=10, ge=1, le=30, description=ARGUMENT_DESCRIPTIONS["max_results"]),
+    ] = 10,
+    safe_search: Annotated[
+        SafeSearch,
+        Field(default="off", description=ARGUMENT_DESCRIPTIONS["safe_search"]),
+    ] = "off",
+    time_filter: Annotated[
+        TimeFilter | None,
+        Field(default=None, description=ARGUMENT_DESCRIPTIONS["time_filter"]),
+    ] = None,
+    search_window: Annotated[
+        int | None,
+        Field(default=None, ge=1, le=100, description=ARGUMENT_DESCRIPTIONS["search_window"]),
+    ] = None,
+    blocked_domains: Annotated[
+        list[str] | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
+    ] = None,
+    allowed_domains: Annotated[
+        list[str] | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
+    ] = None,
+    preferred_domains: Annotated[
+        list[str] | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
+    ] = None,
+) -> dict:
+    """Aggregate web search across providers with automatic fallback."""
+
+    available = sorted(available_providers("general"))
+    response = await perform_aggregated_search(
+        query=query,
+        provider=provider if provider in {"auto", *available} else "auto",
+        max_results=max_results,
+        safe_search=safe_search,
+        time_filter=time_filter,
+        search_window=search_window,
+        blocked_domains=blocked_domains,
+        allowed_domains=allowed_domains,
+        preferred_domains=preferred_domains,
+        kind="general",
+    )
+    return response.model_dump(mode="json")
+
+
+@mcp.tool(annotations=_tool_annotations(read_only=True))
+async def vertical_search(
+    query: Annotated[
+        str,
+        Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"]),
+    ],
+    source: Annotated[
+        str,
+        Field(
+            default="wikipedia",
+            description=(
+                "Vertical search source: wikipedia (encyclopedic) or "
+                "hackernews (tech stories)."
+            ),
+        ),
+    ] = "wikipedia",
+    max_results: Annotated[
+        int,
+        Field(default=5, ge=1, le=20, description=ARGUMENT_DESCRIPTIONS["max_results"]),
+    ] = 5,
+) -> dict:
+    """Search one keyless vertical source (wikipedia, hackernews)."""
+
+    response = await perform_aggregated_search(
+        query=query,
+        provider=source,
+        max_results=max_results,
+        kind="vertical",
+    )
+    return response.model_dump(mode="json")
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))

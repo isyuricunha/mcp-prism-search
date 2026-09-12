@@ -121,6 +121,23 @@ Behavior:
   returns no results.
 - The response `provider` reports the provider that returned results.
 
+## Aggregator Mode (new)
+
+The server is now a multi-source aggregator. `web_search` walks a fallback
+chain of keyless engines (Bing HTML, DuckDuckGo HTML, ddgs backends,
+FreeSerp, Mwmbl, 4get, Keenable, self-hosted SearXNG) and returns results
+from the first healthy source, with a `provider_attempts` tally for
+diagnostics. `vertical_search` queries keyless vertical sources
+(Wikipedia, HackerNews). Providers requiring configuration (SearXNG URL)
+are enabled via env vars and skipped when absent.
+
+```json
+{
+  "provider_attempts": ["bing_html: ok (5)"],
+  "results": [{"title": "...", "url": "...", "snippet": "..."}]
+}
+```
+
 ## Available MCP Tools
 
 ### `ddg_search`
