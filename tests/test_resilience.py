@@ -584,3 +584,27 @@ def test_fetch_http_errors_do_not_consume_or_decode_body(monkeypatch):
     raw = asyncio.run(exercise())
     assert raw.status_code == 429 and raw.content == b""
     assert fetch._response_to_fetch_response("https://example.org", raw, 1000).error == "HTTP 429"
+
+
+def test_live_fetch_resolves_once_and_cache_hit_revalidates_dns(tmp_path, monkeypatch):
+    calls = []
+    original = httpx.AsyncClient
+
+    def resolve(host, port):
+        calls.append((host, port))
+        return ["8.8.8.8"]
+
+    monkeypatch.setattr(security, "_resolve_hostname", resolve)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(
+            200, text="Evidence", headers={"content-type": "text/plain"}
+        )), **kw))
+    store = cache.JsonFileCache(tmp_path, "fetch", 60)
+    first = asyncio.run(fetch.web_fetch("https://example.org", cache=store))
+    assert first.success and not first.cached
+    assert calls == [("example.org", 443)]
+    second = asyncio.run(fetch.web_fetch("https://example.org", cache=store))
+    assert second.cached and calls == [("example.org", 443)] * 2
+    monkeypatch.setattr(security, "_resolve_hostname", lambda *a: ["127.0.0.1"])
+    third = asyncio.run(fetch.web_fetch("https://example.org", cache=store))
+    assert not third.success and not third.cached

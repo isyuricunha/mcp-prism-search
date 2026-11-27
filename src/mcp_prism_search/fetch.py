@@ -274,12 +274,9 @@ async def web_fetch(
     )
 
     try:
-        async with asyncio.timeout(get_fetch_timeout_seconds()):
-            await validate_fetch_url(request.url)
+        validate_url_shape(request.url)
     except UnsafeUrlError as exc:
         return _error_response(request.url, str(exc))
-    except TimeoutError:
-        return _error_response(request.url, "DNS validation timed out")
 
     cache = cache or build_fetch_cache()
     payload = _cache_payload(request) | {"_max_bytes": get_fetch_max_bytes()}
@@ -292,6 +289,15 @@ async def web_fetch(
                     and len(cached.content) <= request.max_chars
                     and ("html" in cached.content_type.lower()
                          or is_plain_text_content(cached.content_type, cached.final_url))):
+                # A cache hit does not connect to a pinned address, so retain
+                # DNS validation here. Live fetches validate and resolve once per hop.
+                try:
+                    async with asyncio.timeout(get_fetch_timeout_seconds()):
+                        await validate_fetch_url(request.url)
+                except UnsafeUrlError as exc:
+                    return _error_response(request.url, str(exc))
+                except TimeoutError:
+                    return _error_response(request.url, "DNS validation timed out")
                 emit("cache", "hit", level="INFO", operation="web_fetch")
                 return cached.model_copy(update={"cached": True})
             cache.delete(payload)
