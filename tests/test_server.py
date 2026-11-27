@@ -164,3 +164,11 @@ def test_schema_advertises_backend_size_limits():
         for field in ("allowed_domains", "blocked_domains", "preferred_domains"):
             assert limit(schemas[name]["properties"][field], "maxItems") == 50
     assert limit(schemas["web_fetch"]["properties"]["url"], "maxLength") == 8192
+
+
+def test_duplicate_authorization_headers_are_rejected():
+    from mcp_prism_search.server import _authorization_header
+
+    assert _authorization_header({"headers": [
+        (b"authorization", b"Bearer first"), (b"Authorization", b"Bearer second"),
+    ]}) is None

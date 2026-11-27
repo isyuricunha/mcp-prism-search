@@ -142,10 +142,11 @@ def _safe_token_match(left: str, right: str) -> bool:
 
 
 def _authorization_header(scope: dict[str, Any]) -> str | None:
-    for name, value in scope.get("headers", []):
-        if name.lower() == b"authorization":
-            return value.decode("latin-1")
-    return None
+    values = [value for name, value in scope.get("headers", [])
+              if name.lower() == b"authorization"]
+    if len(values) != 1:
+        return None
+    return values[0].decode("latin-1")
 
 
 async def _send_unauthorized(send: Any) -> None:
