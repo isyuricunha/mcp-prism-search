@@ -276,6 +276,8 @@ try{
  await searchComplete(firstSearch);
  await page.getByRole("link",{name:"Example ↗"}).waitFor();
  assert.equal(await page.locator("#results a").count(),1);
+ assert.ok(!(await page.locator("#results").textContent()).includes("javascript:alert(1)"));
+ assert.ok((await page.locator("#results").textContent()).includes("URL unavailable"));
  assert.equal(lastSearch.mode,undefined);assert.equal(lastSearch.providers,undefined);assert.equal(lastSearch.max_results,undefined);
  assert.ok((await page.locator("#search-default-summary").textContent()).includes("Keyless fallback"));
  assert.ok((await page.locator("#search-default-summary").textContent()).includes("Up to 7"));
@@ -420,7 +422,12 @@ try{
  await page.locator("#dashboard").waitFor({state:"visible"});
  assert.equal(await page.locator("#native-query").isDisabled(),false);
  await page.locator("#native-panel > summary").click();
- await nav("Connection");await page.locator("#endpoint").fill("https://example.com/mcp");
+ await nav("Connection");
+ for(const invalid of ["https://example.com:0/mcp","https://example.com/"+String.fromCharCode(92)+"mcp","https://example.com/mcp a"]){
+  await page.locator("#endpoint").fill(invalid);
+  assert.equal(await page.locator("#copy-config").isDisabled(),true);
+ }
+ await page.locator("#endpoint").fill("https://example.com/mcp");
  assert.equal(JSON.parse(await page.locator("#connection-json").textContent()).mcp["prism-search"].url,"https://example.com/mcp");
  await page.locator("#endpoint").fill("https://user:secret@example.com/mcp");
  assert.equal(await page.locator("#copy-config").isDisabled(),true);

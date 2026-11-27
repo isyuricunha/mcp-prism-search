@@ -45,10 +45,10 @@ function action(label, callback, className = "") {
   return button;
 }
 function safeHttpUrl(value) {
-  if(typeof value!=="string"||/[\s\x00-\x1f\x7f]/u.test(value))return null;
+  if(typeof value!=="string"||value.includes(String.fromCharCode(92))||/[\s\x00-\x1f\x7f]/u.test(value))return null;
   try{
     const url=new URL(value);
-    return ["http:","https:"].includes(url.protocol)&&!url.username&&!url.password?url:null;
+    return ["http:","https:"].includes(url.protocol)&&!url.username&&!url.password&&url.port!=="0"?url:null;
   }catch{return null;}
 }
 function link(label, url) {
@@ -464,7 +464,7 @@ function renderSearch(data){
     const url=safeHttpUrl(row.url);
     if(url) card.append(link(row.title||url.hostname,url.href));
     else card.append(element("h3",row.title||"Result"));
-    card.append(element("p",row.url,"muted small"),element("p",row.snippet||"No snippet supplied."));
+    card.append(element("p",url?url.href:"URL unavailable","muted small"),element("p",row.snippet||"No snippet supplied."));
     $("results").append(card);
   }
 }
@@ -925,7 +925,7 @@ document.addEventListener("visibilitychange",pollLogs);
 setInterval(pollLogs,5000);
 function connection(){
   let url;
-  try{url=new URL($("endpoint").value);if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.hash||url.search)throw new Error();}
+  try{url=safeHttpUrl($("endpoint").value);if(!url||url.hash||url.search)throw new Error();}
   catch{ $("connection-json").textContent="Enter a valid HTTP(S) MCP endpoint without embedded credentials, a query string or a fragment.";$("copy-config").disabled=true;return; }
   const mode=document.querySelector("input[name=client-type]:checked").value;
   $("config-label").textContent=mode==="opencode"?"OpenCode JSON":"Streamable HTTP details";
