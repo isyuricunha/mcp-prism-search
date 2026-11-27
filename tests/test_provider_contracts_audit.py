@@ -1,5 +1,6 @@
 """Provider contract audit, with deterministic transport fixtures and no paid calls."""
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -124,3 +125,24 @@ def test_brave_domain_pushdown(monkeypatch, domains, query):
         query="needle", allowed_domains=domains, time_filter="year", safe_search="strict"),
         50, 5))
     assert [r.title for r in rows] == ["Good"]
+
+
+def test_exa_domain_contract(monkeypatch):
+    from mcp_prism_search.providers import exa
+
+    monkeypatch.setenv("EXA_API_KEY", "fixture-key")
+
+    def handler(req):
+        data = json.loads(req.content)
+        assert data["includeDomains"] == ["example.org"]
+        assert data["excludeDomains"] == ["blocked.example"]
+        assert data["numResults"] == 1
+        return httpx.Response(200, json={"results": [
+            {"title": "", "url": "https://example.org/bad"},
+            {"title": "Good", "url": "https://example.org/good", "summary": "Evidence"},
+        ]})
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(exa.search(SearchRequest(query="test", allowed_domains=["example.org"],
+        blocked_domains=["blocked.example"]), 1, 5))
+    assert [(r.title, r.snippet) for r in rows] == [("Good", "Evidence")]
