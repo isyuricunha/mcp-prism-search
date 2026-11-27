@@ -110,6 +110,7 @@ class _CacheFile:
     path: Path
     size: int
     mtime: float
+    identity: tuple[int, int, int, int]
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,7 @@ class _ValidCacheFile:
     path: Path
     size: int
     created_at: float
+    identity: tuple[int, int, int, int]
 
 
 
@@ -219,6 +221,7 @@ def _iter_cache_files(root_dir: Path) -> list[_CacheFile]:
                         path=path,
                         size=file_stat.st_size,
                         mtime=file_stat.st_mtime,
+                        identity=_file_identity(file_stat),
                     )
                 )
     return files
@@ -230,12 +233,18 @@ def _read_cache_created_at(cache_file: _CacheFile) -> float:
     return cache_file.mtime
 
 
-def _delete_cache_file(path: Path) -> bool:
+def _file_identity(info: os.stat_result) -> tuple[int, int, int, int]:
+    return (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size)
+
+
+def _delete_cache_file(path: Path, identity: tuple[int, int, int, int]) -> bool:
+    if path.parent.is_symlink():
+        return False
     try:
         file_stat = path.stat(follow_symlinks=False)
     except OSError:
         return False
-    if not stat.S_ISREG(file_stat.st_mode):
+    if not stat.S_ISREG(file_stat.st_mode) or _file_identity(file_stat) != identity:
         return False
     try:
         path.unlink()
@@ -280,27 +289,27 @@ def prune_cache(
     _ensure_cache_namespace_dirs(root)
     now = time.time()
 
-    delete_candidates: dict[Path, int] = {}
+    delete_candidates: dict[Path, tuple[int, tuple[int, int, int, int]]] = {}
     retained_json_files: list[_ValidCacheFile] = []
 
     for cache_file in _iter_cache_files(root):
         if cache_file.path.suffix == ".tmp":
             if now - cache_file.mtime > TEMP_FILE_PRUNE_GRACE_SECONDS:
-                delete_candidates[cache_file.path] = cache_file.size
+                delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             continue
 
         created_at = _read_cache_created_at(cache_file)
 
         namespace_ttl = prune_config.namespace_ttls[cache_file.namespace]
         if now - created_at > namespace_ttl:
-            delete_candidates[cache_file.path] = cache_file.size
+            delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             continue
 
         if (
             prune_config.max_age_seconds is not None
             and now - created_at > prune_config.max_age_seconds
         ):
-            delete_candidates[cache_file.path] = cache_file.size
+            delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             continue
 
         retained_json_files.append(
@@ -308,6 +317,7 @@ def prune_cache(
                 path=cache_file.path,
                 size=cache_file.size,
                 created_at=created_at,
+                identity=cache_file.identity,
             )
         )
 
@@ -319,17 +329,17 @@ def prune_cache(
         ):
             if retained_size <= prune_config.max_size_bytes:
                 break
-            delete_candidates[cache_file.path] = cache_file.size
+            delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             retained_size -= cache_file.size
 
     deleted_files = 0
     deleted_bytes = 0
-    for path, size in delete_candidates.items():
+    for path, (size, identity) in delete_candidates.items():
         if dry_run:
             deleted_files += 1
             deleted_bytes += size
             continue
-        if _delete_cache_file(path):
+        if _delete_cache_file(path, identity):
             deleted_files += 1
             deleted_bytes += size
 
@@ -419,7 +429,7 @@ def clear_cache(
     for cache_file in _iter_cache_files(root):
         if cache_file.namespace not in target_namespaces:
             continue
-        if _delete_cache_file(cache_file.path):
+        if _delete_cache_file(cache_file.path, cache_file.identity):
             deleted_files += 1
             deleted_bytes += cache_file.size
 

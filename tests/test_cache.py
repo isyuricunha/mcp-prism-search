@@ -292,3 +292,21 @@ def test_fetch_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None:
 
     assert cached_response.cached is True
     assert cached_response.content == "Cached content"
+
+
+def test_prune_does_not_delete_replacement_written_after_scan(tmp_path, monkeypatch):
+    from mcp_prism_search import cache as module
+
+    path = tmp_path / "search" / "entry.json"
+    _write_cache_file(path, created_at=time.time() - 120)
+    original = module._delete_cache_file
+
+    def replace(candidate, identity):
+        new = candidate.with_suffix(".replacement")
+        new.write_text("fresh value")
+        os.replace(new, candidate)
+        return original(candidate, identity)
+
+    monkeypatch.setattr(module, "_delete_cache_file", replace)
+    stats = prune_cache(config=_prune_config(tmp_path))
+    assert stats.deleted_files == 0 and path.read_text() == "fresh value"
