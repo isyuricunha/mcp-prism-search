@@ -616,3 +616,17 @@ def test_native_slot_saturation():
             pass
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("job", ["../other", "a/b", "", None])
+def test_tavily_invalid_task_identifier(configure, monkeypatch, job):
+    calls = []
+
+    def handler(request):
+        calls.append(request.method)
+        return httpx.Response(201, json={"request_id": job})
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError):
+        asyncio.run(native.synthesize("question", "tavily", "research", allow_cost=True))
+    assert calls == ["POST"]
