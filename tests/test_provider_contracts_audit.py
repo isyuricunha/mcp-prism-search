@@ -58,3 +58,23 @@ def test_ddgs_unregistered_backend(monkeypatch):
     with pytest.raises(ValueError, match="Unsupported DDGS backend"):
         asyncio.run(ddgs_lib.make_search("not-a-real-backend")(
             SearchRequest(query="test"), 5, 7))
+
+
+def test_registered_ddg_html_contract(monkeypatch):
+    from mcp_prism_search.providers import ddg_html
+
+    def handler(req):
+        assert req.url == httpx.URL(ddg_html.HTML_URL, params={
+            "q": "C++", "kp": "1", "df": "m",
+        })
+        assert req.headers["accept-encoding"] == "identity"
+        return httpx.Response(200, text=(
+            '<div class="result"><a class="result__a" href="https://example.org"> A </a>'
+            '<div class="result__snippet"> Evidence </div></div>'
+        ))
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(ddg_html.search(
+        SearchRequest(query="C++", safe_search="strict", time_filter="month"), 1, 4))
+    assert [(r.title, r.url, r.snippet) for r in rows] == [
+        ("A", "https://example.org", "Evidence")]
