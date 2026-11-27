@@ -91,3 +91,12 @@ def test_dns_resolution_failure(monkeypatch, empty):
     monkeypatch.setattr(socket, "getaddrinfo", resolve)
     with pytest.raises(UnsafeUrlError, match="DNS resolution"):
         _resolve_hostname("example.com", 443)
+
+
+@pytest.mark.parametrize("unsafe", ["127.0.0.1", "invalid-ip", "64:ff9b::7f00:1", "fe80::1"])
+def test_dns_rejects_invalid_or_mixed(monkeypatch, unsafe):
+    from mcp_prism_search import security
+
+    monkeypatch.setattr(security, "_resolve_hostname", lambda *_: ["1.1.1.1", unsafe])
+    with pytest.raises(UnsafeUrlError):
+        security._safe_addresses("example.com", 443)
