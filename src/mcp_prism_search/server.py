@@ -15,7 +15,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from mcp_prism_search import __version__, runtime
+from mcp_prism_search import __version__, observability, runtime
 from mcp_prism_search import cache as cache_ops
 from mcp_prism_search.cache import (
     _get_env_bool,
@@ -128,6 +128,7 @@ class BearerTokenAuthMiddleware:
         if authorization is None or not _safe_token_match(
             authorization, self.expected_authorization
         ):
+            observability.emit("auth", "denied")
             await _send_unauthorized(send)
             return
 
@@ -279,6 +280,7 @@ async def _run_http_async(
         host=settings.host,
         port=settings.port,
         log_level=os.getenv("MCP_LOG_LEVEL", "INFO").lower(),
+        log_config=None, access_log=False,
     )
     server = uvicorn.Server(config)
     prune_task = asyncio.create_task(_cache_prune_loop())
@@ -305,7 +307,7 @@ async def _serve_http(server, settings: HttpSettings) -> None:
     if panel_port == settings.port or not 1 <= panel_port <= 65535:
         raise RuntimeError("Invalid MCP_WEBUI_PORT")
     admin = uvicorn.Server(uvicorn.Config(
-        configured_app(), host=panel_host, port=panel_port, access_log=False,
+        configured_app(), host=panel_host, port=panel_port, access_log=False, log_config=None,
     ))
     # Only the primary server owns signal handlers.
     admin.capture_signals = nullcontext
@@ -320,6 +322,7 @@ async def _serve_http(server, settings: HttpSettings) -> None:
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
+@observability.operation("web_search")
 async def web_search(
     query: Annotated[
         str,
@@ -407,6 +410,7 @@ async def web_search(
 
 
 @mcp.tool(annotations=_tool_annotations())
+@observability.operation("web_answer")
 async def web_answer(
     query: Annotated[str, Field(min_length=1, max_length=4000)],
     provider: AnswerProvider | None = None,
@@ -428,6 +432,7 @@ async def web_answer(
 
 
 @mcp.tool(annotations=_tool_annotations())
+@observability.operation("web_research")
 async def web_research(
     query: Annotated[str, Field(min_length=1, max_length=4000)],
     provider: ResearchProvider | None = None,
@@ -453,6 +458,7 @@ async def web_research(
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
+@observability.operation("vertical_search")
 async def vertical_search(
     query: Annotated[
         str,
@@ -489,6 +495,7 @@ async def vertical_search(
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
+@observability.operation("ddg_search")
 async def ddg_search(
     query: Annotated[
         str, Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"]),
@@ -543,6 +550,7 @@ async def ddg_search(
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
+@observability.operation("web_fetch")
 async def web_fetch(
     url: Annotated[
         str, Field(min_length=1, max_length=8192, description=ARGUMENT_DESCRIPTIONS["url"]),
@@ -564,6 +572,7 @@ async def web_fetch(
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
+@observability.operation("ddg_deep_search")
 async def ddg_deep_search(
     query: Annotated[
         str, Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"]),
@@ -648,6 +657,7 @@ async def ddg_deep_search(
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
+@observability.operation("cache_stats")
 async def cache_stats() -> dict[str, Any]:
     """Return cache file counts and byte totals for each cache namespace."""
 
@@ -655,6 +665,7 @@ async def cache_stats() -> dict[str, Any]:
 
 
 @mcp.tool(annotations=_tool_annotations(destructive=True))
+@observability.operation("cache_prune")
 async def cache_prune(
     expired_only: Annotated[
         bool,
@@ -673,6 +684,7 @@ async def cache_prune(
 
 
 @mcp.tool(annotations=_tool_annotations(destructive=True))
+@observability.operation("cache_clear")
 async def cache_clear(
     namespace: Annotated[
         CacheNamespace,
@@ -706,11 +718,22 @@ def _prune_cache_on_startup() -> None:
 
 def main() -> None:
     previous = runtime.state()
+    transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
+    directory = (
+        runtime.state_directory() / "logs"
+        if transport in {"http", "streamable-http"} and _get_env_bool("MCP_WEBUI_ENABLED", False)
+        else None
+    )
+    observability.configure(_validated_log_level(), directory)
+    observability.emit("lifecycle", "started", operation="server_start")
     try:
+        observability.configure_otel()
         runtime.install(runtime.configured_store())
         effective_defaults()  # Fail clearly on invalid environment settings before serving.
         _run()
     finally:
+        observability.emit("lifecycle", "stopped", operation="server_stop")
+        observability.close()
         runtime.install(previous)
 
 

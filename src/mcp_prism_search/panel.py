@@ -22,7 +22,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from mcp_prism_search import __version__, cache, providers, runtime
+from mcp_prism_search import __version__, cache, observability, providers, runtime
 from mcp_prism_search.ai_search import ENABLED_ENV, PROVIDERS_ENV, SUPPORTED, policy
 from mcp_prism_search.defaults import Recency, describe_defaults, update_defaults
 from mcp_prism_search.models import SafeSearch, SearchRequest
@@ -129,6 +129,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
                 sessions.pop(token, None)
         return request.cookies.get(COOKIE, "") in sessions
 
+    @observability.operation("panel_login")
     async def login(request):
         data = await body(request, Login)
         now = time.monotonic()
@@ -152,6 +153,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
                             httponly=True, samesite="strict", secure=request.url.scheme == "https")
         return response
 
+    @observability.operation("panel_logout")
     async def logout(request):
         sessions.pop(request.cookies.get(COOKIE, ""), None)
         response = JSONResponse({"ok": True})
@@ -205,6 +207,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
             "locked": [field for field, name in SETTINGS_ENV.items() if os.getenv(name)],
         }
 
+    @observability.operation("settings_update")
     async def settings(request):
         data = await body(request, Settings)
         values = {}
@@ -226,6 +229,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         store.set_options(values)
         return JSONResponse(current_settings())
 
+    @observability.operation("defaults_update")
     async def defaults(request):
         if request.method == "PUT":
             patch = await body(request, DefaultsPatch)
@@ -235,6 +239,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
                 return error(str(exc))
         return JSONResponse(describe_defaults())
 
+    @observability.operation("provider_update")
     async def update(request):
         name = request.path_params["name"]
         providers.available_providers()
@@ -266,6 +271,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         store.update(name, spec.needs, enabled, data.credential, data.remove)
         return JSONResponse({"ok": True})
 
+    @observability.operation("panel_search")
     async def search(request):
         data = await body(request, Query)
         available = providers.available_providers("general")
@@ -296,6 +302,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
             result.model_dump(mode="json"), status_code=400 if result.error else 200
         )
 
+    @observability.operation("panel_native")
     async def native(request):
         data = await body(request, NativeQuery)
         try:
@@ -307,12 +314,14 @@ def create_app(password: str, store: PanelStore, assets: Path,
             return error(str(exc))
         return JSONResponse(result.model_dump(mode="json"))
 
+    @observability.operation("cache_prune")
     async def prune(request):
         # Preserve active entries; clearing is a separate confirmed operation.
         return JSONResponse((await asyncio.to_thread(
             cache.prune_cache, expired_only=True
         )).to_dict())
 
+    @observability.operation("cache_clear")
     async def clear(request):
         data = await body(request, ClearCache)
         if data.confirm is not True:
@@ -320,6 +329,33 @@ def create_app(password: str, store: PanelStore, assets: Path,
         return JSONResponse((await asyncio.to_thread(
             cache.clear_cache, namespace=data.namespace, confirm=data.confirm
         )).to_dict())
+
+    log_slots = asyncio.Semaphore(1)
+
+    async def logs(request):
+        params = request.query_params
+        level = params.get("level") or None
+        provider = params.get("provider") or None
+        period = params.get("period", "all")
+        search = params.get("search", "")
+        try:
+            limit = int(params.get("limit", "200"))
+        except ValueError:
+            return error("Invalid log limit")
+        periods = {"all": None, "hour": 3600, "day": 86400, "week": 604800}
+        if (level and level not in observability.LEVELS
+                or provider and provider not in providers.SPECS
+                or period not in periods or len(search) > 100 or not 1 <= limit <= 500):
+            return error("Invalid log filters")
+        seconds = periods[period]
+        if log_slots.locked():
+            return error("Log history is busy; try again shortly", 429)
+        async with log_slots:
+            result = await asyncio.to_thread(
+                observability.history, level=level, provider=provider,
+                since=time.time() - seconds if seconds else None, search=search, limit=limit,
+            )
+        return JSONResponse(result)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -334,6 +370,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         Route("/api/login", login, methods=["POST"]),
         Route("/api/logout", logout, methods=["POST"]),
         Route("/api/overview", overview),
+        Route("/api/logs", logs),
         Route("/api/providers/{name}", update, methods=["PUT"]),
         Route("/api/search", search, methods=["POST"]),
         Route("/api/native", native, methods=["POST"]),

@@ -262,6 +262,8 @@ async def web_fetch(
     *,
     cache: JsonFileCache | None = None,
 ) -> FetchResponse:
+    from mcp_prism_search.observability import emit
+
     request = FetchRequest(
         url=url,
         max_chars=max_chars if max_chars is not None else effective_defaults().fetch_max_chars,
@@ -284,11 +286,13 @@ async def web_fetch(
             validate_url_shape(cached.final_url)
             if (cached.url == request.url and cached.success and not cached.error
                     and len(cached.content) <= request.max_chars):
+                emit("cache", "hit", level="INFO", operation="web_fetch")
                 return cached.model_copy(update={"cached": True})
             cache.delete(payload)
         except Exception:  # noqa: BLE001 - poisoned/stale cache must not break the tool.
             cache.delete(payload)
 
+    emit("cache", "miss", level="INFO", operation="web_fetch")
     try:
         timeout = get_fetch_timeout_seconds()
         async with asyncio.timeout(timeout), httpx.AsyncClient(

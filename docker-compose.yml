@@ -4,9 +4,15 @@ services:
       context: .
       args:
         PRISM_VERSION: ${PRISM_VERSION:-0.0.0+unknown}
+        PRISM_OTEL: ${PRISM_OTEL:-0}
     image: mcp-prism-search:local
     container_name: mcp-prism-search
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       # Loopback only by default; the MCP_AUTH_TOKEN below gates the service.
       - "127.0.0.1:49317:8000"
@@ -22,6 +28,10 @@ services:
       MCP_TRANSPORT: http
       MCP_HOST: 0.0.0.0
       MCP_PORT: "8000"
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+      MCP_OTEL_ENABLED: ${MCP_OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
 
       # DuckDuckGo-only search defaults. ddgs can be enabled explicitly; see README.
       SEARCH_PROVIDER: duckduckgo_html

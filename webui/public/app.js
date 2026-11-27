@@ -6,6 +6,7 @@ const pages = {
   providers: "Configure search engines, credentials and availability.",
   playground: "Try a search before connecting an MCP client.",
   cache: "Inspect stored results and safely reclaim disk space.",
+  logs: "Inspect sanitized operations, provider outcomes and cache activity.",
   settings: "Tune search behavior and personalize this browser.",
   connection: "Generate connection settings for your MCP client."
 };
@@ -28,6 +29,7 @@ let nativePending = false;
 let aiSettingsDirty = false;
 let aiSettingsPending = false;
 let searchAnswerPreference = null;
+let logRows=[],logsPending=false,logsRevision=0;
 
 function element(tag, value = "", className = "") {
   const node = document.createElement(tag);
@@ -80,7 +82,7 @@ async function api(path, method = "GET", data) {
       method, credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Prism-Admin": "1" },
       ...(data === undefined ? {} : { body: JSON.stringify(data) }),
-      signal: AbortSignal.timeout(["search","native"].includes(path) ? 180000 : 20000)
+      signal: AbortSignal.timeout(path==="native"&&data?.mode==="research"&&data?.provider==="tinyfish"?2820000:path==="native"&&data?.effort==="exhaustive"?360000:["search","native"].includes(path) ? 180000 : 20000)
     });
   } catch (e) {
     throw new Error(e.name === "TimeoutError" ? (["search","native"].includes(path) ? "The browser stopped waiting. The server may still be searching; check activity before retrying." : "The request timed out. Try again.") : "Cannot reach the server. Check the connection and retry.");
@@ -110,6 +112,8 @@ async function confirmAction(title, description, label, destructive = true) {
 }
 function showLogin() {
   authEpoch++;
+  logsRevision++;logRows=[];$("logs-list").replaceChildren();$("logs-export").disabled=true;
+  $("logs-search").value="";feedback("logs-feedback");
   if($("confirmation").open)$("confirmation").close("cancel");
   state = null; providerDrafts.clear(); providerMessages.clear(); providerPending.clear();
   settingsDirty = false; defaultsDirty = false;
@@ -128,6 +132,7 @@ function showLogin() {
 }
 function showDashboard() {
   $("boot").hidden = true; $("login").hidden = true; $("dashboard").hidden = false;
+  if(activePage==="logs")loadLogs();
 }
 function applyTheme(theme) {
   const name = theme === "yu-daylight" ? theme : "yu-dark";
@@ -141,6 +146,7 @@ function page(id, navigate = true) {
   if (!Object.hasOwn(pages,id)) id = "overview";
   const button = document.querySelector('[data-page="' + id + '"]');
   activePage = id;
+  if(id==="logs"&&state)loadLogs();
   for (const node of document.querySelectorAll(".page[id][aria-labelledby='page-title']")) node.hidden = node.id !== id;
   for (const node of document.querySelectorAll("[data-page]")) {
     if (node === button) node.setAttribute("aria-current","page"); else node.removeAttribute("aria-current");
@@ -513,7 +519,7 @@ function renderSettings(force=false){
 $("settings-form").addEventListener("input",()=>{settingsDirty=true;feedback("settings-feedback");});
 $("reset-settings").addEventListener("click",()=>{if(state){renderSettings(true);feedback("settings-feedback","Unsaved changes reset.");}});
 function render(){
-  updateQueryCount();renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();renderDefaultSettings();
+  updateQueryCount();renderOverview();logFilters();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();renderDefaultSettings();
 }
 async function refresh(fresh=false){
   if(refreshPromise){if(!fresh)return refreshPromise;await refreshPromise.catch(()=>{});return refresh(true);}
@@ -822,6 +828,64 @@ $("native-form").addEventListener("submit",async event=>{
     $("native-run").removeAttribute("aria-busy");renderNativeOptions();
   }
 });
+function logFilters(){
+  const provider=$("logs-provider"),previous=provider.value;
+  provider.replaceChildren(new Option("All providers",""));
+  for(const p of state?.providers||[])provider.append(new Option(providerName(p.id),p.id));
+  if([...provider.options].some(o=>o.value===previous))provider.value=previous;
+}
+function renderLogs(){
+  const list=$("logs-list");list.replaceChildren();
+  for(const row of logRows){
+    const article=element("article","","log-entry");
+    const head=element("div","","log-head");
+    const level=element("span",row.level,"badge");
+    head.append(level,element("strong",row.operation||row.event),element("span",row.outcome,"muted"));
+    const date=new Date(row.timestamp);
+    const meta=element("div","","log-meta muted");
+    meta.append(element("span",Number.isNaN(date.getTime())?"Unknown time":date.toLocaleString()),
+      ...(row.provider?[element("span",row.provider)]:[]),
+      ...(row.status_code?[element("span","HTTP "+row.status_code)]:[]),
+      ...(Number.isInteger(row.duration_ms)?[element("span",number(row.duration_ms)+" ms")]:[]),
+      ...(Number.isInteger(row.result_count)?[element("span",number(row.result_count)+" results")]:[]));
+    article.append(head,meta);
+    if(row.request_id)article.append(element("code",row.request_id));
+    list.append(article);
+  }
+  if(!logRows.length)list.append(element("p","No matching events.","muted"));
+  $("logs-export").disabled=!logRows.length;
+}
+async function loadLogs(){
+  if(!state||activePage!=="logs"||logsPending)return;
+  logsPending=true;const revision=logsRevision,epoch=authEpoch;
+  $("logs-refresh").disabled=true;
+  const params=new URLSearchParams({level:$("logs-level").value,provider:$("logs-provider").value,period:$("logs-period").value,search:$("logs-search").value.trim(),limit:"200"});
+  try{
+    const data=await api("logs?"+params.toString());
+    if(epoch!==authEpoch||revision!==logsRevision)return;
+    logRows=Array.isArray(data.events)?data.events:[];
+    $("logs-health").textContent=data.enabled?"Recording":"Not available";
+    $("logs-health").classList.toggle("ready",!!data.enabled);
+    renderLogs();feedback("logs-feedback",data.enabled?number(logRows.length)+" events · Updated "+new Date().toLocaleTimeString():"Persistent log history is not enabled.");
+  }catch(error){
+    if(epoch===authEpoch&&revision===logsRevision)feedback("logs-feedback",error.message,true);
+  }finally{
+    logsPending=false;$("logs-refresh").disabled=false;
+    if(revision!==logsRevision&&state&&activePage==="logs")loadLogs();
+  }
+}
+function changeLogs(){logsRevision++;logRows=[];$("logs-export").disabled=true;$("logs-list").replaceChildren();loadLogs();}
+for(const id of ["logs-level","logs-provider","logs-period"])$(id).addEventListener("change",changeLogs);
+$("logs-search").addEventListener("change",changeLogs);
+$("logs-search").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();changeLogs();}});
+$("logs-refresh").addEventListener("click",changeLogs);
+$("logs-export").addEventListener("click",()=>{
+  if(!state||!logRows.length)return;
+  const url=URL.createObjectURL(new Blob([JSON.stringify(logRows,null,2)],{type:"application/json"}));
+  const a=document.createElement("a");a.href=url;a.download="prism-events.json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+setInterval(()=>{if(!document.hidden&&$("logs-live").checked&&activePage==="logs")loadLogs();},5000);
 function connection(){
   let url;
   try{url=new URL($("endpoint").value);if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.hash||url.search)throw new Error();}

@@ -487,7 +487,7 @@ async def _search_one(
             preferred_domains=[],
         )
         record(name, valid, None)
-        runtime.record_metric(name, 'ok' if valid else 'empty', monotonic() - start)
+        runtime.record_metric(name, 'ok' if valid else 'empty', monotonic() - start, len(filtered))
         if answer_sink is not None and name in ai_search.SEPARATE and filtered:
             try:
                 answer = await ai_search.separate_answer(name, request.query, timeout)

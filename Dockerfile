@@ -28,6 +28,12 @@ COPY src ./src
 COPY --from=dashboard-build /ui/dist /app/webui
 # Local source contexts omit .git. CI passes the verified tag version;
 # an unversioned source build is deliberately marked unknown.
+# Optional manual OTLP trace export; base image has only the API.
+ARG PRISM_OTEL=0
+RUN if [ "$PRISM_OTEL" = "1" ]; then \
+      pip install --no-cache-dir opentelemetry-sdk==1.44.0 \
+          opentelemetry-exporter-otlp-proto-http==1.44.0; \
+    fi
 ARG PRISM_VERSION=0.0.0+unknown
 RUN SETUPTOOLS_SCM_PRETEND_VERSION="$PRISM_VERSION" pip install --no-cache-dir --no-deps . \
     && python -c 'import sys; from importlib.metadata import version; assert version("mcp-prism-search") == sys.argv[1]' "$PRISM_VERSION"

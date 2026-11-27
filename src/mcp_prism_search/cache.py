@@ -344,6 +344,10 @@ def prune_cache(
             deleted_bytes += size
 
     remaining = get_cache_stats(root)
+    from mcp_prism_search.observability import emit
+
+    emit("cache", "planned" if dry_run else "ok", level="INFO",
+         operation="cache_prune", result_count=deleted_files)
     return CachePruneStats(
         deleted_files=deleted_files,
         deleted_bytes=deleted_bytes,
@@ -433,6 +437,9 @@ def clear_cache(
             deleted_files += 1
             deleted_bytes += cache_file.size
 
+    from mcp_prism_search.observability import emit
+
+    emit("cache", "ok", level="INFO", operation="cache_clear", result_count=deleted_files)
     return CacheClearStats(
         namespace=namespace,
         deleted_files=deleted_files,

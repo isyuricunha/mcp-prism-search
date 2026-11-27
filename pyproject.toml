@@ -20,11 +20,16 @@ dependencies = [
   "httpx>=0.27",
   "mcp>=2.3,<3",
   "packaging>=24",
+  "opentelemetry-api>=1.44,<2",
   "pydantic>=2.7",
   "starlette>=1.6,<2",
 ]
 
 [project.optional-dependencies]
+telemetry = [
+  "opentelemetry-sdk==1.44.0",
+  "opentelemetry-exporter-otlp-proto-http==1.44.0",
+]
 dev = [
   "pytest",
   "ruff",

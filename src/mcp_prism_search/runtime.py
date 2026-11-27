@@ -56,7 +56,10 @@ def configured_store(*, create: bool = False):
     return PanelStore(directory) if create else None
 
 
-def record_metric(name: str, outcome: str, elapsed: float) -> None:
+def record_metric(name: str, outcome: str, elapsed: float, result_count=None) -> None:
+    from mcp_prism_search.observability import emit
+
+    emit("provider", outcome, provider=name, elapsed=elapsed, result_count=result_count)
     if _state:
         try:
             _state.record(name, outcome, elapsed)
@@ -65,6 +68,9 @@ def record_metric(name: str, outcome: str, elapsed: float) -> None:
 
 
 def record_cache(hit: bool) -> None:
+    from mcp_prism_search.observability import emit
+
+    emit("cache", "hit" if hit else "miss", level="INFO")
     if _state:
         try:
             _state.cache_result(hit)

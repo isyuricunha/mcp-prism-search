@@ -4,6 +4,7 @@ const sections = [
   ["providers", "Providers", "M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18 M3 12h18 M12 3c4 4 4 14 0 18 M12 3c-4 4-4 14 0 18"],
   ["playground", "Playground", "M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 1 0 0-15 M16 16l5 5"],
   ["cache", "Cache", "M4 6c0-2 16-2 16 0v12c0 2-16 2-16 0z M4 6c0 2 16 2 16 0 M4 12c0 2 16 2 16 0"],
+  ["logs", "Logs", "M5 3h14v18H5z M8 7h8 M8 12h8 M8 17h5"],
   ["settings", "Settings", "M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6"],
   ["connection", "Connection", "M10 7l3-3a4 4 0 0 1 6 6l-3 3 M14 17l-3 3a4 4 0 0 1-6-6l3-3 M9 15l6-6"]
 ];
@@ -118,6 +119,21 @@ const sections = [
           <div class="summary cache-summary" id="cache-summary"></div>
           <div class="card"><div class="stack"><h2>Cache storage</h2><p class="muted">Search and webpage-fetch caches reduce repeated upstream work. Files may contain query text or fetched content.</p></div><div class="table-wrap" tabindex="0" role="region" aria-label="Cache namespaces"><table><thead><tr><th scope="col">Namespace</th><th scope="col">Entries</th><th scope="col">Disk usage</th><th scope="col">Action</th></tr></thead><tbody id="cache-rows"></tbody></table></div><p class="muted small">Storage directory: <code id="cache-dir"></code></p><div class="actions"><button id="prune" type="button">Prune expired entries</button><button id="clear-cache" class="danger" type="button">Clear all cache</button></div><p id="cache-feedback" class="feedback" role="status"></p></div>
           <div class="card"><h2>Cache policy</h2><p class="muted">Pruning removes expired or invalid entries without deleting valid cached results. Clearing removes saved results and may temporarily increase upstream requests; it does not remove provider keys or settings.</p><div class="actions"><button type="button" data-go="settings">Adjust cache TTLs</button></div></div>
+        </section>
+        <section id="logs" class="page" hidden aria-labelledby="page-title">
+          <div class="card">
+            <div class="heading"><div class="stack"><h2>Operational logs</h2><p class="muted">Sanitized events from the running server. No queries, API keys, URLs or answer content.</p></div><span id="logs-health" class="badge">Not loaded</span></div>
+            <div class="fields-grid">
+              <div class="field"><label for="logs-level">Severity</label><select id="logs-level"><option value="">All levels</option><option>DEBUG</option><option>INFO</option><option>WARNING</option><option>ERROR</option><option>CRITICAL</option></select></div>
+              <div class="field"><label for="logs-provider">Provider</label><select id="logs-provider"><option value="">All providers</option></select></div>
+              <div class="field"><label for="logs-period">Period</label><select id="logs-period"><option value="all">All retained events</option><option value="hour">Last hour</option><option value="day">Last 24 hours</option><option value="week">Last 7 days</option></select></div>
+              <div class="field"><label for="logs-search">Search events</label><input id="logs-search" type="search" maxlength="100" placeholder="Request ID, event or outcome" /></div>
+            </div>
+            <div class="actions"><label class="switch-label"><input id="logs-live" type="checkbox" class="switch" role="switch" checked /> Live updates (5 seconds)</label><button type="button" id="logs-refresh">Refresh logs</button><button type="button" id="logs-export" disabled>Export JSON</button></div>
+            <p id="logs-feedback" class="feedback" role="status"></p>
+            <p class="muted small">Up to 200 matching events, newest first. Local retention: three files of 10 MiB each. Filters and exports contain only sanitized event metadata.</p>
+            <div id="logs-list" class="log-list" aria-label="Operational events"></div>
+          </div>
         </section>
         <section id="settings" class="page" hidden aria-labelledby="page-title">
           <div class="card appearance-card"><div class="stack"><h2>Appearance</h2><p class="muted">Preferences apply only to this browser.</p></div><div class="appearance-options"><button id="settings-theme" type="button">Switch to White</button><label class="switch-label"><input id="starfield-toggle" class="switch" type="checkbox" role="switch" aria-describedby="starfield-hint" />Starfield Depth</label></div><p id="starfield-hint" class="muted">Optional animated background.</p></div>

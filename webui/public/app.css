@@ -245,3 +245,10 @@ button[aria-busy=true]::after { content:""; display:inline-block; width:12px; he
 .default-provider-picker { display:grid; gap:10px; }
 .default-field select,.search-options select { font:inherit; color:var(--text-primary); background:var(--yu-bg-input); border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); padding:10px 12px; min-height:44px; width:100%; }
 @media(max-width:720px) { .default-grid { grid-template-columns:1fr; } }
+
+.log-list { display:grid; gap:8px; }
+.log-entry { display:grid; gap:8px; min-width:0; padding:12px; border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); background:var(--yu-bg-input); }
+.log-head,.log-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px; overflow-wrap:anywhere; }
+.log-meta { font-size:12px; }
+.log-entry code { width:fit-content; max-width:100%; overflow-wrap:anywhere; }
+#logs select { font:inherit; color:var(--text-primary); background:var(--yu-bg-input); border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); padding:10px 12px; min-height:44px; width:100%; }

@@ -40,6 +40,10 @@ await page.route("http://prism-test.invalid/**",async route=>{
    if(pathname==="/api/login") logged=true;
    else if(!logged){status=401;body={error:"Authentication required"};}
    else if(pathname==="/api/overview"){if(failOverview){failOverview=false;status=503;body={error:"Unavailable"};}else body=data;}
+   else if(pathname==="/api/logs"){
+    const entries=[{timestamp:"2026-11-27T17:00:00Z",level:"WARNING",event:"provider",outcome:"limited",provider:"tinyfish",status_code:429,duration_ms:250,request_id:"0123456789abcdef0123456789abcdef"},{timestamp:"2026-11-27T16:59:00Z",level:"INFO",event:"operation",operation:"web_search",outcome:"ok",result_count:3}];
+    body={enabled:true,events:entries.filter(r=>(!url.searchParams.get("level")||r.level===url.searchParams.get("level"))&&(!url.searchParams.get("provider")||r.provider===url.searchParams.get("provider"))&&(!url.searchParams.get("search")||JSON.stringify(r).includes(url.searchParams.get("search")))),limit:200};
+   }
    else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);if(d.credential)p.credential=true;if(d.remove)p.credential=false;p.configured=!p.env||p.credential;p.enabled=d.enabled&&p.configured&&!p.enabled_locked;p.available=p.enabled;}
    else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;if(holdSettings)await holdSettings;}
    else if(pathname==="/api/defaults"){
@@ -67,7 +71,7 @@ async function audit(name){
  for(const item of findings.violations)results.push({page:name,id:item.id,impact:item.impact,nodes:item.nodes.map(n=>({target:n.target,summary:n.failureSummary})).slice(0,6)});
 }
 async function nav(name){await page.locator("[data-page]").filter({hasText:new RegExp("^"+name+"$")}).click();}
-const sections=["Overview","Providers","Playground","Cache","Settings","Connection"];
+const sections=["Overview","Providers","Playground","Cache","Logs","Settings","Connection"];
 try{
  await page.goto("http://prism-test.invalid/");
  await page.locator("#login").waitFor({state:"visible"});
@@ -105,13 +109,37 @@ try{
    const dims=await page.evaluate(()=>({view:document.documentElement.clientWidth,body:document.documentElement.scrollWidth}));
    assert.ok(dims.body<=dims.view+1,JSON.stringify({width,name,dims}));
   }
-  console.log("Viewport",width,"all six sections fit");
+  console.log("Viewport",width,"all seven sections fit");
  }
  await page.setViewportSize({width:1440,height:900});
  for(const name of sections){await nav(name);await audit(name+"-dark");}
  await page.locator("#theme").click();
  for(const name of sections){await nav(name);await audit(name+"-white");}
  await page.locator("#theme").click();
+ await nav("Logs");
+ await page.locator("#logs-live").uncheck();
+ await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===2);
+ await page.locator("#logs-level").selectOption("WARNING");
+ await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===1);
+ assert.ok((await page.locator("#logs-list").textContent()).includes("HTTP 429"));
+ await page.locator("#logs-provider").selectOption("tinyfish");
+ await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===1);
+ await page.locator("#logs-search").fill("missing");
+ await page.locator("#logs-search").press("Enter");
+ await page.waitForFunction(()=>document.querySelector("#logs-list").textContent.includes("No matching"));
+ assert.equal(await page.locator("#logs-export").isDisabled(),true);
+ await page.locator("#logs-search").fill("");
+ await page.locator("#logs-search").press("Enter");
+ await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===1);
+ const downloaded=page.waitForEvent("download");
+ await page.locator("#logs-export").click();
+ const download=await downloaded;
+ assert.equal(download.suggestedFilename(),"prism-events.json");
+ const exported=JSON.parse(await fs.readFile(await download.path(),"utf8"));
+ assert.equal(exported.length,1);
+ assert.equal(exported[0].status_code,429);
+ await audit("logs-filtered-dark");
+ await page.locator("#theme").click();await audit("logs-filtered-white");await page.locator("#theme").click();
  await nav("Providers");
  await page.locator("#provider-filter").fill("no-such-engine");
  await page.locator("#provider-empty").waitFor({state:"visible"});

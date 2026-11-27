@@ -503,3 +503,7 @@ A Docker source build without Git metadata or a supplied version reports
 Release notes and the full generated changelog are available in [GitHub Releases](https://github.com/isyuricunha/mcp-prism-search/releases).
 
 TinyFish TinyAnswer and TinyResearch are available through the explicit native tools; they are not part of automatic AI-enhanced search. Search is free within published limits; verify synthesis entitlement and charges before use. See [native capabilities](docs/native-ai.md).
+
+### Operational logs
+
+Structured stderr events and the optional dashboard Logs page provide sanitized operational history, correlation, filters and JSON export. See [observability and optional OpenTelemetry](docs/observability.md).
