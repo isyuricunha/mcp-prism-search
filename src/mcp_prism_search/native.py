@@ -176,8 +176,13 @@ async def _chat_stream(client, url, headers, payload, provider):
             if event.get("error"):
                 raise ValueError("Upstream stream failed")
             for choice in event.get("choices", []):
-                if choice.get("finish_reason") == "stop":
+                reason = choice.get("finish_reason")
+                if reason == "stop":
                     finished = True
+                elif reason is not None:
+                    # A terminal length/error/tool-call event is not a complete
+                    # grounded response, even when followed by [DONE].
+                    raise ValueError("Upstream stream did not complete normally")
                 delta = choice.get("delta") or {}
                 text = delta.get("content")
                 if (isinstance(text, str)

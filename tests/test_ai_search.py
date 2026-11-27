@@ -263,3 +263,14 @@ def test_auto_prioritizes_authorized_ai_and_optout_preserves_cache(configure, mo
     }))
     third = asyncio.run(search.aggregated_search("question", provider="auto"))
     assert third.provider == "tavily" and third.answers and not third.cached
+
+
+@pytest.mark.parametrize("reason", ["length", "content_filter", "error"])
+def test_native_incomplete_stream_never_reported_as_complete(configure, monkeypatch, reason):
+    mock_http(monkeypatch, lambda req: httpx.Response(
+        200, text=sse({"choices": [{"delta": {"content": "Partial"},
+                                    "finish_reason": reason}]}),
+        headers={"Content-Type": "text/event-stream"},
+    ))
+    with pytest.raises(native.NativeError, match="invalid or unavailable"):
+        asyncio.run(native.synthesize("question", "brave", "answer", allow_cost=True))
