@@ -300,3 +300,11 @@ def test_invalid_rows_are_not_counted_as_provider_success(registry, monkeypatch)
     assert rows == [] and status == "keenable: empty"
     assert HEALTH["keenable"].empty == 1
     assert metrics[0][1] == "empty"
+
+
+def test_malformed_rows_do_not_discard_valid_provider_results(registry):
+    register, _ = registry
+    register("keenable", [None, {"title": "bad"}, result("https://a.test/")])
+    rows, status = asyncio.run(search._search_one(
+        "keenable", SearchRequest(query="needle"), 5, 5))
+    assert len(rows) == 1 and status == "keenable: ok (1)"

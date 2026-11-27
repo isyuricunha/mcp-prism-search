@@ -221,7 +221,8 @@ def _dedupe_results(
     seen: set[str] = set()
     deduped: list[SearchResult] = []
     for result in results:
-        if not result.title.strip() or not valid_result_url(result.url):
+        if (not isinstance(result, SearchResult) or not result.title.strip()
+                or not valid_result_url(result.url)):
             continue
         normalized_url = normalize_url_for_dedupe(result.url)
         if normalized_url in seen:
