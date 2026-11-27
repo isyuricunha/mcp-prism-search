@@ -645,3 +645,15 @@ def test_panel_store_rejects_shared_state(tmp_path):
     with pytest.raises(RuntimeError, match="private"):
         PanelStore(directory)
     assert not (directory / "encryption.key").exists()
+
+
+def test_panel_store_missing_key_preserves_database(tmp_path):
+    directory = tmp_path / "admin"
+    store = PanelStore(directory)
+    store.update("tinyfish", "TINYFISH_API_KEY", True, "fixture-value", False)
+    (directory / "encryption.key").unlink()
+    before = store.path.read_bytes()
+    with pytest.raises(RuntimeError, match="missing"):
+        PanelStore(directory)
+    assert store.path.read_bytes() == before
+    assert not (directory / "encryption.key").exists()
