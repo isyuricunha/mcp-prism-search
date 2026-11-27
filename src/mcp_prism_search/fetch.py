@@ -285,7 +285,9 @@ async def web_fetch(
             cached = FetchResponse.model_validate(cached_value)
             validate_url_shape(cached.final_url)
             if (cached.url == request.url and cached.success and not cached.error
-                    and len(cached.content) <= request.max_chars):
+                    and len(cached.content) <= request.max_chars
+                    and ("html" in cached.content_type.lower()
+                         or is_plain_text_content(cached.content_type, cached.final_url))):
                 emit("cache", "hit", level="INFO", operation="web_fetch")
                 return cached.model_copy(update={"cached": True})
             cache.delete(payload)

@@ -450,3 +450,56 @@ def test_cache_entry_size_bound_on_read_and_write(tmp_path, monkeypatch):
     store.path_for({"q": 1}).write_text("x" * 500)
     assert store.get({"q": 1}) is None
     assert not list(store.cache_dir.glob("*.tmp"))
+
+
+@pytest.mark.parametrize("final_url", ["http://127.0.0.1/", "file:///etc/passwd"])
+def test_fetch_cache_rejects_unsafe_final_url_even_with_matching_request(
+    tmp_path, monkeypatch, final_url,
+):
+    from mcp_prism_search.models import FetchRequest, FetchResponse
+
+    url = "https://example.org"
+    store = cache.JsonFileCache(tmp_path, "fetch", 60)
+    request = FetchRequest(url=url)
+    payload = fetch._cache_payload(request) | {"_max_bytes": fetch.get_fetch_max_bytes()}
+    store.set(payload, FetchResponse(
+        url=url, final_url=final_url, title="", content="Wrong destination",
+        content_type="text/plain", success=True, cached=False, error=None,
+    ).model_dump())
+
+    async def valid(url):
+        pass
+
+    async def failed(*args):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(fetch, "validate_fetch_url", valid)
+    monkeypatch.setattr(fetch, "_get_with_validated_redirects", failed)
+    result = asyncio.run(fetch.web_fetch(url, cache=store))
+    assert not result.cached and not result.success
+    assert store.get(payload) is None
+
+
+def test_fetch_cache_rejects_unsupported_cached_content_type(tmp_path, monkeypatch):
+    from mcp_prism_search.models import FetchRequest, FetchResponse
+
+    url = "https://example.org"
+    store = cache.JsonFileCache(tmp_path, "fetch", 60)
+    payload = fetch._cache_payload(FetchRequest(url=url)) | {
+        "_max_bytes": fetch.get_fetch_max_bytes(),
+    }
+    store.set(payload, FetchResponse(
+        url=url, final_url=url, title="", content="binary",
+        content_type="image/png", success=True, cached=False, error=None,
+    ).model_dump())
+
+    async def valid(url):
+        pass
+
+    async def failed(*args):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(fetch, "validate_fetch_url", valid)
+    monkeypatch.setattr(fetch, "_get_with_validated_redirects", failed)
+    result = asyncio.run(fetch.web_fetch(url, cache=store))
+    assert not result.cached and not result.success
