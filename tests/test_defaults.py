@@ -232,3 +232,14 @@ def test_freshness_cache_never_exceeds_regular_ttl(monkeypatch, tmp_path):
     monkeypatch.setattr(time, "time", lambda: 10**12)
     assert search.search_ttl_for_query("latest news") == 100
     assert cache.get(payload, ttl_seconds=100) is None
+
+
+def test_unknown_default_patch_is_atomic(tmp_path):
+    store = PanelStore(tmp_path / "state")
+    runtime.install(store)
+    defaults.update_defaults(store, {"search_max_results": 7})
+    before = dict(store.options)
+    with pytest.raises(ValueError, match="Unknown default"):
+        defaults.update_defaults(store, {"search_max_results": 5, "unknown": 1})
+    assert store.options == before
+    assert defaults.effective_defaults().search_max_results == 7
