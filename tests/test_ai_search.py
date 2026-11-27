@@ -575,3 +575,16 @@ def test_combined_invalid_rows_do_not_consume_requested_result_window(configure,
     result = asyncio.run(search.aggregated_search(
         "question", provider="tavily", max_results=1))
     assert len(result.results) == 1 and result.results[0].url == ROW["url"]
+
+
+def test_sse_reader_fragmented_utf8():
+    class Fragmented(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b":" + b"x" * 4083 + b"\ndata: caf\xc3"
+            yield b"\xa9\r\n\r\ndata: next\r\n\r\n"
+
+    async def collect():
+        response = httpx.Response(200, stream=Fragmented())
+        return [item async for item in native._sse_data(response)]
+
+    assert asyncio.run(collect()) == ["café", "next"]
