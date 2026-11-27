@@ -173,3 +173,16 @@ def test_exporter_shutdown_failure_does_not_prevent_history_cleanup(logs, monkey
     assert obs._history is None
     assert obs._writer_lock is None
     assert obs._otel_provider is None
+
+
+def test_panel_operation_rate_limit_retains_http_status(logs):
+    from starlette.responses import JSONResponse
+
+    @obs.operation("panel_search")
+    async def run():
+        return JSONResponse({"error": "private"}, status_code=429)
+
+    asyncio.run(run())
+    row = obs.history()["events"][0]
+    assert row["outcome"] == "limited" and row["status_code"] == 429
+    assert row["level"] == "WARNING"

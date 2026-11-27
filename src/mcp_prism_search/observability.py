@@ -265,7 +265,7 @@ def _safe_row(row):
 
 
 def emit(event, outcome, *, level=None, operation=None, provider=None, elapsed=None,
-         result_count=None):
+         result_count=None, status_code=None):
     try:
         outcome, status = _outcome(outcome)
         row = {
@@ -274,7 +274,8 @@ def emit(event, outcome, *, level=None, operation=None, provider=None, elapsed=N
             "level": level or ("WARNING" if outcome in {"error", "timeout", "limited", "denied"}
                                else "DEBUG" if event == "cache" else "INFO"),
             "operation": operation, "provider": provider, "request_id": request_id.get(),
-            "status_code": status, "result_count": result_count,
+            "status_code": status if status is not None else status_code,
+            "result_count": result_count,
         }
         if isinstance(elapsed, (float, int)) and math.isfinite(elapsed):
             row["duration_ms"] = max(0, min(10**9, round(elapsed * 1000)))
@@ -301,7 +302,7 @@ def operation(name):
         async def wrapped(*args, **kwargs):
             token = request_id.set(request_id.get() or uuid4().hex)
             start = monotonic()
-            outcome, count = "error", None
+            outcome, count, status_code = "error", None, None
             try:
                 # Disable automatic exception capture: exception messages can
                 # contain query text, URLs, upstream payloads or credentials.
@@ -311,12 +312,14 @@ def operation(name):
                     try:
                         emit("operation", "started", operation=name)
                         result = await fn(*args, **kwargs)
-                        status = getattr(result, "status_code", 200)
+                        status_code = getattr(result, "status_code", None)
+                        status = status_code or 200
                         outcome = (
                             "ok" if status < 400 and not getattr(result, "error", None)
                             and getattr(result, "success", True)
                             and not (isinstance(result, dict) and result.get("error"))
-                            else "denied" if status in {401, 403} else "error"
+                            else "denied" if status in {401, 403}
+                            else "limited" if status == 429 else "error"
                         )
                         rows = getattr(result, "results", None)
                         if isinstance(rows, list):
@@ -328,7 +331,8 @@ def operation(name):
                     finally:
                         emit("operation", outcome, operation=name,
                              level="ERROR" if outcome == "error" else None,
-                             elapsed=monotonic() - start, result_count=count)
+                             elapsed=monotonic() - start, result_count=count,
+                             status_code=status_code)
                         if _otel_provider is not None and span.is_recording():
                             span.set_attribute("prism.outcome", outcome)
                             if outcome == "error":
