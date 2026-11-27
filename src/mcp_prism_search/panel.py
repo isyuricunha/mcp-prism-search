@@ -140,6 +140,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
             return error("Invalid password", 401)
         failures.clear()
         valid_session(request)
+        # A successful re-authentication rotates any existing browser session.
+        sessions.pop(request.cookies.get(COOKIE, ""), None)
         if len(sessions) >= 64:
             sessions.pop(next(iter(sessions)))
         token = secrets.token_urlsafe(32)

@@ -343,3 +343,18 @@ def test_panel_security_headers_on_early_denials(panel):
         assert response.headers["cache-control"] == "no-store"
         assert response.headers["x-content-type-options"] == "nosniff"
         assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_successful_reauthentication_revokes_previous_cookie(panel):
+    from mcp_prism_search.panel import COOKIE
+
+    client, _, _ = panel
+    first = sign_in(client).cookies.get(COOKIE)
+    second = sign_in(client).cookies.get(COOKIE)
+    assert first and second and first != second
+    client.cookies.clear()
+    client.cookies.set(COOKIE, first)
+    assert client.get("/api/overview").status_code == 401
+    client.cookies.clear()
+    client.cookies.set(COOKIE, second)
+    assert client.get("/api/overview").status_code == 200
