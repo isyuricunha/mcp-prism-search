@@ -604,3 +604,15 @@ def test_sse_reject_compressed():
 
     with pytest.raises(ValueError, match="encoding"):
         asyncio.run(collect())
+
+
+def test_native_slot_saturation():
+    async def exercise():
+        async with native.synthesis_slot(), native.synthesis_slot():
+            with pytest.raises(native.NativeError, match="Too many"):
+                async with native.synthesis_slot():
+                    pytest.fail("unexpected third slot")
+        async with native.synthesis_slot():
+            pass
+
+    asyncio.run(exercise())
