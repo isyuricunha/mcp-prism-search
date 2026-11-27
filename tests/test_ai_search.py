@@ -274,3 +274,40 @@ def test_native_incomplete_stream_never_reported_as_complete(configure, monkeypa
     ))
     with pytest.raises(native.NativeError, match="invalid or unavailable"):
         asyncio.run(native.synthesize("question", "brave", "answer", allow_cost=True))
+
+
+def test_separate_answer_rechecks_authorization_before_cost(configure, monkeypatch):
+    monkeypatch.setenv("MCP_AI_SEARCH_ENABLED", "false")
+
+    async def unexpected(*args, **kwargs):
+        pytest.fail("Must not call paid synthesis after consent is revoked")
+
+    monkeypatch.setattr(native, "synthesize", unexpected)
+    with pytest.raises(native.NativeError, match="no longer authorized"):
+        asyncio.run(ai_search.separate_answer("brave", "question", 5))
+
+
+
+@pytest.mark.parametrize("provider", ["tavily", "brave"])
+def test_queued_synthesis_rechecks_policy_after_slot(configure, monkeypatch, provider):
+    def unexpected(req):
+        pytest.fail("Revoked synthesis must not reach the upstream API")
+
+    mock_http(monkeypatch, unexpected)
+
+    async def verify():
+        async with native.synthesis_slot(), native.synthesis_slot():
+            if provider == "tavily":
+                operation = ai_search.combined_search(
+                    provider, SearchRequest(query="question"), 5, 5,
+                )
+            else:
+                operation = ai_search.separate_answer(provider, "question", 5)
+            task = asyncio.create_task(operation)
+            await asyncio.sleep(0)
+            assert not task.done()
+            monkeypatch.setenv("MCP_AI_SEARCH_ENABLED", "false")
+        with pytest.raises(native.NativeError, match="no longer authorized"):
+            await task
+
+    asyncio.run(verify())

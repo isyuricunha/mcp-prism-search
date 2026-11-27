@@ -44,6 +44,8 @@ async def combined_search(
     name: str, request: SearchRequest, count: int, timeout: int,
 ) -> tuple[list[SearchResult], NativeResponse | None]:
     """Use the provider's documented combined response, without a second synthesis call."""
+    if name not in eligible([name], request, None):
+        raise native.NativeError("Provider AI is no longer authorized")
     spec = providers.available_providers("general").get(name)
     credential = runtime.setting(spec.needs) if spec and spec.needs else None
     if not credential:
@@ -69,6 +71,9 @@ async def combined_search(
     outcome = "error"
     try:
         async with asyncio.timeout(timeout), native.synthesis_slot(wait=True):
+            if (name not in eligible([name], request, None)
+                    or runtime.setting(spec.needs) != credential):
+                raise native.NativeError("Provider AI is no longer authorized")
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
                 response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
@@ -108,6 +113,8 @@ async def combined_search(
     except (TimeoutError, httpx.TimeoutException):
         outcome = "timeout"
         raise native.NativeError(outcome) from None
+    except native.NativeError:
+        raise
     except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
         raise native.NativeError("invalid or unavailable response") from None
     finally:
@@ -126,8 +133,11 @@ def compact_answer(answer: NativeResponse) -> NativeResponse:
 
 
 async def separate_answer(name: str, query: str, timeout: int) -> NativeResponse:
+    enabled, selected = policy()
+    if not enabled or name not in selected:
+        raise native.NativeError("Provider AI is no longer authorized")
     async with asyncio.timeout(timeout):
         return await native.synthesize(
             query, name, "research" if name == "jina" else "answer", allow_cost=True,
-            effort="lite", wait_for_slot=True,
+            effort="lite", wait_for_slot=True, require_search_policy=True,
         )

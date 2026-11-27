@@ -107,3 +107,7 @@ Keep provider spending controls enabled; Prism does not impose a billing
 quota. Metrics use provider:answer / provider:research labels; a combined
 call is both a search attempt and a synthesis outcome, not two billable
 requests.
+
+A non-stop terminal SSE reason is treated as an incomplete answer, not a
+successful synthesis. Regular search rechecks authorization before initiating
+provider synthesis; revocation does not cancel work already submitted upstream.

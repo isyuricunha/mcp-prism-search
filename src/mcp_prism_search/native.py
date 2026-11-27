@@ -246,7 +246,8 @@ async def _tavily_research(client, headers, payload):
 
 async def synthesize(query: str, provider: str | None, mode: Mode, *,
                      allow_cost: bool = False, effort: Effort | None = None,
-                     wait_for_slot: bool = False) -> NativeResponse:
+                     wait_for_slot: bool = False,
+                     require_search_policy: bool = False) -> NativeResponse:
     from mcp_prism_search.defaults import effective_defaults
 
     defaults = effective_defaults()
@@ -325,6 +326,14 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
     start = monotonic()
     outcome = "error"
     async with synthesis_slot(wait=wait_for_slot):
+        if require_search_policy:
+            from mcp_prism_search.ai_search import policy
+
+            enabled, selected = policy()
+            if (not enabled or provider not in selected
+                    or provider not in providers.available_providers("general")
+                    or runtime.setting(spec.needs) != credential):
+                raise NativeError("Provider AI is no longer authorized")
         try:
             async with asyncio.timeout(timeout):
                 async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:

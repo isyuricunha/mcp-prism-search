@@ -104,3 +104,8 @@ recorded whenever persistent state is active.
 
 The website is an optional management surface, not a separate configuration
 source or a prerequisite for running the MCP.
+
+Search queries are limited to 4,000 characters, domain preference lists to
+50 entries each, and fetch URLs (including redirects) to 8,192 characters.
+Internationalized domains are normalized to ASCII IDNA and malformed domain
+preferences are rejected. Explicit search windows suppress native AI synthesis.
