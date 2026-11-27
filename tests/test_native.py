@@ -132,3 +132,12 @@ def test_mcp_native_structured_output(mode, monkeypatch):
             assert result.structured_content["answer"] == "Grounded answer"
             assert result.structured_content["sources"][0]["url"] == "https://example.org"
     asyncio.run(run())
+
+
+def test_exa_grounding_requires_a_citation_array():
+    with pytest.raises(ValueError, match="Invalid grounding citations"):
+        native._decode("exa", "research", {"output": {
+            "content": {"answer": "Report"}, "grounding": [
+                {"field": "answer", "citations": {"url": "https://example.org"}},
+            ],
+        }}, "lite")

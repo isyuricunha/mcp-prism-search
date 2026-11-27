@@ -143,7 +143,10 @@ def _decode(provider: str, mode: Mode, data: dict, effort: Effort) -> NativeResp
         for field in grounding:
             if not isinstance(field, dict) or field.get("field") != "answer":
                 continue
-            rows.extend(field.get("citations") or [])
+            citations = field.get("citations")
+            if not isinstance(citations, list):
+                raise ValueError("Invalid grounding citations")
+            rows.extend(citations)
         source_kind = "grounding"
     elif mode == "research":
         output = data["output"]
