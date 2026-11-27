@@ -602,3 +602,14 @@ def test_panel_session_expires(tmp_path, monkeypatch):
     with TestClient(app, base_url="http://localhost") as client:
         sign_in(client)
         assert client.get("/api/overview").status_code == 401
+
+
+@pytest.mark.parametrize("preferred", ["not-a-provider", "wikipedia"])
+def test_panel_preferred_general_only(panel, preferred):
+    client, store, _ = panel
+    sign_in(client)
+    before = dict(store.options)
+    response = client.put("/api/settings", json={"timeout": 11, "preferred": preferred},
+                          headers=HEADERS)
+    assert response.status_code == 400
+    assert store.options == before
