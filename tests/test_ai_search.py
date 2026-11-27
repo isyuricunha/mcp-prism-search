@@ -647,3 +647,17 @@ def test_tavily_terminal_failure(configure, monkeypatch, status):
     with pytest.raises(native.NativeError):
         asyncio.run(native.synthesize("question", "tavily", "research", allow_cost=True))
     assert calls == ["POST", "GET"]
+
+
+@pytest.mark.parametrize("reason", ["deadline", "max_iterations", "abort", "planner_no_queries"])
+def test_tinyfish_partial_report(tinyfish_config, monkeypatch, reason):
+    mock_http(monkeypatch, lambda req: httpx.Response(200, text=sse({
+        "event": "final_result", "result": "Report", "citations": ["https://example.org"],
+        "termination_reason": reason,
+    })))
+    result = asyncio.run(native.synthesize(
+        "question", "tinyfish", "research", allow_cost=True, effort="deep",
+    ))
+    assert "budget or planning limit" in result.answer
+    assert result.answer.endswith("Report")
+    assert result.sources[0].url == "https://example.org"
