@@ -58,8 +58,10 @@ def make_search(backend: str):
                     p.kind == inspect.Parameter.VAR_KEYWORD
                     for p in text_signature.parameters.values()
                 )
+                if not include_backend:
+                    raise ValueError("DDGS cannot pin the requested backend")
                 kwargs = _ddgs_text_kwargs(
-                    request, backend, include_backend=include_backend, count=count
+                    request, backend, include_backend=True, count=count
                 )
                 raw_results = ddgs.text(request.query, **kwargs)
                 out = []
