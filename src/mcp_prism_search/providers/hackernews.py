@@ -24,6 +24,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     results: list[SearchResult] = []
     for hit in data.get("hits", []):
+        if not isinstance(hit, dict):
+            continue
         title = normalize_whitespace(str(hit.get("title") or hit.get("story_title") or ""))
         url = str(hit.get("url") or hit.get("story_url") or "")
         if not url.startswith("http"):

@@ -46,8 +46,8 @@ ARGUMENT_DESCRIPTIONS = {
         "from the environment is used."
     ),
     "expired_only": (
-        "When true, cache_prune deletes only expired, corrupt, or temporary cache files and skips "
-        "size-limit pruning."
+        "When true, cache_prune deletes only expired cache files or stale temporary files "
+        "and skips size-limit pruning."
     ),
     "dry_run": "When true, cache_prune reports files that would be deleted without deleting them.",
     "namespace": "Cache namespace to clear: search, fetch, or all.",

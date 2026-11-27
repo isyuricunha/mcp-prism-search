@@ -21,6 +21,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     rows = data if isinstance(data, list) else (data.get("results") or [])
     results: list[SearchResult] = []
     for item in rows:
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or item.get("link") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(str(item.get("snippet") or item.get("summary") or ""))

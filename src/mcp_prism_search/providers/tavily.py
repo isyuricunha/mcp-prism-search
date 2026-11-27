@@ -19,9 +19,10 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     body: dict = {
         "query": request.query,
-        "max_results": count,
+        "max_results": min(count, 20),
         "search_depth": "basic",
         "include_answer": False,
+        "auto_parameters": False,
     }
     if request.blocked_domains:
         body["exclude_domains"] = list(request.blocked_domains)
@@ -40,6 +41,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     results: list[SearchResult] = []
     for item in data.get("results", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(str(item.get("content") or ""))

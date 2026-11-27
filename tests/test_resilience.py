@@ -87,3 +87,68 @@ def test_fetch_preserves_prefix_and_disables_proxy_and_reuse(tmp_path, monkeypat
     assert "prefix" in result.content
     assert options["trust_env"] is False
     assert options["limits"].max_keepalive_connections == 0
+
+
+@pytest.mark.parametrize("name,env", [
+    ("exa", "EXA_API_KEY"), ("tavily", "TAVILY_API_KEY"),
+    ("brave", "BRAVE_API_KEY"), ("jina", "JINA_API_KEY"),
+])
+def test_provider_contract_boundaries(name, env, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+    from importlib import import_module
+
+    from mcp_prism_search.models import SearchRequest
+
+    monkeypatch.setenv(env, "fixture-not-real-key")
+    module = import_module("mcp_prism_search.providers." + name)
+    original = httpx.AsyncClient
+    row = {"url": "https://example.org", "title": "Example", "description": "Text"}
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        if name == "exa":
+            payload = json.loads(req.content)
+            start = datetime.fromisoformat(payload["startPublishedDate"])
+            assert abs((datetime.now(UTC) - timedelta(days=7) - start).total_seconds()) < 5
+        elif name == "tavily":
+            payload = json.loads(req.content)
+            assert payload["max_results"] == 20 and payload["auto_parameters"] is False
+        elif name == "brave":
+            assert req.url.params["count"] == "20" and req.url.params["freshness"] == "pw"
+        else:
+            assert "%3F" in str(req.url) and "%23" in str(req.url)
+            assert not req.url.query and not req.url.fragment
+        data = {"results": [None, row]}
+        if name == "brave":
+            data = {"web": {"results": [None, row]}}
+        elif name == "jina":
+            data = {"data": [None, row]}
+        return httpx.Response(200, json=data)
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(handler), **kw))
+    rows = asyncio.run(module.search(SearchRequest(query="C++? #test", time_filter="week"), 50, 5))
+    assert len(calls) == 1 and rows[0].url == row["url"]
+
+
+def test_dedupe_retains_case_and_path_params_and_rejects_malformed():
+    from mcp_prism_search.models import SearchResult
+    from mcp_prism_search.search import _dedupe_results
+
+    urls = ["https://example.org/A", "https://example.org/a",
+            "https://example.org/a;x", "https://example.org/a#fragment",
+            "https://[invalid", "https://example.org:bad", "javascript:alert(1)"]
+    rows = _dedupe_results([SearchResult(title="T", url=url, snippet="") for url in urls])
+    assert [row.url for row in rows] == urls[:3]
+
+
+def test_malformed_ddg_link_does_not_discard_valid_row():
+    from mcp_prism_search.providers.ddg_html import parse_results
+
+    rows = parse_results(
+        '<div class="result"><a class="result__a" href="https://[bad">Bad</a></div>'
+        '<div class="result"><a class="result__a" href="https://example.org">Good</a></div>',
+        10,
+    )
+    assert len(rows) == 1 and rows[0].title == "Good"

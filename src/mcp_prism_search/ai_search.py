@@ -84,7 +84,11 @@ async def combined_search(
                 if source.url and row.get("title"):
                     results.append(SearchResult(
                         title=normalize_whitespace(source.title), url=source.url,
-                        snippet=normalize_whitespace(source.excerpt),
+                        snippet=normalize_whitespace(
+                            source.excerpt or str(
+                                row.get("description") or row.get("summary") or ""
+                            )
+                        ),
                     ))
             # Valid retrieval must survive a missing or malformed synthesis.
             answer = None

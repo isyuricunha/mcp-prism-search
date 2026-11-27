@@ -30,7 +30,10 @@ def resolve_duckduckgo_redirect_url(href: str) -> str:
     else:
         resolved = href
 
-    parsed = urlparse(resolved)
+    try:
+        parsed = urlparse(resolved)
+    except ValueError:
+        return ""
     hostname = parsed.hostname.lower() if parsed.hostname else ""
     is_ddg_host = hostname == "duckduckgo.com" or hostname.endswith(".duckduckgo.com")
     if is_ddg_host and parsed.path.rstrip("/") == "/l":
@@ -51,25 +54,26 @@ def _result_from_soup_link(link) -> SearchResult | None:
         snippet_el = container.select_one(".result__snippet")
         if snippet_el is not None:
             snippet = normalize_whitespace(snippet_el.get_text(" ", strip=True))
+    url = resolve_duckduckgo_redirect_url(href)
+    if not url:
+        return None
     return SearchResult(
         title=title,
-        url=resolve_duckduckgo_redirect_url(href),
+        url=url,
         snippet=snippet,
     )
 
 
-def _dedupe(results: list[SearchResult], count: int) -> list[SearchResult]:
-    seen: set[str] = set()
-    out: list[SearchResult] = []
-    for result in results:
-        key = result.url.rstrip("/").lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(result)
-        if len(out) >= count:
-            break
-    return out
+def parse_results(html: str, count: int) -> list[SearchResult]:
+    from mcp_prism_search.search import _dedupe_results
+
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    for link in soup.select("a.result__a"):
+        result = _result_from_soup_link(link)
+        if result is not None:
+            results.append(result)
+    return _dedupe_results(results, count)
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
@@ -89,10 +93,4 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response = await client.get(HTML_URL, params=params)
         response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    results: list[SearchResult] = []
-    for link in soup.select("a.result__a"):
-        result = _result_from_soup_link(link)
-        if result is not None:
-            results.append(result)
-    return _dedupe(results, count)
+    return parse_results(response.text, count)

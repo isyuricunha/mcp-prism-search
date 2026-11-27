@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 
 from mcp_prism_search import runtime
@@ -22,11 +24,13 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         body["includeDomains"] = list(request.allowed_domains)
     if request.blocked_domains:
         body["excludeDomains"] = list(request.blocked_domains)
-    time_filter_code = {"day": "1d", "week": "1w", "month": "1m", "year": "1y"}.get(
+    time_filter_code = {"day": 1, "week": 7, "month": 30, "year": 365}.get(
         request.time_filter or ""
     )
     if time_filter_code:
-        body["startPublishedDate"] = time_filter_code
+        body["startPublishedDate"] = (
+            datetime.now(UTC) - timedelta(days=time_filter_code)
+        ).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         response = await client.post(SEARCH_URL, json=body, headers=headers)
@@ -35,6 +39,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     results: list[SearchResult] = []
     for item in data.get("results", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(

@@ -12,21 +12,16 @@ DDGS_SAFE_SEARCH = {"off": "off", "moderate": "moderate", "strict": "on"}
 TIME_FILTERS = {"day": "d", "week": "w", "month": "m", "year": "y"}
 
 
-def provider_request_size(request: SearchRequest) -> int:
-    if request.search_window is not None:
-        return request.search_window
-    return request.max_results
-
-
 def _ddgs_text_kwargs(
     request: SearchRequest,
     backend: str,
     *,
     include_backend: bool,
+    count: int,
 ) -> dict[str, Any]:
     timelimit = TIME_FILTERS.get(request.time_filter) if request.time_filter else None
     kwargs: dict[str, Any] = {
-        "max_results": provider_request_size(request),
+        "max_results": count,
         "timelimit": timelimit,
         "safesearch": DDGS_SAFE_SEARCH[request.safe_search],
     }
@@ -63,24 +58,20 @@ def make_search(backend: str):
                     p.kind == inspect.Parameter.VAR_KEYWORD
                     for p in text_signature.parameters.values()
                 )
-                kwargs = _ddgs_text_kwargs(request, backend, include_backend=include_backend)
+                kwargs = _ddgs_text_kwargs(
+                    request, backend, include_backend=include_backend, count=count
+                )
                 raw_results = ddgs.text(request.query, **kwargs)
                 out = []
                 for raw in raw_results or []:
+                    if not isinstance(raw, dict):
+                        continue
                     result = _result_from_payload(raw)
                     if result is not None:
                         out.append(result)
-                seen: set[str] = set()
-                deduped = []
-                for item in out:
-                    key = item.url.rstrip("/").lower()
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    deduped.append(item)
-                    if len(deduped) >= count:
-                        break
-                return deduped
+                from mcp_prism_search.search import _dedupe_results
+
+                return _dedupe_results(out, count)
 
         return await asyncio.to_thread(run)
 

@@ -26,6 +26,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     results: list[SearchResult] = []
     for item in data.get("organic", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("link") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(str(item.get("snippet") or ""))

@@ -84,3 +84,30 @@ Notes:
 
 - The release workflow builds the Docker image on every push to `main`
   (paths that are markdown-only are ignored).
+
+
+## Frontend build compatibility and dependency audit
+
+The dashboard is compiled to static assets in a separate build stage; the
+runtime image contains neither Astro nor Node.js. On the Cloud LAB's Ivy
+Bridge CPU, Astro 7.4.13 / compiler-rs 0.5.3 reproduces an illegal instruction
+(SIGILL) even on compiler import. Astro 6.4.8 is the latest compatible
+6.x version checked on 2026-11-27. The 7.4.13 isolated dependency tree has
+zero npm audit advisories, but its build does not work on this host.
+The official WASI binding is platform-restricted and the native loader
+attempts the native module before fallback; do not force-install or patch
+that loader.
+
+The remaining Astro 6 advisory group includes server rendering and image
+optimization paths. This project builds trusted source only, serves
+static assets via Python, has no SSR adapter, image optimization endpoint,
+MDX or user-controlled build-time templates. These constraints reduce
+exposure; they are not a claim that vulnerable dependencies are patched.
+Do not expose the Astro development server. Recheck the upstream compiler
+and advisories before upgrading. Use the normal CI build on a supported
+CPU to evaluate future releases.
+
+The pinned transitive esbuild 0.28.2 and sharp 0.35.5 resolve their
+reported advisories; the compatible Astro 6.4.8 remains flagged. Recheck
+the overrides with each framework upgrade. The browser tests and Docker
+build exercise these exact locked versions.

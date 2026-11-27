@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -29,13 +31,15 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     results: list[SearchResult] = []
     for item in data.get("query", {}).get("search", []):
+        if not isinstance(item, dict):
+            continue
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(
             BeautifulSoup(str(item.get("snippet") or ""), "html.parser").get_text(" ")
         )
         if not title:
             continue
-        wiki_url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
+        wiki_url = "https://en.wikipedia.org/wiki/" + quote(title.replace(" ", "_"), safe="")
         results.append(SearchResult(title=title, url=wiki_url, snippet=snippet))
         if len(results) >= count:
             break

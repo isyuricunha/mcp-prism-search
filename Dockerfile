@@ -35,6 +35,6 @@ RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin mcp \
 USER 10001:10001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import socket,sys; s=socket.socket(); s.settimeout(4); s.connect(('127.0.0.1', int(__import__('os').getenv('MCP_PORT','8000'))))" || exit 1
+    CMD python -c "import os,sys,urllib.request; sys.exit(0) if os.getenv('MCP_TRANSPORT','stdio') == 'stdio' else None; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('MCP_PORT','8000')+'/health', timeout=4).close()" || exit 1
 
 ENTRYPOINT ["python", "-m", "mcp_prism_search.server"]

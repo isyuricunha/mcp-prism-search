@@ -87,7 +87,8 @@ def _source(index: int, row: object, url_key: str = "url") -> Source:
     try:
         parsed = urlsplit(url) if isinstance(url, str) else None
         if (not parsed or parsed.scheme not in {"http", "https"}
-                or not parsed.hostname or parsed.username or parsed.password
+                or not parsed.hostname or parsed.username is not None
+                or parsed.password is not None or parsed.port == 0
                 or any(c.isspace() for c in url) or len(url) > 4096):
             url = None
     except ValueError:
@@ -196,9 +197,12 @@ async def _chat_stream(client, url, headers, payload, provider):
     answer = "".join(chunks)
     if provider == "brave":
         def citation(match):
-            item = json.loads(match.group(1))
-            number = item["number"]
-            if not isinstance(number, int) or not 1 <= number <= 100:
+            try:
+                item = json.loads(match.group(1))
+                number = item["number"]
+            except (ValueError, KeyError, TypeError):
+                return ""
+            if type(number) is not int or not 1 <= number <= 100:
                 return ""
             if number not in numbers:
                 numbers.append(number)

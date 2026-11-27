@@ -33,6 +33,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     results: list[SearchResult] = []
     seen: set[str] = set()
     for item in data.get("results", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         if not url.startswith("http") or not title or url in seen:

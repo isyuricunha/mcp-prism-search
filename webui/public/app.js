@@ -107,6 +107,7 @@ function showLogin() {
   for (const id of ["provider-list","choices","results","search-attempts","metrics","summary","server-facts","connection-facts","readiness","cache-summary","cache-rows"]) $(id).replaceChildren();
   aiSettingsDirty=false;searchAnswerPreference=null;
   $("search-ai-cards").replaceChildren();$("search-ai-attempts").replaceChildren();$("search-ai-results").hidden=true;
+  $("native-provider").value="";$("native-effort").value="";
   $("native-query").value = ""; $("native-answer").textContent = ""; $("native-sources").replaceChildren(); $("native-result").hidden=true; feedback("native-feedback");
   $("query").value = ""; $("query-count").textContent = "0 / 1000"; $("search-output").hidden = true;
   $("endpoint").value = ["localhost","127.0.0.1"].includes(location.hostname) ? "http://127.0.0.1:49317/mcp" : ""; connection();

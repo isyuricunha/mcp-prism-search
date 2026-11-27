@@ -6,6 +6,8 @@ extraction is separate and keyless at 20 RPM).
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 import httpx
 
 from mcp_prism_search import runtime
@@ -28,13 +30,15 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         response = await client.get(
-            f"{SEARCH_URL}{request.query}", headers=headers
+            f"{SEARCH_URL}{quote(request.query, safe='')}", headers=headers
         )
         response.raise_for_status()
         data = response.json()
 
     results: list[SearchResult] = []
     for item in (data.get("data") or [])[:count]:
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(

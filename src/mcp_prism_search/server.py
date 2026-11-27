@@ -48,7 +48,6 @@ from mcp_prism_search.search import ddg_search as perform_ddg_search
 LOGGER = logging.getLogger(__name__)
 
 KNOWN_PLACEHOLDER_TOKENS = {"change-me-now", "changeme", "secret", "token"}
-ACCEPTED_TRANSPORTS = {"stdio", "http", "streamable-http"}
 HEALTH_PATH = "/health"
 
 

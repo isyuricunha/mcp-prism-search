@@ -39,6 +39,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
                 break
             previous_count = len(results)
             for item in rows:
+                if not isinstance(item, dict):
+                    continue
                 url = str(item.get("url") or "")
                 title = normalize_whitespace(str(item.get("title") or ""))
                 if not url.startswith(("http://", "https://")) or not title or url in seen:

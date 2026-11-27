@@ -40,6 +40,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     rows = []
     for item in data["results"].get("web", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(

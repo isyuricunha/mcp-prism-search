@@ -30,6 +30,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     results: list[SearchResult] = []
     for item in data.get("results", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         if not url.startswith("http"):
             continue

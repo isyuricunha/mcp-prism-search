@@ -9,10 +9,9 @@ import logging
 import os
 import re
 from typing import Any, cast
-from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
-from bs4 import BeautifulSoup
 
 from mcp_prism_search.cache import JsonFileCache, build_search_cache, get_env_int
 from mcp_prism_search.defaults import effective_defaults, search_parameters
@@ -61,10 +60,6 @@ def get_search_provider() -> str:
         DEFAULT_SEARCH_PROVIDER,
     )
     return DEFAULT_SEARCH_PROVIDER
-
-
-def is_valid_search_provider(provider: str) -> bool:
-    return provider.strip().lower() in SEARCH_PROVIDERS
 
 
 def _available_ddgs_text_backends() -> set[str] | None:
@@ -123,11 +118,6 @@ def has_domain_controls(request: SearchRequest) -> bool:
 NEWS_HINT_TOKENS = {
     "news", "latest", "breaking", "today", "current", "updates", "happening",
 }
-_TRUSTED_DOMAINS = {
-    "apnews.com", "reuters.com", "bbc.com", "bbc.co.uk", "theguardian.com",
-    "nytimes.com", "washingtonpost.com", "dw.com", "euronews.com",
-    "wikipedia.org",
-}
 
 
 def search_ttl_for_query(query: str) -> int | None:
@@ -179,21 +169,9 @@ def provider_request_size(request: SearchRequest) -> int:
 
 
 def resolve_duckduckgo_redirect_url(href: str) -> str:
-    if href.startswith("//"):
-        resolved = f"https:{href}"
-    elif href.startswith("/"):
-        resolved = urljoin(DUCKDUCKGO_HTML_URL, href)
-    else:
-        resolved = href
+    from mcp_prism_search.providers.ddg_html import resolve_duckduckgo_redirect_url as resolve
 
-    parsed = urlparse(resolved)
-    hostname = parsed.hostname.lower() if parsed.hostname else ""
-    is_duckduckgo_host = hostname == "duckduckgo.com" or hostname.endswith(".duckduckgo.com")
-    if is_duckduckgo_host and parsed.path.rstrip("/") == "/l":
-        redirect_values = parse_qs(parsed.query).get("uddg")
-        if redirect_values and redirect_values[0]:
-            return redirect_values[0]
-    return resolved
+    return resolve(href)
 
 
 def normalize_url_for_dedupe(url: str) -> str:
@@ -203,8 +181,8 @@ def normalize_url_for_dedupe(url: str) -> str:
     path = parsed.path or ""
     if path == "/" and not parsed.query:
         path = ""
-    query = urlencode(sorted(parse_qs(parsed.query, keep_blank_values=True).items()), doseq=True)
-    return urlunparse((scheme, netloc, path, "", query, ""))
+    query = parsed.query
+    return urlunparse((scheme, netloc, path, parsed.params, query, ""))
 
 
 def _result_from_payload(payload: dict[str, Any]) -> SearchResult | None:
@@ -223,7 +201,15 @@ def _dedupe_results(
     seen: set[str] = set()
     deduped: list[SearchResult] = []
     for result in results:
-        normalized_url = normalize_url_for_dedupe(result.url)
+        try:
+            parsed = urlparse(result.url)
+            if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                    or parsed.username is not None or parsed.password is not None
+                    or parsed.port == 0 or any(c.isspace() for c in result.url)):
+                continue
+            normalized_url = normalize_url_for_dedupe(result.url)
+        except ValueError:
+            continue
         if normalized_url in seen:
             continue
         seen.add(normalized_url)
@@ -287,29 +273,9 @@ def _search_with_ddgs(
 
 
 def parse_duckduckgo_html_results(html: str, max_results: int) -> list[SearchResult]:
-    soup = BeautifulSoup(html, "html.parser")
-    results: list[SearchResult] = []
-    for result_node in soup.select(".result"):
-        link = result_node.select_one(".result__a")
-        if link is None:
-            continue
-        href = link.get("href")
-        title = normalize_whitespace(link.get_text(" ", strip=True))
-        if not href or not title:
-            continue
+    from mcp_prism_search.providers.ddg_html import parse_results
 
-        snippet_node = result_node.select_one(".result__snippet")
-        snippet = (
-            normalize_whitespace(snippet_node.get_text(" ", strip=True)) if snippet_node else ""
-        )
-        results.append(
-            SearchResult(
-                title=title,
-                url=resolve_duckduckgo_redirect_url(str(href)),
-                snippet=snippet,
-            )
-        )
-    return _dedupe_results(results, max_results)
+    return parse_results(html, max_results)
 
 
 async def _search_with_duckduckgo_html(
@@ -407,14 +373,15 @@ async def ddg_search(
         try:
             LOGGER.debug("Running DuckDuckGo HTML search")
             html_results = apply_search_domain_controls(
-                await _search_with_duckduckgo_html(request, timeout_seconds),
+                rank_results(await _search_with_duckduckgo_html(request, timeout_seconds),
+                             request.query),
                 request,
             )
             if html_results:
                 response = SearchResponse(
                     query=request.query,
                     provider="duckduckgo_html",
-                    results=rank_results(html_results, request.query),
+                    results=html_results,
                     cached=False,
                     error=None,
                     provider_attempts=[f"duckduckgo_html: ok ({len(html_results)})"],
@@ -431,14 +398,15 @@ async def ddg_search(
         backend = ddgs_backend or DEFAULT_DDGS_BACKEND
         try:
             ddgs_results = apply_search_domain_controls(
-                await asyncio.to_thread(_search_with_ddgs, request, timeout_seconds, backend),
+                rank_results(await asyncio.to_thread(
+                    _search_with_ddgs, request, timeout_seconds, backend), request.query),
                 request,
             )
             if ddgs_results:
                 response = SearchResponse(
                     query=request.query,
                     provider="ddgs",
-                    results=rank_results(ddgs_results, request.query),
+                    results=ddgs_results,
                     cached=False,
                     error=None,
                     provider_attempts=[
@@ -650,7 +618,7 @@ async def aggregated_search(
     if not enhanced:
         runtime.record_cache(False)
     timeout = get_ddg_timeout_seconds()
-    count = max(request.max_results, provider_request_size(request))
+    count = provider_request_size(request)
     actual = None
     merged: list[SearchResult] = []
     if parallel:

@@ -16,13 +16,15 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     if not api_key:
         raise RuntimeError("BRAVE_API_KEY is not set")
 
-    params: dict[str, str] = {"q": request.query, "count": str(count)}
+    params: dict[str, str] = {"q": request.query, "count": str(min(count, 20))}
     safe_map = {"off": "off", "moderate": "moderate", "strict": "strict"}
     params["safesearch"] = safe_map[request.safe_search]
-    if request.allowed_domains:
-        params["q"] += " " + " ".join(
-            f"site:{domain}" for domain in request.allowed_domains
-        )
+    if request.time_filter:
+        params["freshness"] = {"day": "pd", "week": "pw", "month": "pm",
+                               "year": "py"}[request.time_filter]
+    # Multiple site operators can change query semantics; local filtering is canonical.
+    if len(request.allowed_domains) == 1:
+        params["q"] += " site:" + request.allowed_domains[0]
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         response = await client.get(
@@ -39,6 +41,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     results: list[SearchResult] = []
     seen: set[str] = set()
     for item in (data.get("web") or {}).get("results", []):
+        if not isinstance(item, dict):
+            continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
         snippet = normalize_whitespace(str(item.get("description") or ""))
