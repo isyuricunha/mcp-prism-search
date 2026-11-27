@@ -635,3 +635,31 @@ def test_fetch_parsing_runs_outside_event_loop(tmp_path, monkeypatch):
                          cache=cache.JsonFileCache(tmp_path, "fetch", 60)))
     assert result.success and "Evidence" in result.content
     assert thread_ids and thread_ids[0] != threading.get_ident()
+
+
+def test_concurrent_deep_search_progress_is_monotonic(monkeypatch):
+    from mcp_prism_search.models import FetchResponse, SearchResponse, SearchResult
+
+    sources = [SearchResult(title=str(i), url=f"https://example.org/{i}", snippet="")
+               for i in range(3)]
+    progress = []
+
+    async def retrieve(**kwargs):
+        return SearchResponse(query="query", provider="ddgs", results=sources,
+                              cached=False, error=None)
+
+    async def page(url, **kwargs):
+        return FetchResponse(url=url, final_url=url, title="Page", content="Evidence",
+                             content_type="text/plain", cached=False, success=True, error=None)
+
+    async def report(done, total):
+        if done == 2:
+            await asyncio.sleep(0.02)
+        progress.append(done)
+
+    monkeypatch.setattr(fetch, "ddg_search", retrieve)
+    monkeypatch.setattr(fetch, "web_fetch", page)
+    result = asyncio.run(fetch.ddg_deep_search(
+        "query", max_pages=3, progress_callback=report))
+    assert len(result.pages) == 3
+    assert progress == [0, 1, 2, 3, 4]
