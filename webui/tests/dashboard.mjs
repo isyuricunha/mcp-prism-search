@@ -289,6 +289,8 @@ try{
  assert.equal(await page.locator("#query").evaluate(n=>n.validity.valid),true);
  await page.locator("#query").fill("x".repeat(4001));
  assert.equal(await page.locator("#run-search").isDisabled(),true);
+ await page.locator("#query").fill("   ");
+ assert.equal(await page.locator("#run-search").isDisabled(),true);
  await page.locator("#query").fill("test query");
  assert.equal(await page.locator("#query-count").textContent(),"10 / 4000");
  const firstSearch=responseFor("/api/search",d=>d.mode===undefined);
@@ -304,7 +306,11 @@ try{
  assert.equal(await page.locator("#search-overrides").evaluate(e=>e.open),false);
  await page.locator("#search-overrides > summary").click();
  await page.locator('input[name=search-mode][value=auto]').check();
+ await page.locator("#max-results").fill("31");
+ assert.equal(await page.locator("#run-search").isDisabled(),true);
+ assert.ok((await page.locator("#max-results-hint").textContent()).includes("whole number"));
  await page.locator("#max-results").fill("3");
+ assert.equal(await page.locator("#run-search").isDisabled(),false);
  await page.locator("#search-recency").selectOption("any");
  const autoSearch=responseFor("/api/search",d=>d.mode==="auto");
  await page.getByRole("button",{name:"Run search"}).click();

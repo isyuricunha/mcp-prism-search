@@ -429,7 +429,10 @@ function syncSearchMode(){
   const count=$("max-results").value||defaultValue("search_max_results")||"server default";
   $("search-default-summary").textContent=(searchMode()==="default"?"Server defaults: ":"Overrides: ")+humanChoice(mode)+names+" · Up to "+count+" results · AI "+(toggle.checked?"enabled":"off");
   $("search-cost").hidden=!chosen.some(p=>p.env);
-  $("run-search").disabled=searchPending||chosen.length===0||!$("query").validity.valid;
+  const limit=$("max-results");
+  $("max-results-hint").textContent=limit.validity.valid?"Leave blank to inherit.":
+    "Enter a whole number from "+limit.min+" to "+limit.max+", or leave blank.";
+  $("run-search").disabled=searchPending||chosen.length===0||!$("query").validity.valid||!limit.validity.valid;
 }
 function resetSearchOptions(render=true){
   document.querySelector('input[name=search-mode][value=default]').checked=true;
@@ -447,7 +450,8 @@ function updateQueryCount(){
   const input=$("query"),limit=state?.limits?.query_max_chars||4000;
   const count=Array.from(input.value).length;
   input.maxLength=limit*2;
-  input.setCustomValidity(count>limit?"Use at most "+limit+" characters.":"");
+  input.setCustomValidity(count>limit?"Use at most "+limit+" characters.":
+    count&&!input.value.trim()?"Enter a non-empty search query.":"");
   $("query-count").textContent=count+" / "+limit;
 }
 $("query").addEventListener("input",()=>{updateQueryCount();feedback("search-error");syncSearchMode();});
