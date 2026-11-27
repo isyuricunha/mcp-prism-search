@@ -123,3 +123,19 @@ def test_large_history_reverse_scan_preserves_order(logs, monkeypatch):
         obs.emit("provider", "ok", provider="keenable", result_count=i)
     rows = obs.history(limit=500)["events"]
     assert [r["result_count"] for r in rows] == list(range(699, 199, -1))
+
+
+def test_log_history_survives_deeply_nested_corruption_and_reports_write_failure(logs, monkeypatch):
+    obs.emit("provider", "ok", provider="keenable")
+    with (logs / "events.jsonl").open("a") as handle:
+        handle.write("[" * 1500 + "]" * 1500 + "\n")
+    assert len(obs.history()["events"]) == 1
+    handler = obs._history
+    with monkeypatch.context() as patch:
+        def fail(record):
+            raise OSError("disk unavailable")
+        patch.setattr(handler, "shouldRollover", fail)
+        obs.emit("provider", "ok", provider="keenable")
+        assert obs.history()["healthy"] is False
+    obs.emit("provider", "ok", provider="keenable")
+    assert obs.history()["healthy"] is True

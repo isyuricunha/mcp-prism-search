@@ -58,9 +58,15 @@ class PrivateRotatingHandler(RotatingFileHandler):
             raise PermissionError("Log file must be private")
         return os.fdopen(fd, "a", encoding="utf-8")
 
+    write_failed = False
+
+    def emit(self, record):
+        self.write_failed = False
+        super().emit(record)
+
     def handleError(self, record):  # noqa: N802 - logging API
         # Logging must never break a tool or print the original LogRecord.
-        pass
+        self.write_failed = True
 
 
 class DiagnosticFormatter(logging.Formatter):
@@ -336,7 +342,7 @@ def history(*, level=None, provider=None, since=None, search="", limit=200):
     """Return a bounded newest-first sanitized snapshot, never raw file content."""
     handler = _history
     if handler is None:
-        return {"enabled": False, "events": [], "limit": limit}
+        return {"enabled": False, "healthy": False, "events": [], "limit": limit}
     rows = []
     cutoff = datetime.fromtimestamp(since, UTC) if since is not None else None
     term = search.casefold()
@@ -362,7 +368,7 @@ def history(*, level=None, provider=None, since=None, search="", limit=200):
             for raw in _reverse_lines(handle):
                 try:
                     row = _safe_row(json.loads(raw))
-                except (ValueError, TypeError, OverflowError):
+                except (ValueError, TypeError, OverflowError, RecursionError):
                     continue
                 if not row or (level and row["level"] != level):
                     continue
@@ -376,11 +382,13 @@ def history(*, level=None, provider=None, since=None, search="", limit=200):
                     continue
                 rows.append(row)
                 if len(rows) >= min(MAX_EVENTS, max(1, limit)):
-                    return {"enabled": True, "events": rows, "limit": limit}
+                    return {"enabled": True, "healthy": not handler.write_failed,
+                            "events": rows, "limit": limit}
     finally:
         for handle in handles:
             handle.close()
-    return {"enabled": True, "events": rows, "limit": limit}
+    return {"enabled": True, "healthy": not handler.write_failed,
+                            "events": rows, "limit": limit}
 
 
 def _reverse_lines(handle):
