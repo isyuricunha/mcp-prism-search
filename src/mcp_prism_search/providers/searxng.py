@@ -30,6 +30,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response.raise_for_status()
         data = response.json()
 
+    from mcp_prism_search.search import valid_result_url
+
     results: list[SearchResult] = []
     seen: set[str] = set()
     for item in data.get("results", []):
@@ -37,7 +39,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
             continue
         url = str(item.get("url") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
-        if not url.startswith("http") or not title or url in seen:
+        if not valid_result_url(url) or not title or url in seen:
             continue
         seen.add(url)
         results.append(

@@ -255,3 +255,21 @@ def test_mwmbl_pacing_lock_is_scoped_to_event_loop(monkeypatch):
 
     asyncio.run(exercise())
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("module", [keenable, freeserp, mwmbl, searxng])
+def test_invalid_provider_urls_do_not_consume_result_limit(monkeypatch, module):
+    monkeypatch.setenv("SEARXNG_URL", "https://search.example")
+    original = httpx.AsyncClient
+    rows = [
+        {"title": "Invalid", "url": "httpx://example.org"},
+        {"title": "Invalid port", "url": "https://example.org:bad"},
+        {"title": "Valid", "url": "https://example.org/valid"},
+    ]
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={
+            "results": rows,
+        })), **kw))
+    assert [row.title for row in asyncio.run(
+        module.search(SearchRequest(query="test"), 1, 5)
+    )] == ["Valid"]

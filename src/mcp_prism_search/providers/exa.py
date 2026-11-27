@@ -37,6 +37,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response.raise_for_status()
         data = response.json()
 
+    from mcp_prism_search.search import valid_result_url
+
     results: list[SearchResult] = []
     for item in data.get("results", []):
         if not isinstance(item, dict):
@@ -46,7 +48,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         snippet = normalize_whitespace(
             str(item.get("text") or item.get("summary") or "")
         )
-        if not url.startswith("http") or not title:
+        if not valid_result_url(url) or not title:
             continue
         results.append(SearchResult(title=title, url=url, snippet=snippet))
         if len(results) >= count:

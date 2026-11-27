@@ -198,6 +198,20 @@ def _result_from_payload(payload: dict[str, Any]) -> SearchResult | None:
     return SearchResult(title=title, url=resolve_duckduckgo_redirect_url(url), snippet=snippet)
 
 
+def valid_result_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        return bool(
+            parsed.scheme in {"http", "https"} and parsed.hostname
+            and parsed.username is None and parsed.password is None
+            and parsed.port != 0 and len(url) <= 8192
+            and not any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == chr(92)
+                        for c in url)
+        )
+    except ValueError:
+        return False
+
+
 def _dedupe_results(
     results: list[SearchResult],
     max_results: int | None = None,
@@ -207,18 +221,9 @@ def _dedupe_results(
     seen: set[str] = set()
     deduped: list[SearchResult] = []
     for result in results:
-        try:
-            parsed = urlparse(result.url)
-            if (parsed.scheme not in {"http", "https"} or not parsed.hostname
-                    or parsed.username is not None or parsed.password is not None
-                    or parsed.port == 0 or any(
-                        c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\"
-                        for c in result.url
-                    )):
-                continue
-            normalized_url = normalize_url_for_dedupe(result.url)
-        except ValueError:
+        if not result.title.strip() or not valid_result_url(result.url):
             continue
+        normalized_url = normalize_url_for_dedupe(result.url)
         if normalized_url in seen:
             continue
         seen.add(normalized_url)
