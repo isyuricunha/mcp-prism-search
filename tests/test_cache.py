@@ -398,3 +398,19 @@ def test_cache_read_rejects_symlink_swapped_after_path_check(tmp_path, monkeypat
 
     monkeypatch.setattr(Path, "is_file", swap)
     assert store.get(key) is None
+
+
+def test_cache_config_invalid_env(monkeypatch, tmp_path):
+    from mcp_prism_search.cache import get_cache_prune_config
+
+    monkeypatch.setenv("CACHE_MAX_SIZE_MB", "-5")
+    monkeypatch.setenv("CACHE_MAX_AGE_SECONDS", "not-a-number")
+    monkeypatch.setenv("CACHE_PRUNE_ON_START", "invalid")
+    monkeypatch.setenv("CACHE_PRUNE_INTERVAL_SECONDS", "0")
+    monkeypatch.setenv("DDG_CACHE_TTL_SECONDS", "invalid")
+    config = get_cache_prune_config(tmp_path)
+    assert config.max_size_bytes is None
+    assert config.max_age_seconds is None
+    assert config.prune_on_start is True
+    assert config.prune_interval_seconds == 3600
+    assert config.namespace_ttls["search"] == 21600
