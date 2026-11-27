@@ -354,3 +354,15 @@ def test_searxng_week_filter_is_forwarded(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
         transport=httpx.MockTransport(response), **kw))
     assert asyncio.run(searxng.search(SearchRequest(query="test", time_filter="week"), 5, 5)) == []
+
+
+def test_hackernews_invalid_link_uses_valid_story_permalink(monkeypatch):
+    from mcp_prism_search.providers import hackernews
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"hits": [
+            {"title": "Story", "url": "https://example.org:wrong", "objectID": "42"},
+        ]})), **kw))
+    rows = asyncio.run(hackernews.search(SearchRequest(query="test"), 1, 5))
+    assert rows[0].url == "https://news.ycombinator.com/item?id=42"

@@ -24,6 +24,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response.raise_for_status()
         data = response.json()
 
+    from mcp_prism_search.search import valid_result_url
+
     results: list[SearchResult] = []
     if not isinstance(data, dict) or not isinstance(data.get("hits"), list):
         raise ValueError("Invalid Hacker News response")
@@ -32,7 +34,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
             continue
         title = normalize_whitespace(str(hit.get("title") or hit.get("story_title") or ""))
         url = str(hit.get("url") or hit.get("story_url") or "")
-        if not url.startswith(("http://", "https://")):
+        if not valid_result_url(url):
             identifier = str(hit.get("objectID") or "")
             if not re.fullmatch(r"[0-9]{1,20}", identifier):
                 continue
