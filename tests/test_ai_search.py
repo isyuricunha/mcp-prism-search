@@ -661,3 +661,24 @@ def test_tinyfish_partial_report(tinyfish_config, monkeypatch, reason):
     assert "budget or planning limit" in result.answer
     assert result.answer.endswith("Report")
     assert result.sources[0].url == "https://example.org"
+
+
+def test_tinyfish_created_run_cancellation(tinyfish_config, monkeypatch):
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        if req.url.path.endswith("/cancel"):
+            return httpx.Response(200, json={"cancelled": True})
+        return httpx.Response(200, text=sse(
+            {"event": "created", "research_run_id": "fixture-run"},
+            {"event": "done"},
+        ))
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError):
+        asyncio.run(native.synthesize(
+            "question", "tinyfish", "research", allow_cost=True, effort="deep",
+        ))
+    assert len(calls) == 2
+    assert calls[1] == "/v1/research-run/fixture-run/cancel"
