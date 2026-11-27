@@ -690,3 +690,51 @@ def test_panel_store_metrics_unavailable(tmp_path, monkeypatch, caplog):
     store.record("keenable", "ok", 0.1)
     assert "counter write failed" in caplog.text
     assert "metric write failed" in caplog.text
+
+
+def test_panel_search_saturation(tmp_path, monkeypatch):
+    from mcp_prism_search.models import SearchResponse
+
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "index.html").write_text("index")
+    app = create_app(PASSWORD, PanelStore(tmp_path / "state"), assets)
+
+    async def verify():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        calls = 0
+
+        async def blocked(query, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                entered.set()
+            await release.wait()
+            return SearchResponse(query=query, provider="keenable", results=[],
+                                  cached=False, error=None)
+
+        monkeypatch.setattr("mcp_prism_search.panel.aggregated_search", blocked)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://localhost") as client:
+            response = await client.post("/api/login", headers=HEADERS,
+                                         json={"password": PASSWORD})
+            assert response.status_code == 200
+
+            async def search():
+                return await client.post("/api/search", headers=HEADERS,
+                                         json={"query": "fixture query", "mode": "keyless"})
+
+            tasks = [asyncio.create_task(search()) for _ in range(2)]
+            try:
+                await asyncio.wait_for(entered.wait(), timeout=5)
+                response = await search()
+                assert response.status_code == 429
+                assert calls == 2
+            finally:
+                release.set()
+                results = await asyncio.gather(*tasks)
+            assert all(response.status_code == 200 for response in results)
+            assert (await search()).status_code == 200
+
+    asyncio.run(verify())
