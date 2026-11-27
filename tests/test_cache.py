@@ -443,3 +443,18 @@ def test_cache_scan_non_entries(tmp_path):
     assert (namespace / "link.json").is_symlink()
     assert (namespace / "directory.json").is_dir()
     assert (namespace / "notes.txt").exists()
+
+
+def test_cache_active_temp(tmp_path):
+    namespace = tmp_path / "search"
+    namespace.mkdir()
+    active = namespace / ".active.tmp"
+    abandoned = namespace / ".abandoned.tmp"
+    active.write_text("writing")
+    abandoned.write_text("old")
+    old = time.time() - 120
+    os.utime(abandoned, (old, old))
+    stats = prune_cache(config=_prune_config(tmp_path))
+    assert stats.deleted_files == 1
+    assert active.read_text() == "writing"
+    assert not abandoned.exists()
