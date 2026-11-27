@@ -358,3 +358,28 @@ def test_startup_prune_failure_nonfatal(monkeypatch, caplog):
     monkeypatch.setattr(server.cache_ops, "prune_cache_on_startup", fail)
     server._prune_cache_on_startup()
     assert "Startup cache pruning failed" in caplog.text
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_vertical_mcp_contract(monkeypatch, failed):
+    from mcp import Client
+
+    from mcp_prism_search import server
+    from mcp_prism_search.models import SearchResponse
+
+    async def search(**kwargs):
+        assert kwargs == {"query": "topic", "provider": "wikipedia",
+                          "max_results": 3, "kind": "vertical"}
+        return SearchResponse(query="topic", provider="wikipedia", results=[],
+                              cached=False, error="Unavailable" if failed else None)
+
+    monkeypatch.setattr(server, "perform_aggregated_search", search)
+
+    async def verify():
+        async with Client(mcp) as client:
+            result = await client.call_tool("vertical_search", {
+                "query": "topic", "source": "wikipedia", "max_results": 3,
+            })
+            assert result.is_error is failed
+
+    asyncio.run(verify())
