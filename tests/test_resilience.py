@@ -663,3 +663,15 @@ def test_concurrent_deep_search_progress_is_monotonic(monkeypatch):
         "query", max_pages=3, progress_callback=report))
     assert len(result.pages) == 3
     assert progress == [0, 1, 2, 3, 4]
+
+
+@pytest.mark.parametrize("mime,success", [
+    ("application/nothtml", False),
+    ("application/xhtml+xml; charset=utf-8", True),
+    ("text/html; charset=utf-8", True),
+])
+def test_fetch_classifies_html_by_exact_media_type(mime, success):
+    raw = fetch.RawFetchedResponse(200, httpx.Headers({"content-type": mime}),
+                                  b"<html>Evidence</html>", "https://example.org", "utf-8")
+    response = fetch._response_to_fetch_response("https://example.org", raw, 1000)
+    assert response.success is success

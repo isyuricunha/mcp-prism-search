@@ -30,6 +30,12 @@ def truncate_text(value: str, max_chars: int) -> str:
     return value[:max_chars].rstrip()
 
 
+def is_html_content(content_type: str) -> bool:
+    return content_type.partition(";")[0].strip().lower() in {
+        "text/html", "application/xhtml+xml",
+    }
+
+
 def is_plain_text_content(content_type: str, url: str) -> bool:
     media_type = content_type.partition(";")[0].strip().lower()
     if media_type.startswith("text/") or media_type == "application/json" or (

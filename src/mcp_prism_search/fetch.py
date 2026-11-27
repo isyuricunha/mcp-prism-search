@@ -26,7 +26,12 @@ from mcp_prism_search.security import (
     validate_fetch_url,
     validate_url_shape,
 )
-from mcp_prism_search.text import extract_html_text, is_plain_text_content, truncate_text
+from mcp_prism_search.text import (
+    extract_html_text,
+    is_html_content,
+    is_plain_text_content,
+    truncate_text,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -218,8 +223,7 @@ def _response_to_fetch_response(
         if response.truncated else ""
     )
 
-    lowered_content_type = content_type.lower()
-    if "html" in lowered_content_type:
+    if is_html_content(content_type):
         extracted = extract_html_text(text, max_chars)
         return FetchResponse(
             url=request_url,
@@ -287,7 +291,7 @@ async def web_fetch(
             validate_url_shape(cached.final_url)
             if (cached.url == request.url and cached.success and not cached.error
                     and len(cached.content) <= request.max_chars
-                    and ("html" in cached.content_type.lower()
+                    and (is_html_content(cached.content_type)
                          or is_plain_text_content(cached.content_type, cached.final_url))):
                 # A cache hit does not connect to a pinned address, so retain
                 # DNS validation here. Live fetches validate and resolve once per hop.
