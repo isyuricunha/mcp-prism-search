@@ -175,3 +175,25 @@ def test_telemetry_backend_failure_does_not_propagate(monkeypatch):
     monkeypatch.setattr(runtime, "_state", SimpleNamespace(record=fail, cache_result=fail))
     runtime.record_metric("test", "ok", 0.1)
     runtime.record_cache(True)
+
+
+def test_aggregated_cache_rejects_wrong_query(tmp_path, monkeypatch):
+    from mcp_prism_search import providers, search
+    from mcp_prism_search.models import SearchResult
+
+    store = cache.JsonFileCache(tmp_path, "search", 60)
+    calls = []
+
+    async def retrieve(*args):
+        calls.append(args)
+        return [SearchResult(title="Evidence", url="https://example.org", snippet="Text")]
+
+    monkeypatch.setattr(providers, "run_provider", retrieve)
+    first = asyncio.run(search.aggregated_search("query", provider="keenable", cache=store))
+    assert first.results
+    path = next(store.cache_dir.glob("*.json"))
+    envelope = json.loads(path.read_text())
+    envelope["value"]["query"] = "another query"
+    path.write_text(json.dumps(envelope))
+    second = asyncio.run(search.aggregated_search("query", provider="keenable", cache=store))
+    assert not second.cached and second.query == "query" and len(calls) == 2

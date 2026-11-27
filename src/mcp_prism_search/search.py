@@ -610,9 +610,15 @@ async def aggregated_search(
     if cached is not None:
         try:
             result = SearchResponse.model_validate(cached).model_copy(update={"cached": True})
-            if result.provider not in enhanced:
+            # Only retrieval results from the current request and allowed chain
+            # are cacheable. Older or corrupted envelopes must not return AI.
+            if (result.query.strip() == request.query and result.results
+                    and not result.error and not result.answers and not result.answer_attempts
+                    and result.provider in {*chain, mode}
+                    and _final_results(result.results, request) == result.results):
                 runtime.record_cache(True)
                 return result
+            cache.delete(payload)
         except ValueError:
             cache.delete(payload)
 
