@@ -460,7 +460,10 @@ async def ddg_search(
     )
 
 
-async def _search_one(name: str, request: SearchRequest, count: int, timeout: int):
+async def _search_one(
+    name: str, request: SearchRequest, count: int, timeout: int,
+    answer_sink=None, answer_status=None,
+):
     """Return results and an accurate, credential-free attempt status."""
     from time import monotonic
 
@@ -470,8 +473,24 @@ async def _search_one(name: str, request: SearchRequest, count: int, timeout: in
     start = monotonic()
 
     try:
-        async with asyncio.timeout(timeout):
-            raw = await run_provider(name, request, count, timeout)
+        raw = None
+        if answer_sink is not None:
+            from mcp_prism_search import ai_search, native
+
+            if name in ai_search.COMBINED:
+                try:
+                    raw, answer = await ai_search.combined_search(name, request, count, timeout)
+                    if answer:
+                        answer_sink[name] = ai_search.compact_answer(answer)
+                    answer_status[name] = "ok" if answer else "no answer returned"
+                except native.NativeError as exc:
+                    answer_status[name] = str(exc)
+                # If combined retrieval failed or was empty, preserve ordinary search.
+                if not raw:
+                    raw = None
+        if raw is None:
+            async with asyncio.timeout(timeout):
+                raw = await run_provider(name, request, count, timeout)
         valid = []
         for item in raw:
             try:
@@ -489,6 +508,15 @@ async def _search_one(name: str, request: SearchRequest, count: int, timeout: in
         )
         record(name, valid, None)
         runtime.record_metric(name, 'ok' if valid else 'empty', monotonic() - start)
+        if answer_sink is not None and name in ai_search.SEPARATE and filtered:
+            try:
+                answer = await ai_search.separate_answer(name, request.query, timeout)
+                answer_sink[name] = ai_search.compact_answer(answer)
+                answer_status[name] = "ok"
+            except (native.NativeError, TimeoutError) as exc:
+                answer_status[name] = str(exc) or "timeout"
+            except Exception as exc:  # noqa: BLE001 - preserve successful retrieval.
+                answer_status[name] = type(exc).__name__
         return filtered, f"{name}: ok ({len(filtered)})" if filtered else f"{name}: empty"
     except TimeoutError:
         status = "timeout"
@@ -521,6 +549,7 @@ async def aggregated_search(
     preferred_domains: list[str] | None = None,
     kind: str = "general",
     cache: JsonFileCache | None = None,
+    include_answers: bool | None = None,
 ) -> SearchResponse:
     """Search one provider, a health-ordered fallback chain or a parallel selection."""
     from mcp_prism_search import runtime
@@ -538,12 +567,16 @@ async def aggregated_search(
     )
     cache = cache or build_search_cache()
     attempts: list[str] = []
+    answers = {}
+    answer_status = {}
     mode = "selected" if providers is not None else provider
 
     def response(results, error=None, actual=None):
         return SearchResponse(
             query=query, provider=actual or mode, results=results, cached=False,
             error=error, provider_attempts=attempts,
+            answers=[answers[n] for n in answer_status if n in answers],
+            answer_attempts=[f"{n}: {v}" for n, v in answer_status.items()],
         )
 
     try:
@@ -563,28 +596,44 @@ async def aggregated_search(
     if not chain:
         return response([], "No search providers configured for this environment")
 
+    from mcp_prism_search.ai_search import eligible
+
+    enhanced = eligible(chain, request, include_answers) if kind == "general" else set()
+    attempted_enhanced = set()
+
+    async def run_one(name, count, timeout):
+        if name in enhanced:
+            attempted_enhanced.add(name)
+            return await _search_one(name, request, count, timeout, answers, answer_status)
+        return await _search_one(name, request, count, timeout)
+
     parallel = provider == "all" or providers is not None
     payload = request.to_cache_payload(
         _aggregator_version=2, _mode=mode, _kind=kind,
         _providers=sorted(chain) if mode == "auto" else chain,
     )
-    cached = cache.get(payload, ttl_seconds=search_ttl_for_query(query))
+    # In auto mode an ordinary cached winner is still a valid fallback result;
+    # only bypass it when that winner is eligible for synthesis.
+    cache_read = not enhanced or mode == "auto"
+    cached = cache.get(payload, ttl_seconds=search_ttl_for_query(query)) if cache_read else None
     if cached is not None:
         try:
             result = SearchResponse.model_validate(cached).model_copy(update={"cached": True})
-            runtime.record_cache(True)
-            return result
+            if result.provider not in enhanced:
+                runtime.record_cache(True)
+                return result
         except ValueError:
             cache.delete(payload)
 
-    runtime.record_cache(False)
+    if not enhanced:
+        runtime.record_cache(False)
     timeout = get_ddg_timeout_seconds()
     count = max(request.max_results, provider_request_size(request))
     actual = None
     merged: list[SearchResult] = []
     if parallel:
         batches = await asyncio.gather(
-            *(_search_one(name, request, count, timeout) for name in chain)
+            *(run_one(name, count, timeout) for name in chain)
         )
         attempts.extend(status for _, status in batches)
         # Interleave before stable ranking so tied scores preserve source diversity.
@@ -592,7 +641,7 @@ async def aggregated_search(
             merged.extend(rows[index] for rows, _ in batches if index < len(rows))
     else:
         for name in chain:
-            rows, status = await _search_one(name, request, count, timeout)
+            rows, status = await run_one(name, count, timeout)
             attempts.append(status)
             if rows:
                 merged = rows
@@ -600,10 +649,14 @@ async def aggregated_search(
                 break
 
     results = _final_results(merged, request)
+    answer_status = {n: answer_status[n] for n in chain if n in answer_status}
     result = response(
         results, None if results else "; ".join(attempts) or "No search results", actual
     )
     # Do not cache degraded parallel responses or failures.
-    if results and (not parallel or all(": ok (" in status for status in attempts)):
+    if enhanced and not attempted_enhanced:
+        runtime.record_cache(False)
+    if (not attempted_enhanced and results
+            and (not parallel or all(": ok (" in s for s in attempts))):
         cache.set(payload, _cacheable_search_response(result))
     return result

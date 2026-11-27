@@ -341,7 +341,7 @@ quotas, fallback ordering and migration notes.
 
 | Tool | Purpose |
 |---|---|
-| `web_search` | General search across one, selected or all engines |
+| `web_search` | General search across one, selected or all engines; optional authorized native AI answers |
 | `web_answer` | Optional native AI answer with sources (configured key + explicit cost consent) |
 | `web_research` | Optional provider-native multi-step synthesis (configured key + explicit cost consent) |
 | `vertical_search` | Wikipedia or Hacker News |
@@ -461,4 +461,4 @@ for published versions.
 
 ## Optional provider-native AI
 
-Use `web_answer` for provider-generated answers and `web_research` for multi-step synthesis. Both require a configured supported API key and explicit `allow_cost: true`. Ordinary web search never calls these APIs. See [native AI tools and pricing](docs/native-ai.md).
+Use `web_answer` for provider-generated answers and `web_research` for multi-step synthesis. Both standalone tools require a configured supported API key and explicit `allow_cost: true`. Normal search is retrieval-only by default; enable AI-enhanced search globally and authorize individual providers through the panel or environment to include provider-generated answers in `web_search`. Set `include_answers: false` for retrieval only. See [native AI tools and pricing](docs/native-ai.md).

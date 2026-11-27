@@ -221,3 +221,26 @@ def test_native_panel_cost_gate(panel, monkeypatch):
     })
     assert result.status_code == 400
     assert "allow_cost" in result.json()["error"]
+
+
+def test_ai_search_settings_persist(panel, monkeypatch):
+    for env in ("MCP_AI_SEARCH_ENABLED", "MCP_AI_SEARCH_PROVIDERS"):
+        monkeypatch.delenv(env, raising=False)
+    client, _, directory = panel
+    sign_in(client)
+    initial = client.get("/api/overview").json()["settings"]
+    assert not initial["ai_search_enabled"]
+    response = client.put("/api/settings", headers=HEADERS, json={
+        "ai_search_enabled": True, "ai_search_providers": ["tavily", "brave"],
+    })
+    assert response.status_code == 200
+    assert response.json()["ai_search_providers"] == ["brave", "tavily"]
+    assert PanelStore(directory).options["MCP_AI_SEARCH_ENABLED"] == "True"
+    assert client.put("/api/settings", headers=HEADERS, json={
+        "ai_search_providers": ["unknown"],
+    }).status_code == 400
+    monkeypatch.setenv("MCP_AI_SEARCH_ENABLED", "false")
+    assert not client.get("/api/overview").json()["settings"]["ai_search_enabled"]
+    assert client.put("/api/settings", headers=HEADERS, json={
+        "ai_search_enabled": True,
+    }).status_code == 400

@@ -23,6 +23,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from mcp_prism_search import __version__, cache, providers, runtime
+from mcp_prism_search.ai_search import ENABLED_ENV, PROVIDERS_ENV, SUPPORTED, policy
 from mcp_prism_search.native import Effort, NativeError, capabilities, synthesize
 from mcp_prism_search.panel_store import PanelStore
 from mcp_prism_search.search import aggregated_search, get_ddg_timeout_seconds
@@ -35,6 +36,8 @@ SETTINGS_ENV = {
     "search_ttl": "DDG_CACHE_TTL_SECONDS",
     "fetch_ttl": "FETCH_CACHE_TTL_SECONDS",
     "preferred": "MCP_PREFERRED_PROVIDER",
+    "ai_search_enabled": ENABLED_ENV,
+    "ai_search_providers": PROVIDERS_ENV,
 }
 
 
@@ -56,6 +59,8 @@ class Settings(BaseModel):
     search_ttl: int | None = Field(default=None, ge=60, le=604800)
     fetch_ttl: int | None = Field(default=None, ge=60, le=604800)
     preferred: str | None = Field(default=None, max_length=100)
+    ai_search_enabled: bool | None = Field(default=None, strict=True)
+    ai_search_providers: list[str] | None = Field(default=None, max_length=5)
 
 
 class ClearCache(BaseModel):
@@ -70,12 +75,13 @@ class Query(BaseModel):
     providers: list[str] | None = Field(default=None, min_length=1, max_length=50)
     mode: Literal["selected", "auto", "all"] = "selected"
     max_results: int = Field(default=5, ge=1, le=10)
+    include_answers: bool | None = Field(default=None, strict=True)
 
 
 class NativeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=4000)
-    provider: Literal["tavily", "exa", "youcom"]
+    provider: Literal["tavily", "exa", "youcom", "brave", "jina"]
     mode: Literal["answer", "research"]
     allow_cost: bool = Field(default=False, strict=True)
     effort: Effort = "lite"
@@ -171,6 +177,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
             "search_ttl": cache.build_search_cache().ttl_seconds,
             "fetch_ttl": cache.build_fetch_cache().ttl_seconds,
             "preferred": runtime.setting("MCP_PREFERRED_PROVIDER"),
+            "ai_search_enabled": policy()[0],
+            "ai_search_providers": sorted(policy()[1]),
             "locked": [field for field, name in SETTINGS_ENV.items() if os.getenv(name)],
         }
 
@@ -186,7 +194,12 @@ def create_app(password: str, store: PanelStore, assets: Path,
                 spec = providers.SPECS.get(value)
                 if not spec or spec.kind != "general":
                     return error("Choose a general provider")
-            values[env] = str(value) if value is not None else None
+            if field == "ai_search_providers" and value is not None:
+                if not set(value) <= SUPPORTED:
+                    return error("Choose supported AI search providers")
+                values[env] = ",".join(sorted(set(value))) or "none"
+            else:
+                values[env] = str(value) if value is not None else None
         store.set_options(values)
         return JSONResponse(current_settings())
 
@@ -222,6 +235,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
             kwargs = {"providers": data.providers} if data.mode == "selected" else {
                 "provider": data.mode
             }
+            if data.include_answers is not None:
+                kwargs["include_answers"] = data.include_answers
             result = await aggregated_search(
                 data.query.strip(), max_results=data.max_results, **kwargs
             )

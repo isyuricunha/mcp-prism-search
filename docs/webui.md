@@ -174,4 +174,4 @@ Settings → Appearance → Starfield Depth controls the canonical YuTheme Canva
 
 ### Optional provider-generated answers
 
-Open Playground → AI answers & research to use configured Tavily, Exa or You.com capabilities. This is separate from standard web search and requires explicit confirmation of potential credit usage. See [supported APIs and pricing](native-ai.md).
+Settings → AI-enhanced search enables automatic provider answers for the authorized engines. The Playground includes a per-search override and displays answers with attributed sources separately from ordinary results. The administrator authorizes consumption once; standalone AI answers & research retains per-call confirmation. Supported native capabilities include Tavily, Exa, You.com, Brave and Jina. See [supported APIs and pricing](native-ai.md).

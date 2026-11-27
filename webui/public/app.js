@@ -42,6 +42,9 @@ let searchPending = false;
 let settingsPending = false;
 let cachePending = false;
 let nativePending = false;
+let aiSettingsDirty = false;
+let aiSettingsPending = false;
+let searchAnswerPreference = null;
 
 function element(tag, value = "", className = "") {
   const node = document.createElement(tag);
@@ -118,6 +121,8 @@ function showLogin() {
   state = null; providerDrafts.clear(); providerMessages.clear(); providerPending.clear();
   settingsDirty = false;
   for (const id of ["provider-list","choices","results","search-attempts","metrics","summary","server-facts","connection-facts","readiness","cache-summary","cache-rows"]) $(id).replaceChildren();
+  aiSettingsDirty=false;searchAnswerPreference=null;
+  $("search-ai-cards").replaceChildren();$("search-ai-attempts").replaceChildren();$("search-ai-results").hidden=true;
   $("native-query").value = ""; $("native-answer").textContent = ""; $("native-sources").replaceChildren(); $("native-result").hidden=true; feedback("native-feedback");
   $("query").value = ""; $("query-count").textContent = "0 / 1000"; $("search-output").hidden = true;
   $("endpoint").value = ["localhost","127.0.0.1"].includes(location.hostname) ? "http://127.0.0.1:49317/mcp" : ""; connection();
@@ -339,9 +344,18 @@ function syncSearchMode(){
   $("search-provider-field").disabled=searchPending;
   const chosen=chosenProviders();
   $("selection-count").textContent=chosen.length+" selected";
+  const authorized=state?.settings?.ai_search_providers||[];
+  const available=!!state?.settings?.ai_search_enabled&&chosen.some(p=>authorized.includes(p.id));
+  const toggle=$("search-answers");
+  toggle.disabled=searchPending||!available;
+  toggle.checked=available&&searchAnswerPreference!==false;
+  $("search-answers-hint").textContent=available
+    ?"Uses authorized engines only. May spend provider credits; turn off for retrieval only."
+    :"No authorized AI engine in this selection. Configure AI-enhanced search in Settings.";
   $("search-cost").hidden=!chosen.some(p=>p.env);
   $("run-search").disabled=searchPending||chosen.length===0;
 }
+$("search-answers").addEventListener("change",()=>{searchAnswerPreference=$("search-answers").checked;});
 for(const node of document.querySelectorAll("input[name=search-mode]"))node.addEventListener("change",syncSearchMode);
 $("select-keyless").addEventListener("click",()=>{selected.clear();for(const p of state.providers)if(p.kind==="general"&&p.available&&!p.env)selected.add(p.id);renderChoices();});
 $("clear-selection").addEventListener("click",()=>{selected.clear();renderChoices();});
@@ -351,6 +365,19 @@ function renderSearch(data){
   const rows=Array.isArray(data.results)?data.results:[],attempts=data.provider_attempts||[];
   $("search-summary").textContent=(data.query ? "Query: "+data.query+" · " : "")+(rows.length?rows.length+" result"+(rows.length===1?"":"s")+(attempts.some(a=>a.includes(": error")||a.endsWith(": empty"))?" · Some providers returned no usable results.":""):"No usable results. Review provider attempts or try a different query.");
   $("search-attempts").replaceChildren(...attempts.map(text=>element("li",text)));
+  const aiAnswers=data.answers||[],aiAttempts=data.answer_attempts||[];
+  $("search-ai-results").hidden=!aiAnswers.length&&!aiAttempts.length;
+  $("search-ai-attempts").replaceChildren(...aiAttempts.map(value=>element("li",value)));
+  $("search-ai-cards").replaceChildren();
+  for(const answer of aiAnswers){
+    const card=element("article","","card result stack");
+    card.append(element("h3",providerName(answer.provider)+" · "+(answer.mode==="research"?"Research":"Answer")),
+      element("p",answer.answer,"native-answer"),
+      element("p",(answer.truncated?"Response truncated. ":"")+(answer.source_kind==="search_results"?"Retrieved results, not verified citations.":answer.source_kind==="grounding"?"Provider grounding references.":"Provider-supplied citations."),"muted small"));
+    const sources=element("ol","","steps");
+    appendNativeSources(sources,answer.sources);
+    card.append(sources);$("search-ai-cards").append(card);
+  }
   $("results").replaceChildren();
   for(const row of rows){
     const card=element("article","","card result");
@@ -420,7 +447,7 @@ function renderSettings(force=false){
 $("settings-form").addEventListener("input",()=>{settingsDirty=true;feedback("settings-feedback");});
 $("reset-settings").addEventListener("click",()=>{if(state){renderSettings(true);feedback("settings-feedback","Unsaved changes reset.");}});
 function render(){
-  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();
+  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();
 }
 async function refresh(fresh=false){
   if(refreshPromise){if(!fresh)return refreshPromise;await refreshPromise.catch(()=>{});return refresh(true);}
@@ -459,7 +486,7 @@ $("login-form").addEventListener("submit",async event=>{
 $("refresh").addEventListener("click",async()=>{try{await refresh();status("Dashboard refreshed.");}catch(error){status(error.message,true);}});
 $("logout").addEventListener("click",async()=>{
   if(busyCount||refreshPromise){status("An operation is in progress. Wait for it to finish before signing out.",true);return;}
-  if((settingsDirty||[...providerDrafts.values()].some(d=>d.credential)||state?.providers.some(p=>providerDrafts.get(p.id)?.enabled!==p.enabled))&&!await confirmAction("Sign out","Unsaved settings and credentials will be discarded.","Sign out",false))return;
+  if((settingsDirty||aiSettingsDirty||[...providerDrafts.values()].some(d=>d.credential)||state?.providers.some(p=>providerDrafts.get(p.id)?.enabled!==p.enabled))&&!await confirmAction("Sign out","Unsaved settings and credentials will be discarded.","Sign out",false))return;
   const button=$("logout");setPending(button,true,"Signing out…");
   try{await api("logout","POST");showLogin();feedback("login-status","Signed out.");}
   catch(error){status(error.message,true);}
@@ -470,13 +497,15 @@ $("search-form").addEventListener("submit",async event=>{
   const query=$("query").value.trim(),chosen=chosenProviders(),mode=searchMode();
   if(!query){feedback("search-error","Enter a search query.",true);$("query").focus();return;}
   if(!chosen.length){feedback("search-error","Choose at least one available provider.",true);return;}
-  if(chosen.some(p=>p.env)&&!await confirmAction("Use authenticated engines?","This search may consume provider credits or access your private instance. Continue with "+chosen.length+" engine(s)?","Run search",false))return;
+  const authorized=state?.settings?.ai_search_providers||[];
+  const useAnswers=$("search-answers").checked;
+  if(chosen.some(p=>p.env&&!(useAnswers&&authorized.includes(p.id)))&&!await confirmAction("Use authenticated engines?","This search may consume provider credits or access your private instance. Continue with "+chosen.length+" engine(s)?","Run search",false))return;
   if(searchPending)return;
   searchPending=true;busyCount++;setPending($("run-search"),true,"Searching…");syncSearchMode();feedback("search-error");
   $("search-output").hidden=true;
   for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results"))n.disabled=true;
   try{
-    const data={query,mode,max_results:Number($("max-results").value)};
+    const data={query,mode,max_results:Number($("max-results").value),include_answers:useAnswers};
     if(mode==="selected")data.providers=chosen.map(p=>p.id);
     renderSearch(await api("search","POST",data));
   }catch(error){
@@ -501,6 +530,55 @@ $("settings-form").addEventListener("submit",async event=>{
   catch(error){feedback("settings-feedback",error.message,true);}
   finally{settingsPending=false;busyCount--;for(const n of editable)n.disabled=false;setPending(button,false);if(state&&!settingsDirty)renderSettings(true);}
 });
+function renderAiSettings(force=false){
+  if(!state)return;
+  const settings=state.settings,locked=settings.locked||[];
+  const global=$("ai-search-enabled"),field=$("ai-provider-field");
+  global.disabled=aiSettingsPending||locked.includes("ai_search_enabled");
+  field.disabled=aiSettingsPending||locked.includes("ai_search_providers");
+  $("ai-policy-lock").textContent=locked.includes("ai_search_enabled")||locked.includes("ai_search_providers")?"Some values are managed by the server environment.":"";
+  if(aiSettingsDirty&&!force)return;
+  aiSettingsDirty=false;global.checked=!!settings.ai_search_enabled;
+  const allowed=new Set(settings.ai_search_providers||[]);
+  const list=$("ai-provider-list");list.replaceChildren();
+  for(const capability of state.native||[]){
+    const label=element("label","","switch-label ai-provider-row");
+    const input=document.createElement("input");
+    input.type="checkbox";input.className="switch";input.setAttribute("role","switch");input.value=capability.id;
+    input.checked=allowed.has(capability.id);
+    input.setAttribute("aria-label","Authorize "+providerName(capability.id)+" for AI search");
+    const desc=element("span","","stack");desc.append(element("strong",providerName(capability.id)),element("small",(capability.available?"Configured":"Setup required")+" · "+capability.pricing,"muted"));
+    label.append(input,desc);list.append(label);
+  }
+  $("save-ai-settings").disabled=aiSettingsPending||(global.disabled&&field.disabled);
+}
+$("ai-settings-form").addEventListener("input",()=>{aiSettingsDirty=true;feedback("ai-settings-feedback");});
+$("reset-ai-settings").addEventListener("click",()=>{if(state){renderAiSettings(true);feedback("ai-settings-feedback","Unsaved changes reset.");}});
+$("ai-settings-form").addEventListener("submit",async event=>{
+  event.preventDefault();if(aiSettingsPending)return;
+  const data={},global=$("ai-search-enabled"),field=$("ai-provider-field");
+  if(!global.disabled)data.ai_search_enabled=global.checked;
+  if(!field.disabled)data.ai_search_providers=[...field.querySelectorAll("input:checked")].map(n=>n.value);
+  const enabled=data.ai_search_enabled??state.settings.ai_search_enabled;
+  const names=data.ai_search_providers??state.settings.ai_search_providers??[];
+  if(enabled&&!names.length){feedback("ai-settings-feedback","Select at least one authorized provider.",true);return;}
+  if(enabled&&!await confirmAction("Authorize AI-enhanced searches?","Future searches may spend credits with "+names.map(providerName).join(", ")+". This applies to all MCP clients using this server.","Authorize and save",false))return;
+  if(aiSettingsPending)return;
+  aiSettingsPending=true;busyCount++;
+  const button=$("save-ai-settings");setPending(button,true,"Saving…");global.disabled=true;field.disabled=true;
+  try{await api("settings","PUT",data);aiSettingsDirty=false;await refresh(true);feedback("ai-settings-feedback","AI search settings saved.");}
+  catch(error){feedback("ai-settings-feedback",error.message,true);}
+  finally{aiSettingsPending=false;busyCount--;setPending(button,false);renderAiSettings();}
+});
+function appendNativeSources(list,sources){
+  for(const source of sources||[]){
+    const li=element("li");li.value=source.index;
+    let url;try{url=new URL(source.url);}catch{}
+    if(source.url&&url&&["http:","https:"].includes(url.protocol))li.append(link(source.title||url.hostname,url.href));else li.append(element("span",source.title+" (URL unavailable)"));
+    if(source.excerpt)li.append(element("p",source.excerpt,"muted small"));
+    list.append(li);
+  }
+}
 function nativeMode(){return document.querySelector("input[name=native-mode]:checked").value;}
 function renderNativeOptions(){
   const mode=nativeMode(),select=$("native-provider"),old=select.value;
@@ -547,13 +625,7 @@ $("native-form").addEventListener("submit",async event=>{
     $("native-answer").textContent=data.answer;
     $("native-note").textContent=(data.truncated?"Response truncated to limit context. ":"")+"Generated by the provider; not independently verified. "+(data.source_kind==="search_results"?"These are retrieved search results, not verified citations.":data.source_kind==="grounding"?"These are grounding sources returned for the synthesized answer.":"Citation numbering follows the upstream response.");
     $("native-sources").replaceChildren();
-    for(const source of data.sources){
-      const li=element("li");li.value=source.index;
-      let url;try{url=new URL(source.url);}catch{}
-      if(source.url&&url&&["http:","https:"].includes(url.protocol))li.append(link(source.title||url.hostname,url.href));else li.append(element("span",source.title+" (URL unavailable)"));
-      if(source.excerpt)li.append(element("p",source.excerpt,"muted small"));
-      $("native-sources").append(li);
-    }
+    appendNativeSources($("native-sources"),data.sources);
     $("native-result").hidden=false;feedback("native-feedback","Completed.");
   }catch(error){feedback("native-feedback",error.message,true);}
   finally{

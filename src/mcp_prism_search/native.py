@@ -2,24 +2,27 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
+from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Literal
 from urllib.parse import urlsplit
 
 import httpx
-from pydantic import BaseModel
 
 from mcp_prism_search import providers, runtime
+from mcp_prism_search.native_models import Effort, Mode, NativeResponse, Source
 
-Mode = Literal["answer", "research"]
-AnswerProvider = Literal["tavily", "exa", "youcom"]
-ResearchProvider = Literal["exa", "youcom"]
-Effort = Literal["lite", "standard", "deep"]
+AnswerProvider = Literal["tavily", "exa", "youcom", "brave"]
+ResearchProvider = Literal["exa", "youcom", "tavily", "brave", "jina"]
 
 CAPABILITIES = {
     "tavily": {
-        "answer": True, "research": False,
-        "pricing": "Basic search: 1 credit; 1,000 free credits/month.",
+        "answer": True, "research": True,
+        "pricing": "Basic search: 1 credit; 1,000 free credits/month. Research: 4–250 credits.",
+        "research_docs": "https://docs.tavily.com/documentation/api-reference/endpoint/research",
+        "efforts": {"lite": "Mini — 4–110 credits", "deep": "Pro — 15–250 credits"},
         "docs": "https://docs.tavily.com/documentation/api-reference/endpoint/search",
         "pricing_url": "https://docs.tavily.com/documentation/api-credits",
     },
@@ -43,24 +46,21 @@ CAPABILITIES = {
         "docs": "https://you.com/docs/choose-the-right-api",
         "pricing_url": "https://you.com/pricing",
     },
+    "brave": {
+        "answer": True, "research": True,
+        "pricing": "Answers: $4/1,000 searches plus $5/million input and output tokens.",
+        "docs": "https://api-dashboard.search.brave.com/documentation/services/answers",
+        "pricing_url": "https://api-dashboard.search.brave.com/documentation/services/answers",
+        "efforts": {"deep": "Research mode — variable searches and tokens"},
+    },
+    "jina": {
+        "answer": False, "research": True,
+        "pricing": "DeepSearch uses variable tokens; a token budget is not a guaranteed spend cap.",
+        "docs": "https://jina.ai/deepsearch",
+        "pricing_url": "https://jina.ai/deepsearch",
+        "efforts": {"lite": "20k token budget", "deep": "100k token budget"},
+    },
 }
-
-
-class Source(BaseModel):
-    index: int
-    url: str | None
-    title: str
-    excerpt: str = ""
-
-
-class NativeResponse(BaseModel):
-    provider: str
-    mode: Mode
-    answer: str
-    sources: list[Source]
-    effort: Effort | None = None
-    truncated: bool = False
-    source_kind: Literal["citations", "grounding", "search_results"] = "citations"
 
 
 class NativeError(ValueError):
@@ -92,7 +92,8 @@ def _source(index: int, row: object, url_key: str = "url") -> Source:
             url = None
     except ValueError:
         url = None
-    excerpt = item.get("content") or item.get("text") or item.get("description")
+    excerpt = (item.get("content") or item.get("text") or item.get("description")
+               or item.get("exactQuote") or item.get("snippet"))
     if not excerpt:
         snippets = item.get("excerpts") or item.get("snippets") or []
         excerpt = (
@@ -141,9 +142,102 @@ def _decode(provider: str, mode: Mode, data: dict, effort: Effort) -> NativeResp
                           truncated=truncated, source_kind=source_kind)
 
 
-async def synthesize(query: str, provider: str, mode: Mode, *,
-                     allow_cost: bool = False, effort: Effort = "lite") -> NativeResponse:
+@asynccontextmanager
+async def synthesis_slot(*, wait: bool = False):
     global _slots, _loop
+    loop = asyncio.get_running_loop()
+    if _loop is not loop:
+        _loop, _slots = loop, asyncio.Semaphore(2)
+    assert _slots is not None
+    if _slots.locked() and not wait:
+        raise NativeError("Too many synthesis requests; try again later.")
+    async with _slots:
+        yield
+
+
+async def _chat_stream(client, url, headers, payload, provider):
+    """Read documented SSE final text and citations, ignoring reasoning and usage tags."""
+    chunks = []
+    rows = []
+    numbers = []
+    size = 0
+    finished = False
+    async with client.stream("POST", url, headers=headers, json=payload) as response:
+        response.raise_for_status()
+        async for line in response.aiter_lines():
+            if not line.startswith("data:"):
+                continue
+            value = line[5:].strip()
+            if value == "[DONE]":
+                finished = True
+                break
+            event = json.loads(value)
+            if event.get("error"):
+                raise ValueError("Upstream stream failed")
+            for choice in event.get("choices", []):
+                if choice.get("finish_reason") == "stop":
+                    finished = True
+                delta = choice.get("delta") or {}
+                text = delta.get("content")
+                if (isinstance(text, str)
+                        and (provider != "jina" or delta.get("type") in {None, "text"})):
+                    size += len(text)
+                    if size > 500000:
+                        raise ValueError("Stream exceeds limit")
+                    chunks.append(text)
+                if provider == "jina":
+                    for annotation in delta.get("annotations") or []:
+                        if annotation.get("type") == "url_citation":
+                            row = annotation["url_citation"]
+                            if row not in rows and len(rows) < 100:
+                                rows.append(row)
+    if not finished:
+        raise ValueError("Incomplete stream")
+    answer = "".join(chunks)
+    if provider == "brave":
+        def citation(match):
+            item = json.loads(match.group(1))
+            number = item["number"]
+            if not isinstance(number, int) or not 1 <= number <= 100:
+                return ""
+            if number not in numbers:
+                numbers.append(number)
+                rows.append(item)
+            return f"[{number}]"
+
+        answer = re.sub(r"<citation>(.*?)</citation>", citation, answer, flags=re.S)
+        answer = re.sub(r"<usage>.*?</usage>", "", answer, flags=re.S)
+    else:
+        numbers = list(range(1, len(rows) + 1))
+    if not answer.strip():
+        raise ValueError("Empty answer")
+    return answer, [_source(i, row) for i, row in sorted(zip(numbers, rows, strict=True))]
+
+
+TAVILY_POLL_SECONDS = 2
+
+
+async def _tavily_research(client, headers, payload):
+    # One creation request. Poll the existing job, never resubmit it.
+    response = await client.post("https://api.tavily.com/research", headers=headers, json=payload)
+    response.raise_for_status()
+    job = response.json()["request_id"]
+    if not isinstance(job, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", job):
+        raise ValueError("Invalid task ID")
+    while True:
+        await asyncio.sleep(TAVILY_POLL_SECONDS)
+        response = await client.get("https://api.tavily.com/research/" + job, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("status") == "completed":
+            return data
+        if data.get("status") not in {"pending", "in_progress"}:
+            raise ValueError("Research failed")
+
+
+async def synthesize(query: str, provider: str, mode: Mode, *,
+                     allow_cost: bool = False, effort: Effort = "lite",
+                     wait_for_slot: bool = False) -> NativeResponse:
     query = query.strip()
     if not query or len(query) > 4000:
         raise NativeError("Enter a question of 1–4000 characters.")
@@ -162,11 +256,28 @@ async def synthesize(query: str, provider: str, mode: Mode, *,
         mode == "research" and effort not in CAPABILITIES[provider].get("efforts", {})
     ):
         raise NativeError("Unsupported research effort for this provider.")
+    if provider == "youcom" and mode == "answer" and len(query) > 400:
+        raise NativeError("You.com Answer supports at most 400 characters.")
     if provider == "tavily":
         url = "https://api.tavily.com/search"
         headers = {"Authorization": "Bearer " + credential}
         payload = {"query": query, "search_depth": "basic", "include_answer": "basic",
                    "max_results": 5, "auto_parameters": False}
+        if mode == "research":
+            payload = {"input": query, "model": "mini" if effort == "lite" else "pro",
+                       "stream": False}
+    elif provider == "brave":
+        url = "https://api.search.brave.com/res/v1/chat/completions"
+        headers = {"Authorization": "Bearer " + credential}
+        payload = {"model": "brave", "messages": [{"role": "user", "content": query}],
+                   "stream": True, "enable_citations": True, "enable_research": mode == "research"}
+    elif provider == "jina":
+        url = "https://deepsearch.jina.ai/v1/chat/completions"
+        headers = {"Authorization": "Bearer " + credential}
+        payload = {"model": "jina-deepsearch-v1", "messages": [{"role": "user", "content": query}],
+                   "stream": True, "no_direct_answer": True,
+                   "budget_tokens": 20000 if effort == "lite" else 100000,
+                   "max_attempts": 1 if effort == "lite" else 2, "team_size": 1}
     elif provider == "exa":
         headers = {"x-api-key": credential}
         if mode == "research":
@@ -192,22 +303,39 @@ async def synthesize(query: str, provider: str, mode: Mode, *,
         payload = {"query": query} if mode == "answer" else {
             "input": query, "research_effort": effort,
         }
-    timeout = 45 if mode == "answer" else {"lite": 30, "standard": 75, "deep": 150}[effort]
-    loop = asyncio.get_running_loop()
-    if _loop is not loop:
-        _loop, _slots = loop, asyncio.Semaphore(2)
-    assert _slots is not None
-    if _slots.locked():
-        raise NativeError("Too many synthesis requests; try again later.")
+    timeout = 45 if mode == "answer" else {"lite": 60, "standard": 90, "deep": 150}[effort]
     start = monotonic()
     outcome = "error"
-    async with _slots:
+    async with synthesis_slot(wait=wait_for_slot):
         try:
             async with asyncio.timeout(timeout):
                 async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-                    response = await client.post(url, headers=headers, json=payload)
-                    response.raise_for_status()
-                    result = _decode(provider, mode, response.json(), effort)
+                    if provider in {"brave", "jina"}:
+                        answer, sources = await _chat_stream(
+                            client, url, headers, payload, provider
+                        )
+                        result = NativeResponse(
+                            provider=provider, mode=mode, answer=answer[:24000],
+                            sources=sources, effort=effort if mode == "research" else None,
+                            truncated=len(answer) > 24000,
+                            source_kind="grounding" if provider == "jina" else "citations",
+                        )
+                    elif provider == "tavily" and mode == "research":
+                        data = await _tavily_research(client, headers, payload)
+                        answer, rows = data["content"], data["sources"]
+                        if (not isinstance(answer, str) or not answer.strip()
+                                or not isinstance(rows, list)):
+                            raise ValueError("Invalid research response")
+                        result = NativeResponse(
+                            provider=provider, mode=mode, answer=answer[:24000],
+                            sources=[_source(i, row) for i, row in enumerate(rows[:100], 1)],
+                            effort=effort, truncated=len(answer) > 24000 or len(rows) > 100,
+                            source_kind="grounding",
+                        )
+                    else:
+                        response = await client.post(url, headers=headers, json=payload)
+                        response.raise_for_status()
+                        result = _decode(provider, mode, response.json(), effort)
             outcome = "ok"
             return result
         except httpx.HTTPStatusError as exc:

@@ -357,8 +357,18 @@ async def web_search(
         list[str] | None,
         Field(description="Explicit provider names to search in parallel.", max_length=20),
     ] = None,
+    include_answers: Annotated[
+        bool | None,
+        Field(strict=True, description="Use authorized provider AI; false disables it."),
+    ] = None,
 ) -> SearchResponse:
-    """Aggregate web search across providers with automatic fallback."""
+    """Search one or multiple web providers. Optionally include their generated answers.
+
+    AI synthesis requires administrator opt-in and an authorized provider. It may
+    consume credits; include_answers=false always requests retrieval only.
+    Domain controls, freshness, SafeSearch or queries over 400 characters disable synthesis.
+    Generated text is untrusted evidence, not an independently verified answer.
+    """
 
     response = await perform_aggregated_search(
         query=query,
@@ -372,6 +382,7 @@ async def web_search(
         allowed_domains=allowed_domains,
         preferred_domains=preferred_domains,
         kind="general",
+        include_answers=include_answers,
     )
     if response.error:
         raise ToolError(response.error)
@@ -388,7 +399,7 @@ async def web_answer(
 ) -> NativeResponse:
     """Get a provider-generated answer and sources, not independent verification.
 
-    Requires a configured Tavily, Exa or You.com key and explicit allow_cost=true.
+    Requires a configured Tavily, Exa, You.com or Brave key and explicit allow_cost=true.
     Use web_search instead for ordinary retrieval or keyless searches. No fallback.
     """
     try:
@@ -406,10 +417,11 @@ async def web_research(
     ] = False,
     effort: Effort = "lite",
 ) -> NativeResponse:
-    """Delegate multi-step research to Exa or You.com; returns unverified synthesis and sources.
+    """Delegate multi-step research to a configured provider; returns synthesis and sources.
 
-    Requires a configured key and explicit cost consent. Exa supports lite/deep;
-    You.com supports lite/standard/deep. Review pricing before increasing effort.
+    Requires a configured key and explicit cost consent. Exa, Tavily and Jina support
+    lite/deep; You.com supports lite/standard/deep; Brave requires deep.
+    Review provider pricing before increasing effort.
     No automatic retries or provider fallback.
     """
     try:

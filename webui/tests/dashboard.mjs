@@ -14,7 +14,7 @@ const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
 const provider=(id,extra={})=>({id,kind:"general",description:"A search engine for web research.",enabled:true,available:true,credential:false,editable:false,managed:false,env:null,...extra});
-let data={native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7-test",sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,locked:[]}};
+let data={native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7-test",sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
 await page.route("http://prism-test.invalid/**",async route=>{
  const url=new URL(route.request().url());
  const pathname=url.pathname;
@@ -28,7 +28,7 @@ await page.route("http://prism-test.invalid/**",async route=>{
    else if(pathname==="/api/cache/clear"){cleared++;body={deleted_files:2,deleted_bytes:2048};}
    else if(pathname==="/api/logout")logged=false;
    else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:"answer",answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""}],truncated:false};}
-   else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"}]};}
+   else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"}],answers:lastSearch.include_answers?[{provider:"exa",mode:"answer",answer:"Enhanced answer <script>bad</script>",source_kind:"grounding",sources:[{index:2,url:"https://example.org",title:"Grounded source",excerpt:"Evidence"}]}]:[],answer_attempts:lastSearch.include_answers?["exa: ok"]:[]};}
    await route.fulfill({status,json:body});return;
  }
  const name=pathname==="/"?"index.html":pathname.slice(1);
@@ -114,6 +114,43 @@ try{
  await page.getByRole("button",{name:"Run search"}).click();
  await page.waitForFunction(()=>!document.querySelector("#run-search").disabled);
  assert.equal(lastSearch.mode,"auto");assert.equal(lastSearch.providers,undefined);
+ // Authorize once, then search without another cost dialog for the authorized engine.
+ assert.equal(await page.locator("#search-answers").isDisabled(),true);
+ data.providers.push(provider("exa",{editable:true,credential:true,env:"EXA_API_KEY"}));
+ await nav("Settings");
+ await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
+ await page.locator("#ai-search-enabled").check();
+ await page.locator('#ai-provider-list input[value=exa]').check();
+ await page.locator("#save-ai-settings").click();
+ await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
+ assert.equal(data.settings.ai_search_enabled,false);
+ await page.locator("#save-ai-settings").click();
+ await page.getByRole("dialog").getByRole("button",{name:"Authorize and save",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector("#ai-settings-feedback").textContent.includes("settings saved"));
+ assert.equal(data.settings.ai_search_enabled,true);
+ assert.deepEqual(data.settings.ai_search_providers,["exa"]);
+ await nav("Playground");
+ await page.locator('input[name=search-mode][value=selected]').check();
+ await page.locator("#clear-selection").click();
+ await page.locator('#choices input[value=exa]').check();
+ assert.equal(await page.locator("#search-answers").isChecked(),true);
+ await page.locator("#run-search").click();
+ await page.locator("#search-ai-results").waitFor({state:"visible"});
+ assert.equal(lastSearch.include_answers,true);
+ assert.deepEqual(lastSearch.providers,["exa"]);
+ assert.equal(await page.locator("#search-ai-cards script").count(),0);
+ assert.equal(await page.locator("#search-ai-cards a").count(),1);
+ await audit("enhanced-search-dark");
+ await page.locator("#theme").click();
+ await audit("enhanced-search-white");
+ await page.locator("#theme").click();
+ await page.locator("#search-answers").uncheck();
+ await page.locator("#run-search").click();
+ await page.getByRole("dialog").getByRole("button",{name:"Run search",exact:true}).click();
+ await page.waitForFunction(()=>!document.querySelector("#run-search").disabled);
+ assert.equal(lastSearch.include_answers,false);
+ assert.equal(await page.locator("#search-ai-results").isVisible(),false);
+
  await page.locator("#native-panel > summary").click();
  await page.locator("#native-query").fill("test answer");
  await page.locator("#native-run").click();

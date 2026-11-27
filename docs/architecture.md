@@ -251,4 +251,4 @@ or initialize state. See [dashboard design and operations](webui.md).
 
 ## Optional native synthesis
 
-The native synthesis adapter is independent of the search aggregator. A caller chooses a configured provider and explicitly accepts credit consumption. The same bounded adapter serves the MCP tools and the authenticated panel; no implicit synthesis, retries, cross-provider fallback, local LLM or answer cache. See [native AI](native-ai.md).
+The native synthesis adapter serves explicit MCP tools and the authenticated panel. An opt-in AI search policy permits provider-generated answers alongside retrieval. Combined endpoints avoid duplicate generation calls; separate APIs remain optional. Synthesis is bounded, not cached, and cannot bypass administrator authorization. No local LLM or automatic synthesis retry. See [native AI](native-ai.md).

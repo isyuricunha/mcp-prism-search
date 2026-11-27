@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from mcp_prism_search.domains import normalize_domains
+from mcp_prism_search.native_models import NativeResponse
 
 SafeSearch = Literal["off", "moderate", "strict"]
 TimeFilter = Literal["day", "week", "month", "year"]
@@ -161,6 +162,8 @@ class SearchResponse(StrictBaseModel):
     cached: bool
     error: str | None
     provider_attempts: list[str] = Field(default_factory=list)
+    answers: list[NativeResponse] = Field(default_factory=list)
+    answer_attempts: list[str] = Field(default_factory=list)
 
 
 class FetchResponse(StrictBaseModel):
