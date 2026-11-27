@@ -630,3 +630,20 @@ def test_tavily_invalid_task_identifier(configure, monkeypatch, job):
     with pytest.raises(native.NativeError):
         asyncio.run(native.synthesize("question", "tavily", "research", allow_cost=True))
     assert calls == ["POST"]
+
+
+@pytest.mark.parametrize("status", ["failed", "cancelled", "unknown"])
+def test_tavily_terminal_failure(configure, monkeypatch, status):
+    calls = []
+    monkeypatch.setattr(native, "TAVILY_POLL_SECONDS", 0)
+
+    def handler(request):
+        calls.append(request.method)
+        if request.method == "POST":
+            return httpx.Response(201, json={"request_id": "job-id"})
+        return httpx.Response(200, json={"status": status})
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError):
+        asyncio.run(native.synthesize("question", "tavily", "research", allow_cost=True))
+    assert calls == ["POST", "GET"]
