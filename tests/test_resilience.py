@@ -545,3 +545,11 @@ def test_result_dedupe_zero_limit():
 
     assert not _dedupe_results(
         [SearchResult(title="Test", url="https://example.org", snippet="")], 0)
+
+
+def test_dedupe_default_ports_without_merging_nondefault_ports():
+    from mcp_prism_search.search import normalize_url_for_dedupe as identity
+
+    assert identity("https://example.org:443/path") == identity("https://example.org/path")
+    assert identity("http://[2001:4860::1]:80/") == identity("http://[2001:4860::1]/")
+    assert identity("https://example.org:8443/path") != identity("https://example.org/path")

@@ -178,6 +178,10 @@ def normalize_url_for_dedupe(url: str) -> str:
     parsed = urlparse(url)
     scheme = parsed.scheme.lower()
     netloc = parsed.netloc.lower()
+    # Explicit default ports identify the same HTTP resource.
+    if (scheme == "http" and parsed.port == 80
+            or scheme == "https" and parsed.port == 443):
+        netloc = netloc.rsplit(":", 1)[0]
     path = parsed.path or ""
     if path == "/" and not parsed.query:
         path = ""
