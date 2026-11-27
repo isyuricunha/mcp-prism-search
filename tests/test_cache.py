@@ -467,3 +467,14 @@ def test_cache_prune_lock_busy(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "prune_cache", lambda **kwargs: pytest.fail("overlapping prune"))
     with cache._PRUNE_LOCK:
         assert maybe_prune_cache(root_dir=tmp_path, force=True) is None
+
+
+def test_cache_startup_prune_disabled(tmp_path, monkeypatch):
+    from mcp_prism_search.cache import prune_cache_on_startup
+
+    monkeypatch.setenv("MCP_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("CACHE_PRUNE_ON_START", "off")
+    path = tmp_path / "search" / "expired.json"
+    _write_cache_file(path, created_at=time.time() - 90000)
+    assert prune_cache_on_startup() is None
+    assert path.exists()
