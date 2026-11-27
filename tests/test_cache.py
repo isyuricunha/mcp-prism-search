@@ -458,3 +458,12 @@ def test_cache_active_temp(tmp_path):
     assert stats.deleted_files == 1
     assert active.read_text() == "writing"
     assert not abandoned.exists()
+
+
+def test_cache_prune_lock_busy(tmp_path, monkeypatch):
+    from mcp_prism_search import cache
+
+    monkeypatch.setattr(cache, "_LAST_PRUNE_TIMES", {})
+    monkeypatch.setattr(cache, "prune_cache", lambda **kwargs: pytest.fail("overlapping prune"))
+    with cache._PRUNE_LOCK:
+        assert maybe_prune_cache(root_dir=tmp_path, force=True) is None
