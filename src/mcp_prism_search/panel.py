@@ -73,7 +73,7 @@ class DefaultsPatch(BaseModel):
 class ClearCache(BaseModel):
     model_config = ConfigDict(extra="forbid")
     namespace: Literal["search", "fetch", "all"]
-    confirm: Literal[True]
+    confirm: bool = Field(strict=True)
 
 
 class Query(BaseModel):
@@ -302,6 +302,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
 
     async def clear(request):
         data = await body(request, ClearCache)
+        if data.confirm is not True:
+            return error("Explicit confirmation is required")
         return JSONResponse((await asyncio.to_thread(
             cache.clear_cache, namespace=data.namespace, confirm=data.confirm
         )).to_dict())

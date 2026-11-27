@@ -319,3 +319,17 @@ def test_provider_update_rejects_ambiguous_values(panel, payload):
                       json=payload).status_code == 400
     assert "TINYFISH_API_KEY" not in store.credentials
     assert "tinyfish" not in store.flags
+
+
+@pytest.mark.parametrize("confirmation", [1, "true", False])
+def test_panel_cache_clear_requires_boolean_true(panel, confirmation):
+    from mcp_prism_search.cache import JsonFileCache, get_cache_dir
+
+    client, _, _ = panel
+    sign_in(client)
+    store = JsonFileCache(get_cache_dir(), "search", 60)
+    store.set({"test": 1}, {"value": "preserved"})
+    assert client.post("/api/cache/clear", headers=HEADERS, json={
+        "namespace": "all", "confirm": confirmation,
+    }).status_code == 400
+    assert store.get({"test": 1}) == {"value": "preserved"}
