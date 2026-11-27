@@ -146,3 +146,28 @@ def test_exa_domain_contract(monkeypatch):
     rows = asyncio.run(exa.search(SearchRequest(query="test", allowed_domains=["example.org"],
         blocked_domains=["blocked.example"]), 1, 5))
     assert [(r.title, r.snippet) for r in rows] == [("Good", "Evidence")]
+
+
+@pytest.mark.parametrize("safe", ["off", "moderate", "strict"])
+def test_tavily_filter_contract(monkeypatch, safe):
+    from mcp_prism_search.providers import tavily
+
+    monkeypatch.setenv("TAVILY_API_KEY", "fixture-key")
+
+    def handler(req):
+        data = json.loads(req.content)
+        assert data.get("safe_search", False) is (safe != "off")
+        assert data["include_domains"] == ["example.org"]
+        assert data["exclude_domains"] == ["blocked.example"]
+        assert data["time_range"] == "d"
+        assert data["auto_parameters"] is False and data["include_answer"] is False
+        return httpx.Response(200, json={"results": [
+            {"title": "Invalid", "url": "javascript:bad"},
+            {"title": "Good", "url": "https://example.org", "content": "Evidence"},
+        ]})
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(tavily.search(SearchRequest(query="test", safe_search=safe,
+        allowed_domains=["example.org"], blocked_domains=["blocked.example"], time_filter="day"),
+        1, 5))
+    assert len(rows) == 1 and rows[0].snippet == "Evidence"

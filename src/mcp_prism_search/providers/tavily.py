@@ -25,6 +25,9 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         "include_answer": False,
         "auto_parameters": False,
     }
+    if request.safe_search != "off":
+        # Tavily exposes a Boolean filter rather than three distinct levels.
+        body["safe_search"] = True
     if request.blocked_domains:
         body["exclude_domains"] = list(request.blocked_domains)
     if request.allowed_domains:
