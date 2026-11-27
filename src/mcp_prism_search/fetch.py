@@ -317,8 +317,8 @@ async def web_fetch(
             response = await _get_with_validated_redirects(
                 client, request.url, get_fetch_max_bytes()
             )
-        fetch_response = _response_to_fetch_response(
-            request.url, response, request.max_chars
+        fetch_response = await asyncio.to_thread(
+            _response_to_fetch_response, request.url, response, request.max_chars
         )
         if fetch_response.success:
             cache.set(payload, _cacheable_fetch_response(fetch_response))

@@ -608,3 +608,30 @@ def test_live_fetch_resolves_once_and_cache_hit_revalidates_dns(tmp_path, monkey
     monkeypatch.setattr(security, "_resolve_hostname", lambda *a: ["127.0.0.1"])
     third = asyncio.run(fetch.web_fetch("https://example.org", cache=store))
     assert not third.success and not third.cached
+
+
+def test_fetch_parsing_runs_outside_event_loop(tmp_path, monkeypatch):
+    import threading
+
+    thread_ids = []
+    original_parse = fetch._response_to_fetch_response
+    original_client = httpx.AsyncClient
+
+    def parse(*args):
+        thread_ids.append(threading.get_ident())
+        return original_parse(*args)
+
+    async def resolve(url):
+        return "8.8.8.8", 443
+
+    monkeypatch.setattr(fetch, "resolve_safe_address", resolve)
+    monkeypatch.setattr(fetch, "_response_to_fetch_response", parse)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original_client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(
+            200, text="<html><body>Evidence</body></html>",
+            headers={"content-type": "text/html"}
+        )), **kw))
+    result = asyncio.run(fetch.web_fetch("https://example.org",
+                         cache=cache.JsonFileCache(tmp_path, "fetch", 60)))
+    assert result.success and "Evidence" in result.content
+    assert thread_ids and thread_ids[0] != threading.get_ident()
