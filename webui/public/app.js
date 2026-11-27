@@ -41,9 +41,18 @@ function action(label, callback, className = "") {
   button.addEventListener("click", callback);
   return button;
 }
+function safeHttpUrl(value) {
+  if(typeof value!=="string"||/[\s\x00-\x1f\x7f]/u.test(value))return null;
+  try{
+    const url=new URL(value);
+    return ["http:","https:"].includes(url.protocol)&&!url.username&&!url.password?url:null;
+  }catch{return null;}
+}
 function link(label, url) {
+  const target=safeHttpUrl(url);
+  if(!target)return element("span",label+" (URL unavailable)");
   const a = element("a", label + " ↗");
-  a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+  a.href = target.href; a.target = "_blank"; a.rel = "noopener noreferrer";
   return a;
 }
 function feedback(target, message = "", isError = false) {
@@ -415,8 +424,8 @@ function renderSearch(data){
   $("results").replaceChildren();
   for(const row of rows){
     const card=element("article","","card result");
-    let url;try{url=new URL(row.url);}catch{}
-    if(url&&["https:","http:"].includes(url.protocol)) card.append(link(row.title||url.hostname,url.href));
+    const url=safeHttpUrl(row.url);
+    if(url) card.append(link(row.title||url.hostname,url.href));
     else card.append(element("h3",row.title||"Result"));
     card.append(element("p",row.url,"muted small"),element("p",row.snippet||"No snippet supplied."));
     $("results").append(card);
@@ -712,8 +721,8 @@ $("ai-settings-form").addEventListener("submit",async event=>{
 function appendNativeSources(list,sources){
   for(const source of sources||[]){
     const li=element("li");li.value=source.index;
-    let url;try{url=new URL(source.url);}catch{}
-    if(source.url&&url&&["http:","https:"].includes(url.protocol))li.append(link(source.title||url.hostname,url.href));else li.append(element("span",source.title+" (URL unavailable)"));
+    const url=safeHttpUrl(source.url);
+    if(url)li.append(link(source.title||url.hostname,url.href));else li.append(element("span",source.title+" (URL unavailable)"));
     if(source.excerpt)li.append(element("p",source.excerpt,"muted small"));
     list.append(li);
   }

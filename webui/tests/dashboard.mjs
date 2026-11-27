@@ -48,8 +48,8 @@ await page.route("http://prism-test.invalid/**",async route=>{
    }
    else if(pathname==="/api/cache/clear"){cleared++;body={deleted_files:2,deleted_bytes:2048};}
    else if(pathname==="/api/logout")logged=false;
-   else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:lastNative.mode,answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""}],truncated:false};}
-   else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"}],answers:lastSearch.include_answers?[{provider:"exa",mode:"answer",answer:"Enhanced answer <script>bad</script>",source_kind:"grounding",sources:[{index:2,url:"https://example.org",title:"Grounded source",excerpt:"Evidence"}]}]:[],answer_attempts:lastSearch.include_answers?["exa: ok"]:[]};}
+   else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:lastNative.mode,answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""},{index:3,url:"https://user:pass@example.org",title:"Embedded credentials",excerpt:""}],truncated:false};}
+   else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"},{title:"Unsafe",url:"javascript:alert(1)",snippet:"Untrusted"}],answers:lastSearch.include_answers?[{provider:"exa",mode:"answer",answer:"Enhanced answer <script>bad</script>",source_kind:"grounding",sources:[{index:2,url:"https://example.org",title:"Grounded source",excerpt:"Evidence"}]}]:[],answer_attempts:lastSearch.include_answers?["exa: ok"]:[]};}
    if(["/api/search","/api/native"].includes(pathname))await delay(120);
    await route.fulfill({status,json:body});return;
  }
@@ -177,6 +177,7 @@ try{
  await page.getByRole("button",{name:"Run search"}).click();
  await searchComplete(firstSearch);
  await page.getByRole("link",{name:"Example ↗"}).waitFor();
+ assert.equal(await page.locator("#results a").count(),1);
  assert.equal(lastSearch.mode,undefined);assert.equal(lastSearch.providers,undefined);assert.equal(lastSearch.max_results,undefined);
  assert.ok((await page.locator("#search-default-summary").textContent()).includes("Keyless fallback"));
  assert.ok((await page.locator("#search-default-summary").textContent()).includes("Up to 7"));
