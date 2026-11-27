@@ -36,3 +36,11 @@ def test_quality_pipeline_respects_domain_controls_and_deduplication():
     unrelated = row("Reference", "https://outside.example/ref", "Reference")
     request = SearchRequest(query="reference", allowed_domains=["example.org"], max_results=2)
     assert _final_results([unrelated, primary, duplicate], request) == [primary]
+
+
+def test_duplicate_url_retains_more_relevant_description():
+    weak = row("Welcome", "https://docs.example.org/ref", "Introduction")
+    strong = row("Python asyncio TaskGroup", "https://docs.example.org/ref#asyncio",
+                 "Python structured concurrency with asyncio TaskGroup")
+    request = SearchRequest(query="Python asyncio TaskGroup")
+    assert _final_results([weak, strong], request) == [strong]

@@ -154,7 +154,9 @@ def rank_results(results: list[SearchResult], query: str) -> list[SearchResult]:
         hostname = urlparse(result.url).hostname or ""
         return 2.0 * title_score + 1.0 * snippet_score + 1.5 * _trusted_domain_score(hostname)
 
-    return sorted(_dedupe_results(results), key=score, reverse=True)
+    valid = [row for row in results if isinstance(row, SearchResult)
+             and row.title.strip() and valid_result_url(row.url)]
+    return _dedupe_results(sorted(valid, key=score, reverse=True))
 
 
 def provider_request_size(request: SearchRequest) -> int:
@@ -546,7 +548,7 @@ async def _search_one(
 
 def _final_results(results: list[SearchResult], request: SearchRequest) -> list[SearchResult]:
     return apply_search_domain_controls(
-        rank_results(_dedupe_results(results), request.query), request
+        rank_results(results, request.query), request
     )
 
 
