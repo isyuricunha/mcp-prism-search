@@ -273,3 +273,15 @@ def test_invalid_provider_urls_do_not_consume_result_limit(monkeypatch, module):
     assert [row.title for row in asyncio.run(
         module.search(SearchRequest(query="test"), 1, 5)
     )] == ["Valid"]
+
+
+def test_httpx_provider_timeout_uses_timeout_status(registry, monkeypatch):
+    register, _ = registry
+    register("keenable")
+
+    async def timeout(*args):
+        raise httpx.ReadTimeout("private URL")
+
+    monkeypatch.setattr(providers, "run_provider", timeout)
+    rows, status = asyncio.run(search._search_one("keenable", SearchRequest(query="test"), 1, 5))
+    assert not rows and status == "keenable: error (timeout)"

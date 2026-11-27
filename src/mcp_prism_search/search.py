@@ -541,7 +541,7 @@ async def _search_one(
     except asyncio.CancelledError:
         runtime.record_metric(name, "cancelled", monotonic() - start)
         raise
-    except TimeoutError:
+    except (TimeoutError, httpx.TimeoutException):
         status = "timeout"
     except httpx.HTTPStatusError as exc:
         status = f"HTTP {exc.response.status_code}"
