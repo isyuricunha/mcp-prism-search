@@ -535,7 +535,16 @@ try{
  await page.locator("#dashboard").waitFor({state:"visible"});
  assert.equal(await page.locator("#cache-feedback").textContent(),"");
  assert.equal(cleared,2);
- await page.locator("#logout").click();await page.locator("#login").waitFor({state:"visible"});
+  await nav("Providers");
+  await page.locator('.provider-row[data-provider="keenable"]').getByRole("switch").uncheck();
+  logged=false;
+  await page.locator('.provider-row[data-provider="keenable"]').getByRole("button",{name:"Save",exact:true}).click();
+  await page.locator("#login").waitFor({state:"visible"});
+  await page.locator("#password").fill("test-only-password");
+  await page.getByRole("button",{name:"Sign in",exact:true}).click();
+  await page.locator("#dashboard").waitFor({state:"visible"});
+  assert.equal(await page.locator("#provider-feedback-keenable").textContent(),"");
+  await page.locator("#logout").click();await page.locator("#login").waitFor({state:"visible"});
  await page.locator("#login-theme").click();await audit("login-white");
  assert.deepEqual(errors,[]);
  console.log("Interaction tests PASS");

@@ -343,6 +343,7 @@ function renderProviders() {
     }
     async function update(removeKey=false) {
       if(providerPending.has(p.id))return;
+      const epoch=authEpoch;
       providerPending.add(p.id);busyCount++;syncDraft();setPending(save,true,"Saving…");
       feedback(local,"");
       try {
@@ -351,8 +352,8 @@ function renderProviders() {
         if(!removeKey&&draft.credential&&!payload.credential)throw new Error("Enter a non-empty API key.");
         await api("providers/"+encodeURIComponent(p.id),"PUT",payload);
         providerDrafts.delete(p.id);providerMessages.set(p.id,{message:"Saved. New searches use these settings.",error:false});
-        try{await refresh(true);}catch{providerMessages.set(p.id,{message:"Saved, but refresh failed. Refresh to see current state.",error:true});}
-      }catch(error){providerMessages.set(p.id,{message:error.message,error:true});feedback(local,error.message,true);}
+        try{await refresh(true);}catch{if(epoch===authEpoch)providerMessages.set(p.id,{message:"Saved, but refresh failed. Refresh to see current state.",error:true});}
+      }catch(error){if(epoch===authEpoch){providerMessages.set(p.id,{message:error.message,error:true});feedback(local,error.message,true);}}
       finally{providerPending.delete(p.id);busyCount--;setPending(save,false);syncDraft();if(state)renderProviders();}
     }
     toggle.addEventListener("change",syncDraft);
