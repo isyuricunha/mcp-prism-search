@@ -30,7 +30,10 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         data = response.json()
 
     results: list[SearchResult] = []
-    for item in data.get("query", {}).get("search", []):
+    query_data = data.get("query") if isinstance(data, dict) else None
+    if not isinstance(query_data, dict) or not isinstance(query_data.get("search"), list):
+        raise ValueError("Invalid Wikipedia search response")
+    for item in query_data["search"]:
         if not isinstance(item, dict):
             continue
         title = normalize_whitespace(str(item.get("title") or ""))

@@ -329,3 +329,15 @@ def test_youcom_invalid_urls_do_not_consume_result_limit():
         {"title": "Good", "url": "https://example.org/good"},
     ]}}, 1)
     assert [row.title for row in rows] == ["Good"]
+
+
+def test_wikipedia_api_error_is_not_a_successful_empty_response(monkeypatch):
+    from mcp_prism_search.providers import wikipedia
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={
+            "error": {"code": "search-error"}
+        })), **kw))
+    with pytest.raises(ValueError, match="Invalid Wikipedia"):
+        asyncio.run(wikipedia.search(SearchRequest(query="test"), 5, 5))
