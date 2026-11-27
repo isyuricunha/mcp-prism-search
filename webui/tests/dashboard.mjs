@@ -13,7 +13,7 @@ const page=await context.newPage();
 const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
-let holdSettings=null,failOverview=false,logsHealthy=true,failLogs=false;
+let holdSettings=null,holdNative=null,failOverview=false,logsHealthy=true,failLogs=false;
 // Deliberate response latency exposes stale DOM/fixture assertions on fast runners.
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function responseFor(endpoint, predicate=()=>true){
@@ -55,6 +55,7 @@ await page.route("http://prism-test.invalid/**",async route=>{
    else if(pathname==="/api/logout")logged=false;
    else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:lastNative.mode,answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""},{index:3,url:"https://user:pass@example.org",title:"Embedded credentials",excerpt:""}],truncated:false};}
    else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"},{title:"Unsafe",url:"javascript:alert(1)",snippet:"Untrusted"}],answers:lastSearch.include_answers?[{provider:"exa",mode:"answer",answer:"Enhanced answer <script>bad</script>",source_kind:"grounding",sources:[{index:2,url:"https://example.org",title:"Grounded source",excerpt:"Evidence"}]}]:[],answer_attempts:lastSearch.include_answers?["exa: ok"]:[]};}
+   if(pathname==="/api/native"&&holdNative)await holdNative;
    if(["/api/search","/api/native"].includes(pathname))await delay(120);
    await route.fulfill({status,json:body});return;
  }
@@ -343,8 +344,20 @@ try{
  await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
  assert.equal(lastNative,null);
  await page.locator("#native-run").click();
+ let releaseNative;
+ holdNative=new Promise(resolve=>{releaseNative=resolve;});
  const answerResponse=responseFor("/api/native",d=>d.mode==="answer");
  await page.getByRole("dialog").getByRole("button",{name:"Continue",exact:true}).click();
+ try{
+  await page.waitForFunction(()=>document.querySelector("#native-run").hasAttribute("aria-busy"));
+  data.native.find(p=>p.id==="exa").available=false;
+  await page.evaluate(()=>refresh());
+  assert.equal(await page.locator("#native-provider").inputValue(),"exa");
+  assert.equal(await page.locator("#native-provider").isDisabled(),true);
+  assert.equal(await page.locator("#native-query").isDisabled(),true);
+  data.native.find(p=>p.id==="exa").available=true;
+  await page.evaluate(()=>refresh());
+ }finally{releaseNative();holdNative=null;}
  await nativeComplete(answerResponse);
  assert.equal(lastNative.allow_cost,true);
  assert.equal(lastNative.provider,"exa");

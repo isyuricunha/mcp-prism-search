@@ -768,6 +768,7 @@ function appendNativeSources(list,sources){
 }
 function nativeMode(){return document.querySelector("input[name=native-mode]:checked").value;}
 function renderNativeOptions(){
+  if(nativePending)return;
   const mode=nativeMode(),select=$("native-provider"),old=select.value;
   const caps=(state?.native||[]).filter(p=>p[mode]);
   select.replaceChildren(new Option("Choose a provider",""));
