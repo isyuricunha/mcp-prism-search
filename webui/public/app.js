@@ -820,7 +820,16 @@ $("ai-settings-form").addEventListener("submit",async event=>{
   const enabled=data.ai_search_enabled??state.settings.ai_search_enabled;
   const names=data.ai_search_providers??state.settings.ai_search_providers??[];
   if(enabled&&!names.length){feedback("ai-settings-feedback","Select at least one authorized provider.",true);return;}
-  if(enabled&&!await confirmAction("Authorize AI-enhanced searches?","Future searches may spend credits with "+names.map(providerName).join(", ")+". This applies to all MCP clients using this server.","Authorize and save",false))return;
+  if(enabled){
+    const consent=JSON.stringify([state.settings.locked,state.settings.ai_search_enabled,
+      state.settings.ai_search_providers,global.checked,[...field.querySelectorAll("input:checked")].map(n=>n.value),
+      (state.native||[]).filter(p=>names.includes(p.id)).map(p=>[p.id,p.pricing,p.available])]);
+    if(!await confirmAction("Authorize AI-enhanced searches?","Future searches may spend credits with "+names.map(providerName).join(", ")+". This applies to all MCP clients using this server.","Authorize and save",false))return;
+    const current=JSON.stringify([state.settings.locked,state.settings.ai_search_enabled,
+      state.settings.ai_search_providers,global.checked,[...field.querySelectorAll("input:checked")].map(n=>n.value),
+      (state.native||[]).filter(p=>names.includes(p.id)).map(p=>[p.id,p.pricing,p.available])]);
+    if(current!==consent){feedback("ai-settings-feedback","AI policy or provider information changed. Review and confirm again.",true);return;}
+  }
   if(aiSettingsPending)return;
   const epoch=authEpoch;
   aiSettingsPending=true;busyCount++;

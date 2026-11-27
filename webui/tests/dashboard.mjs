@@ -337,6 +337,15 @@ try{
  await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
  assert.equal(data.settings.ai_search_enabled,false);
  await page.locator("#save-ai-settings").click();
+ const aiPricing=data.native.find(p=>p.id==="exa"),oldPricing=aiPricing.pricing;
+ aiPricing.pricing="Changed pricing";
+ await page.evaluate(()=>refresh());
+ await page.getByRole("dialog").getByRole("button",{name:"Authorize and save",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector("#ai-settings-feedback").textContent.includes("confirm again"));
+ assert.equal(data.settings.ai_search_enabled,false);
+ aiPricing.pricing=oldPricing;
+ await page.evaluate(()=>refresh());
+ await page.locator("#save-ai-settings").click();
  await page.getByRole("dialog").getByRole("button",{name:"Authorize and save",exact:true}).click();
  await page.waitForFunction(()=>document.querySelector("#ai-settings-feedback").textContent.includes("settings saved"));
  assert.equal(data.settings.ai_search_enabled,true);
