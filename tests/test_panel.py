@@ -613,3 +613,14 @@ def test_panel_preferred_general_only(panel, preferred):
                           headers=HEADERS)
     assert response.status_code == 400
     assert store.options == before
+
+
+def test_panel_rejects_conflicting_credential_actions(panel):
+    client, store, _ = panel
+    sign_in(client)
+    before = (dict(store.credentials), dict(store.flags))
+    response = client.put("/api/providers/tinyfish",
+                          json={"enabled": True, "credential": "fixture-key", "remove": True},
+                          headers=HEADERS)
+    assert response.status_code == 400
+    assert (store.credentials, store.flags) == before
