@@ -591,6 +591,19 @@ $("logout").addEventListener("click",async()=>{
   catch(error){status(error.message,true);}
   finally{setPending(button,false);}
 });
+function searchPayload(query,chosen,mode,useAnswers){
+  const data={query,include_answers:useAnswers};
+  if(mode!=="default")data.mode=mode;
+  if($("max-results").value)data.max_results=Number($("max-results").value);
+  if($("search-safe-search").value)data.safe_search=$("search-safe-search").value;
+  if($("search-recency").value)data.time_filter=$("search-recency").value;
+  if(mode==="selected")data.providers=chosen.map(p=>p.id);
+  return data;
+}
+function searchConsentKey(data,chosen){
+  return JSON.stringify([data,chosen.map(p=>[p.id,p.env]),state?.settings?.ai_search_enabled,
+    state?.settings?.ai_search_providers,state?.defaults?.fields?.map(f=>[f.id,f.value])]);
+}
 $("search-form").addEventListener("submit",async event=>{
   event.preventDefault();if(searchPending)return;
   const query=$("query").value.trim(),chosen=chosenProviders(),mode=searchMode();
@@ -598,19 +611,23 @@ $("search-form").addEventListener("submit",async event=>{
   if(!chosen.length){feedback("search-error","Choose at least one available provider.",true);return;}
   const authorized=state?.settings?.ai_search_providers||[];
   const useAnswers=$("search-answers").checked;
-  if(chosen.some(p=>p.env&&!(useAnswers&&authorized.includes(p.id)))&&!await confirmAction("Use authenticated engines?","This search may consume provider credits or access your private instance. Continue with "+chosen.length+" engine(s)?","Run search",false))return;
+  const data=searchPayload(query,chosen,mode,useAnswers);
+  if(chosen.some(p=>p.env&&!(useAnswers&&authorized.includes(p.id)))){
+    const consent=searchConsentKey(data,chosen);
+    if(!await confirmAction("Use authenticated engines?","This search may consume provider credits or access your private instance. Continue with "+chosen.length+" engine(s)?","Run search",false))return;
+    const current=chosenProviders();
+    if(consent!==searchConsentKey(searchPayload($("query").value.trim(),current,
+        searchMode(),$("search-answers").checked),current)){
+      feedback("search-error","Search options or provider availability changed. Review and confirm again.",true);
+      return;
+    }
+  }
   if(searchPending)return;
   const epoch=authEpoch;
   searchPending=true;busyCount++;setPending($("run-search"),true,"Searching…");syncSearchMode();feedback("search-error");
   $("search-output").hidden=true;
   for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results, #search-safe-search, #search-recency, #reset-search-options"))n.disabled=true;
   try{
-    const data={query,include_answers:useAnswers};
-    if(mode!=="default")data.mode=mode;
-    if($("max-results").value)data.max_results=Number($("max-results").value);
-    if($("search-safe-search").value)data.safe_search=$("search-safe-search").value;
-    if($("search-recency").value)data.time_filter=$("search-recency").value;
-    if(mode==="selected")data.providers=chosen.map(p=>p.id);
     renderSearch(await api("search","POST",data));
   }catch(error){
     if(epoch!==authEpoch)return;

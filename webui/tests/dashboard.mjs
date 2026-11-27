@@ -356,6 +356,16 @@ try{
  await page.waitForFunction(()=>!document.querySelector("#run-search").disabled && document.querySelector("#search-ai-results").hidden);
  assert.equal(lastSearch.include_answers,false);
  assert.equal(await page.locator("#search-ai-results").isVisible(),false);
+ const beforeChangedSearch=lastSearch;
+ await page.locator("#run-search").click();
+ await page.getByRole("dialog").waitFor({state:"visible"});
+ data.providers.find(p=>p.id==="exa").available=false;
+ await page.evaluate(()=>refresh());
+ await page.getByRole("dialog").getByRole("button",{name:"Run search",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector("#search-error").textContent.includes("confirm again"));
+ assert.equal(lastSearch,beforeChangedSearch);
+ data.providers.find(p=>p.id==="exa").available=true;
+ await page.evaluate(()=>refresh());
 
  await page.locator("#native-panel > summary").click();
  await page.locator("#native-query").fill("test answer");
