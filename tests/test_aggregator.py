@@ -319,3 +319,13 @@ def test_search_echoes_normalized_query_on_cache_hit(registry, tmp_path):
     second = asyncio.run(search.aggregated_search("needle", cache=cache))
     assert first.query == second.query == "needle"
     assert second.cached and len(calls) == 1
+
+
+def test_youcom_invalid_urls_do_not_consume_result_limit():
+    from mcp_prism_search.providers.youcom import parse_web_results
+
+    rows = parse_web_results({"results": {"web": [
+        {"title": "Bad", "url": "https://example.org:wrong/"},
+        {"title": "Good", "url": "https://example.org/good"},
+    ]}}, 1)
+    assert [row.title for row in rows] == ["Good"]

@@ -38,6 +38,8 @@ def parse_web_results(data: object, count: int) -> list[SearchResult]:
     web = data["results"].get("web", [])
     if not isinstance(web, list):
         raise ValueError("Invalid You.com web results")
+    from mcp_prism_search.search import valid_result_url
+
     results: list[SearchResult] = []
     for hit in web:
         if not isinstance(hit, dict):
@@ -47,7 +49,7 @@ def parse_web_results(data: object, count: int) -> list[SearchResult]:
         if not isinstance(url, str) or not isinstance(title, str):
             continue
         title = normalize_whitespace(title)
-        if not title or not url.startswith(("http://", "https://")):
+        if not title or not valid_result_url(url):
             continue
         description = hit.get("description")
         snippets = hit.get("snippets")
