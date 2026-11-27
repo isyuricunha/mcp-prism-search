@@ -226,9 +226,13 @@ try{
  await page.locator("#theme").click();
  await page.locator('input[name=native-mode][value=research]').check();
  assert.equal(await page.locator("#native-run").isDisabled(),true);
+ data.native.find(p=>p.id==="exa").efforts={deep:"Deep"};
+ await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
  await page.locator("#native-provider").selectOption("exa");
- assert.equal(await page.locator("#native-run").isDisabled(),false);
+ assert.equal(await page.locator("#native-effort").inputValue(),"");
+ assert.equal(await page.locator("#native-run").isDisabled(),true);
  await page.locator("#native-effort").selectOption("deep");
+ assert.equal(await page.locator("#native-run").isDisabled(),false);
  await page.locator("#native-run").click();
  const researchResponse=responseFor("/api/native",d=>d.mode==="research");
  await page.getByRole("dialog").getByRole("button",{name:"Continue",exact:true}).click();

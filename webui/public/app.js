@@ -735,23 +735,26 @@ function renderNativeOptions(){
   $("native-links").replaceChildren();
   if(selectedCap)$("native-links").append(link("API documentation",mode==="research"?(selectedCap.research_docs||selectedCap.docs):selectedCap.docs),link("Pricing",selectedCap.pricing_url));
   const effortSelect=$("native-effort"),previousEffort=effortSelect.value;
-  effortSelect.replaceChildren();
+  effortSelect.replaceChildren(new Option("Choose research effort",""));
   for(const [value,label] of Object.entries(selectedCap?.efforts||{}))effortSelect.append(new Option(label,value));
-  if([...effortSelect.options].some(o=>o.value===previousEffort))effortSelect.value=previousEffort;
+  if(previousEffort&&[...effortSelect.options].some(o=>o.value===previousEffort))effortSelect.value=previousEffort;
   else if([...effortSelect.options].some(o=>o.value===defaultValue("research_effort")))effortSelect.value=defaultValue("research_effort");
+  else effortSelect.value="";
   effortSelect.disabled=nativePending||!selectedCap;
   $("native-effort-field").hidden=mode!=="research";
   $("native-run").textContent=nativePending?"Working…":mode==="answer"?"Generate answer":"Run research";
-  $("native-run").disabled=nativePending||!selectedCap;
+  $("native-run").disabled=nativePending||!selectedCap||(mode==="research"&&!effortSelect.value);
   select.disabled=nativePending||!caps.some(p=>p.available);
 }
 for(const input of document.querySelectorAll("input[name=native-mode]"))input.addEventListener("change",()=>{$("native-provider").value="";$("native-effort").value="";renderNativeOptions();});
-$("native-provider").addEventListener("change",renderNativeOptions);
+$("native-provider").addEventListener("change",()=>{$("native-effort").value="";renderNativeOptions();});
+$("native-effort").addEventListener("change",renderNativeOptions);
 $("native-form").addEventListener("submit",async event=>{
   event.preventDefault();if(nativePending)return;
   const query=$("native-query").value.trim(),provider=$("native-provider").value,mode=nativeMode(),effort=$("native-effort").value||"lite";
   const capability=state?.native?.find(p=>p.id===provider&&p.available&&p[mode]);
   if(!query||!capability){feedback("native-feedback","Enter a question and select an available provider.",true);return;}
+  if(mode==="research"&&!$("native-effort").value){feedback("native-feedback","Choose a supported research effort.",true);return;}
   if(!await confirmAction("Use provider AI?",providerName(provider)+" may spend API credits. "+capability.pricing,"Continue",false))return;
   if(nativePending)return;
   nativePending=true;busyCount++;
