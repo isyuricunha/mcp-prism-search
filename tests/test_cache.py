@@ -235,7 +235,8 @@ def test_search_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None
     response = SearchResponse(
         query="example",
         provider="duckduckgo_html",
-        results=[],
+        results=[search_module.SearchResult(title="Example", url="https://example.org",
+                                           snippet="Evidence")],
         cached=False,
         error=None,
     )
@@ -358,3 +359,19 @@ def test_expired_only_preserves_fresh_oversized_entry(tmp_path, monkeypatch):
     _write_cache_file(path, created_at=time.time(), value={"large": "x" * 500})
     assert prune_cache(config=_prune_config(tmp_path), expired_only=True).deleted_files == 0
     assert path.exists()
+
+
+def test_legacy_empty_cached_result_cannot_hide_retrieval(tmp_path, monkeypatch):
+    monkeypatch.setenv("SEARCH_PROVIDER", "duckduckgo_html")
+    store = JsonFileCache(tmp_path, "search", 60)
+    payload = search_module._cache_payload(SearchRequest(query="test"),
+                                           provider="duckduckgo_html", ddgs_backend=None)
+    store.set(payload, SearchResponse(query="test", provider="duckduckgo_html",
+                                     results=[], cached=False, error=None).model_dump())
+
+    async def retrieve(*args):
+        return [search_module.SearchResult(title="Test", url="https://example.org", snippet="")]
+
+    monkeypatch.setattr(search_module, "_search_with_duckduckgo_html", retrieve)
+    response = asyncio.run(ddg_search("test", cache=store))
+    assert response.results and not response.cached

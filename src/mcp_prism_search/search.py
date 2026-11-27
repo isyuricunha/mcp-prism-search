@@ -395,7 +395,8 @@ async def ddg_search(
             cached = SearchResponse.model_validate(cached_value)
             valid_providers = {"duckduckgo_html", "ddgs"} if provider == "auto" else {provider}
             if (cached.query.strip() == request.query and cached.provider in valid_providers
-                    and not cached.error and not cached.answers and not cached.answer_attempts
+                    and cached.results and not cached.error
+                    and not cached.answers and not cached.answer_attempts
                     and (cached.provider != "duckduckgo_html" or runtime.enabled("ddg_html"))
                     and (cached.provider != "ddgs" or _legacy_ddgs_allowed(
                         ddgs_backend or DEFAULT_DDGS_BACKEND
