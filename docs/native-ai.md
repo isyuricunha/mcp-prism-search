@@ -111,3 +111,7 @@ requests.
 A non-stop terminal SSE reason is treated as an incomplete answer, not a
 successful synthesis. Regular search rechecks authorization before initiating
 provider synthesis; revocation does not cancel work already submitted upstream.
+
+The dashboard requires an explicit provider when its default is explicit.
+If the configured effort is unsupported by the chosen provider, select a
+supported effort before submitting; no higher tier is chosen automatically.

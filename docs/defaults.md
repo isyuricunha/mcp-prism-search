@@ -114,3 +114,8 @@ The MCP discovery schemas advertise the core request size limits. Legacy
 deep search reports progress as individual pages finish and preserves
 successful pages when another page fails. Cache maintenance skips entries
 that have been replaced since its scan.
+
+The Playground reads the query character limit from the server overview
+and uses the same 4,000-character bound as MCP discovery. Explicit native
+provider defaults require a selection in the panel; incompatible research
+effort defaults never silently escalate to a more expensive option.

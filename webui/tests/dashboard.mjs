@@ -154,6 +154,13 @@ try{
  assert.equal(data.defaults.fields.find(f=>f.id==="search_mode").value,"keyless");
  await page.locator('#default-fields details').filter({has:page.locator("summary",{hasText:"Fetching"})}).locator("summary").click();
  assert.equal(await page.locator("#default-fetch_timeout").isDisabled(),true);
+ await page.locator("#default-fetch_max_chars").fill("999");
+ await page.locator('#default-fields details').filter({has:page.locator("summary",{hasText:"Fetching"})}).locator("summary").click();
+ await page.locator("#save-defaults").click();
+ assert.equal(await page.locator("#default-fetch_max_chars").isVisible(),true);
+ assert.ok((await page.locator("#defaults-feedback").textContent()).includes("Check"));
+ await page.locator("#default-fetch_max_chars").fill("12000");
+ await page.locator("#reset-defaults").click();
  await audit("defaults-advanced-dark");
  await page.locator("#theme").click();await audit("defaults-advanced-white");await page.locator("#theme").click();
 

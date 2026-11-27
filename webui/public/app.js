@@ -645,6 +645,16 @@ function readDefaultInput(field){
   if(field.type==="integer")return Number(input.value);
   return input.value;
 }
+$("defaults-form").addEventListener("invalid",event=>{
+  // Open a collapsed group before native browser validation tries to focus it.
+  const field=event.target.closest("[data-default-id]");
+  if(field){
+    const group=field.closest("details");
+    if(group)group.open=true;
+    const label=state?.defaults?.fields?.find(f=>f.id===field.dataset.defaultId)?.label;
+    feedback("defaults-feedback","Check "+(label||"the highlighted setting")+".",true);
+  }
+},true);
 $("defaults-form").addEventListener("input",()=>{defaultsDirty=true;syncDefaultSelection();feedback("defaults-feedback");});
 $("reset-defaults").addEventListener("click",()=>{renderDefaultSettings(true);feedback("defaults-feedback","Unsaved changes reset.");});
 $("builtin-defaults").addEventListener("click",()=>{renderDefaultSettings(true,true);feedback("defaults-feedback","Built-in values prepared. Save to apply them.");});
