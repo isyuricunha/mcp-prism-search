@@ -518,3 +518,13 @@ def test_log_filters_initialize_registry_without_overview(panel, monkeypatch):
     sign_in(client)
     assert client.get("/api/logs?provider=keenable").status_code == 200
     assert client.get("/api/logs?provider=unknown").status_code == 400
+
+
+@pytest.mark.parametrize("value", ["key with spaces", " leading", "trailing ", "chavé"])
+def test_invalid_environment_api_keys_are_not_available(panel, monkeypatch, value):
+    client, _, _ = panel
+    monkeypatch.setenv("EXA_API_KEY", value)
+    sign_in(client)
+    row = next(p for p in client.get("/api/overview").json()["providers"] if p["id"] == "exa")
+    assert not row["configured"] and not row["available"] and row["managed"]
+    assert "exa" not in providers.available_providers()

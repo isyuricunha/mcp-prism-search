@@ -134,7 +134,12 @@ def general_provider_ids() -> list[str]:
 
 def configured(spec: ProviderSpec) -> bool:
     """Whether the provider has all required local configuration."""
-    return not spec.needs or bool((runtime.setting(spec.needs) or "").strip())
+    if not spec.needs:
+        return True
+    value = runtime.setting(spec.needs) or ""
+    if spec.needs == "SEARXNG_URL":
+        return bool(value.strip())
+    return bool(value and all(33 <= ord(char) <= 126 for char in value))
 
 
 def enabled(spec: ProviderSpec) -> bool:
