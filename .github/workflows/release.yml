@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: ""
+      image_digest:
+        description: "Optional existing multiarch digest to recover a published build (requires tag)"
+        required: false
+        type: string
+        default: ""
 
 # All production releases share one lane, including manual recovery.
 concurrency:
@@ -60,6 +65,7 @@ jobs:
         id: plan
         env:
           REQUESTED_TAG: ${{ inputs.tag }}
+          RECOVERY_DIGEST: ${{ inputs.image_digest }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
@@ -72,6 +78,12 @@ jobs:
           if [[ "$GITHUB_REF" != refs/heads/main ]]; then
             echo "::error::Run releases from main only"
             exit 1
+          fi
+          if [[ -n "$RECOVERY_DIGEST" ]]; then
+            [[ -n "$REQUESTED_TAG" && "$RECOVERY_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              echo "::error::Recovery digest requires an explicit release tag and valid SHA256"
+              exit 1
+            }
           fi
           python -m venv "$RUNNER_TEMP/semantic-release"
           "$RUNNER_TEMP/semantic-release/bin/pip" install "python-semantic-release==$SEMANTIC_RELEASE_VERSION"
@@ -126,7 +138,14 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
-          npx playwright-core install --with-deps --only-shell chromium
+          # Retry transient repository/CDN failures, but never skip browser tests.
+          for attempt in 1 2 3; do
+            if npx playwright-core install --with-deps --only-shell chromium; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep "$((attempt * 5))"
+          done
           npm run test:browser
 
       - name: Docker build and smoke test (non-release)
@@ -207,6 +226,7 @@ jobs:
           python scripts/release_guard.py "$RELEASE_TAG" "$SOURCE_SHA"
 
       - name: Build and push versioned images
+        if: inputs.image_digest == ''
         id: image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
@@ -227,27 +247,48 @@ jobs:
           cache-from: type=gha,scope=prism-multiarch
           cache-to: type=gha,scope=prism-multiarch,mode=max
 
+      - name: Resolve build or recovery digest
+        id: digest
+        env:
+          BUILT_DIGEST: ${{ steps.image.outputs.digest }}
+          RECOVERY_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          digest="${RECOVERY_DIGEST:-$BUILT_DIGEST}"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "value=$digest" >> "$GITHUB_OUTPUT"
+
       - name: Verify runtime and manifests
         env:
           DOCKERHUB_IMAGE: ${{ steps.images.outputs.dockerhub }}
           GHCR_IMAGE: ${{ steps.images.outputs.ghcr }}
-          DIGEST: ${{ steps.image.outputs.digest }}
+          DIGEST: ${{ steps.digest.outputs.value }}
         run: |
           set -euo pipefail
           for image in "$DOCKERHUB_IMAGE" "$GHCR_IMAGE"; do
             docker buildx imagetools inspect "$image@$DIGEST" --raw | python scripts/verify_manifest.py
             test "$(docker buildx imagetools inspect "$image:$RELEASE_TAG" --format '{{.Manifest.Digest}}')" = "$DIGEST"
           done
-          for platform in linux/amd64 linux/arm64; do
-            docker run --rm --platform "$platform" --entrypoint python "$GHCR_IMAGE@$DIGEST" \
-              -c 'import sys; from mcp_prism_search import __version__; from importlib.metadata import version; assert __version__ == version("mcp-prism-search") == sys.argv[1]; print(__version__)' "$RELEASE_VERSION"
+          index=$(docker buildx imagetools inspect "$GHCR_IMAGE@$DIGEST" --raw)
+          for arch in amd64 arm64; do
+            # The classic Docker image store cannot associate one index digest
+            # with two platform images. Pull each immutable child manifest.
+            child=$(jq -er --arg arch "$arch" '
+              [.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest]
+              | if length == 1 then .[0] else error("Expected one platform manifest") end
+            ' <<< "$index")
+            [[ "$child" =~ ^sha256:[0-9a-f]{64}$ ]]
+            image="$GHCR_IMAGE@$child"
+            docker run --rm --platform "linux/$arch" --entrypoint python "$image" \
+              -c 'import sys, platform; from mcp_prism_search import __version__; from importlib.metadata import version; assert __version__ == version("mcp-prism-search") == sys.argv[1]; assert platform.machine() == sys.argv[2]; print(__version__, platform.machine())' \
+              "$RELEASE_VERSION" "$( [[ "$arch" == amd64 ]] && echo x86_64 || echo aarch64 )"
+            test "$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE_SHA"
           done
 
       - name: Promote verified digest, not mutable build tags
         env:
           DOCKERHUB_IMAGE: ${{ steps.images.outputs.dockerhub }}
           GHCR_IMAGE: ${{ steps.images.outputs.ghcr }}
-          DIGEST: ${{ steps.image.outputs.digest }}
+          DIGEST: ${{ steps.digest.outputs.value }}
         run: |
           python scripts/release_guard.py "$RELEASE_TAG" "$SOURCE_SHA" --promote
           for image in "$DOCKERHUB_IMAGE" "$GHCR_IMAGE"; do

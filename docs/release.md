@@ -44,6 +44,12 @@ is still available (seven days); otherwise dispatch the tag again. Each full
 rerun uploads a new attempt-specific artifact, while a publish-only rerun
 uses the original validation output.
 
+If both registries already hold the same versioned multiarch digest, the
+manual workflow also accepts image_digest with the latest tag. It skips
+rebuilding and revalidates both registry references, per-platform runtime
+versions, architectures and source revisions before promoting that exact
+digest. Never supply an unverified or mismatched digest.
+
 A registry push and a GitHub release are external, separate operations:
 cross-registry atomicity is not guaranteed. A failure after pushing one
 registry or promoting one latest tag can leave a temporary mismatch.
@@ -60,3 +66,6 @@ bare local remote; they do not create tags on GitHub or publish images.
 python -m pytest tests/test_release_pipeline.py
 python -m ruff check .
 ```
+
+Browser dependency installation retries transient APT or CDN failures up to
+three times. A permanent installation failure still blocks publication.
