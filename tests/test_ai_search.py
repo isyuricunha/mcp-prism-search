@@ -700,3 +700,18 @@ def test_tinyfish_unsafe_run_id(tinyfish_config, monkeypatch):
             "question", "tinyfish", "research", allow_cost=True, effort="deep",
         ))
     assert len(calls) == 1
+
+
+def test_compact_answer_preserves_indices():
+    from mcp_prism_search.native_models import NativeResponse, Source
+
+    response = NativeResponse(
+        provider="exa", mode="answer", answer="a" * 6500, source_kind="citations",
+        sources=[Source(index=i + 5, title="source", url="https://example.org",
+                        excerpt="x" * 600) for i in range(15)],
+    )
+    compact = ai_search.compact_answer(response)
+    assert len(compact.answer) == 6000 and compact.truncated
+    assert [source.index for source in compact.sources] == list(range(5, 17))
+    assert all(len(source.excerpt) == 500 for source in compact.sources)
+    assert len(response.sources) == 15 and len(response.answer) == 6500
