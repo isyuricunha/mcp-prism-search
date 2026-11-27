@@ -137,6 +137,8 @@ function showLogin() {
   $("native-provider").value="";$("native-effort").value="";
   $("native-query").value = ""; $("native-answer").textContent = ""; $("native-sources").replaceChildren(); $("native-result").hidden=true; feedback("native-feedback");
   $("query").value = ""; updateQueryCount(); $("search-output").hidden = true;
+  for(const id of ["status","search-error","cache-feedback","settings-feedback",
+    "defaults-feedback","ai-settings-feedback","connection-feedback"])feedback(id);
   $("endpoint").value = ["localhost","127.0.0.1"].includes(location.hostname) ? "http://127.0.0.1:49317/mcp" : ""; connection();
   $("password").value = ""; $("password").type = "password";
   $("password-visibility").textContent = "Show"; $("password-visibility").setAttribute("aria-pressed","false");
@@ -502,15 +504,16 @@ async function cacheAction(kind,namespace="all"){
   const clear=kind==="clear";
   if(!await confirmAction(clear?"Clear "+(namespace==="all"?"all cache":namespace+" cache"):"Prune expired entries",clear?"Remove cached results in "+namespace+". This cannot be undone. New searches may make more upstream requests.":"Remove expired entries and stale temporary files. Active cached results are retained.",clear?"Clear cache":"Prune cache"))return;
   if(cachePending)return;
+  const epoch=authEpoch;
   cachePending=true;busyCount++;feedback("cache-feedback","Working…");
   for(const b of $("cache").querySelectorAll("button"))b.disabled=true;
   try{
     const result=await api("cache/"+kind,"POST",clear?{namespace,confirm:true}:undefined);
     if(result.error)throw new Error(result.error);
     const message="Removed "+number(result.deleted_files)+" entries ("+bytes(result.deleted_bytes)+").";
-    try{await refresh(true);feedback("cache-feedback",message);}
-    catch{feedback("cache-feedback",message+" Refresh failed; refresh the dashboard to see current usage.",true);}
-  }catch(error){feedback("cache-feedback",error.message,true);}
+    try{await refresh(true);if(epoch===authEpoch)feedback("cache-feedback",message);}
+    catch{if(epoch===authEpoch)feedback("cache-feedback",message+" Refresh failed; refresh the dashboard to see current usage.",true);}
+  }catch(error){if(epoch===authEpoch)feedback("cache-feedback",error.message,true);}
   finally{cachePending=false;busyCount--;for(const b of $("cache").querySelectorAll("button"))b.disabled=false;}
 }
 $("prune").addEventListener("click",()=>cacheAction("prune"));

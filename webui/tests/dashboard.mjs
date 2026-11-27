@@ -510,6 +510,17 @@ try{
  await page.locator("#password").fill("test-only-password");
  await page.getByRole("button",{name:"Sign in",exact:true}).click();
  await page.locator("#dashboard").waitFor({state:"visible"});
+ assert.equal(await page.locator("#cache-feedback").textContent(),"");
+ await page.getByRole("button",{name:"Clear all cache",exact:true}).click();
+ await page.getByRole("dialog").waitFor({state:"visible"});
+ logged=false;
+ await page.getByRole("dialog").getByRole("button",{name:"Clear cache",exact:true}).click();
+ await page.locator("#login").waitFor({state:"visible"});
+ await page.locator("#password").fill("test-only-password");
+ await page.getByRole("button",{name:"Sign in",exact:true}).click();
+ await page.locator("#dashboard").waitFor({state:"visible"});
+ assert.equal(await page.locator("#cache-feedback").textContent(),"");
+ assert.equal(cleared,2);
  await page.locator("#logout").click();await page.locator("#login").waitFor({state:"visible"});
  await page.locator("#login-theme").click();await audit("login-white");
  assert.deepEqual(errors,[]);
