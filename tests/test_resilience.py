@@ -386,3 +386,12 @@ def test_redirect_resolution_uses_one_pinned_lookup_per_hop(monkeypatch):
     monkeypatch.setattr(fetch, "resolve_safe_address", resolve)
     asyncio.run(verify())
     assert calls == ["https://example.org/first", "https://example.org/second"]
+
+
+def test_partial_html_notice_survives_article_extraction():
+    body = b"<article>" + b"hello " * 300 + b"</article>"
+    raw = fetch.RawFetchedResponse(200, httpx.Headers({"content-type": "text/html"}),
+                                   body, "https://example.org", "utf-8", truncated=True)
+    result = fetch._response_to_fetch_response("https://example.org", raw, 1000)
+    assert result.truncated and result.content.startswith("[PARTIAL CONTENT:")
+    assert "hello" in result.content and len(result.content) <= 1000

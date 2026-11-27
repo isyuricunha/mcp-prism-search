@@ -60,7 +60,7 @@ def get_max_concurrency(max_concurrency: int | None = None) -> int:
 
 
 def _cache_payload(request: FetchRequest) -> dict[str, Any]:
-    return request.to_cache_payload(_extraction_version=2)
+    return request.to_cache_payload(_extraction_version=3)
 
 
 def _cacheable_fetch_response(response: FetchResponse) -> dict[str, Any]:
@@ -208,12 +208,11 @@ def _response_to_fetch_response(
         text = response.content.decode(charset, errors="replace")
     except (LookupError, UnicodeError):
         text = response.content.decode("utf-8", errors="replace")
-    if response.truncated:
-        text = (
-            f"[PARTIAL CONTENT: download stopped at the {len(response.content)} byte "
-            "safety limit (FETCH_MAX_BYTES). The page continues beyond this point; "
-            "raise FETCH_MAX_BYTES or fetch a narrower page if you need the rest.] "
-        ) + text
+    notice = (
+        f"[PARTIAL CONTENT: download stopped at the {len(response.content)} byte "
+        "safety limit (FETCH_MAX_BYTES). The page continues beyond this point.] "
+        if response.truncated else ""
+    )
 
     lowered_content_type = content_type.lower()
     if "html" in lowered_content_type:
@@ -222,7 +221,7 @@ def _response_to_fetch_response(
             url=request_url,
             final_url=final_url,
             title=extracted.title,
-            content=extracted.content,
+            content=truncate_text(notice + extracted.content, max_chars),
             content_type=content_type,
             cached=False,
             success=True,
@@ -236,7 +235,7 @@ def _response_to_fetch_response(
             url=request_url,
             final_url=final_url,
             title="",
-            content=truncate_text(text, max_chars),
+            content=truncate_text(notice + text, max_chars),
             content_type=content_type,
             cached=False,
             success=True,
