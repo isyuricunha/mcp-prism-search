@@ -529,3 +529,9 @@ def test_sse_reader_ignores_initial_utf8_bom():
         return [item async for item in native._sse_data(response)]
 
     assert asyncio.run(collect()) == ["ok"]
+
+
+@pytest.mark.parametrize("url", ["https://example.org/\x00a", "https://example.org/\\a"])
+def test_native_source_preserves_index_but_rejects_ambiguous_url(url):
+    source = native._source(7, {"url": url, "title": "Evidence"})
+    assert source.index == 7 and source.url is None and source.title == "Evidence"
