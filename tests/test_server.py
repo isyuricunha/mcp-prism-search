@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from mcp_prism_search.server import (
     BearerTokenAuthMiddleware,
     _build_transport_security_settings,
@@ -271,3 +273,10 @@ def test_http_runtime_uses_normalized_log_level(monkeypatch):
     monkeypatch.setattr(server, "_serve_http", serve)
     asyncio.run(server._run_http_async())
     assert captured == ["warning"]
+
+
+@pytest.mark.parametrize("port", ["bad", "0", "65536", "-1"])
+def test_invalid_http_port(monkeypatch, port):
+    monkeypatch.setenv("MCP_PORT", port)
+    with pytest.raises(RuntimeError, match="Invalid MCP_PORT"):
+        _configure_http_settings()
