@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 import httpx
 
+from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
 
@@ -13,7 +12,9 @@ SAFE_SEARCH = {"off": "0", "moderate": "1", "strict": "2"}
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
-    base_url = os.getenv("SEARXNG_URL", "").rstrip("/")
+    base_url = (runtime.setting("SEARXNG_URL") or "").strip().rstrip("/")
+    if not base_url:
+        raise ValueError("SearXNG URL is not configured")
     params: dict[str, str | int] = {
         "q": request.query,
         "format": "json",

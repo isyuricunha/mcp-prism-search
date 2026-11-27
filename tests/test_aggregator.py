@@ -377,3 +377,20 @@ def test_provider_batch_preserves_more_relevant_duplicate(registry):
     rows, _ = asyncio.run(search._search_one(
         "keenable", SearchRequest(query="needle"), 5, 5))
     assert [row.title for row in rows] == ["needle"]
+
+
+def test_searxng_uses_same_configuration_source_as_registry(monkeypatch):
+    from mcp_prism_search import runtime
+
+    monkeypatch.delenv("SEARXNG_URL", raising=False)
+    monkeypatch.setattr(runtime, "setting", lambda name: (
+        "https://search.example/" if name == "SEARXNG_URL" else None))
+    original = httpx.AsyncClient
+
+    def response(req):
+        assert str(req.url).startswith("https://search.example/search?")
+        return httpx.Response(200, json={"results": []})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(response), **kw))
+    assert asyncio.run(searxng.search(SearchRequest(query="test"), 5, 5)) == []
