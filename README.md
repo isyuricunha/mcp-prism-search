@@ -509,3 +509,5 @@ TinyFish TinyAnswer and TinyResearch are available through the explicit native t
 Structured stderr events and the optional dashboard Logs page provide sanitized operational history, correlation, filters and JSON export. See [observability and optional OpenTelemetry](docs/observability.md).
 
 Cache entries are bounded to 8 MiB each; oversized replacements are not published.
+
+Offline ranking quality regressions: run python -m pytest tests/test_retrieval_quality.py. These deterministic fixtures complement, but do not replace, live provider relevance evaluation.
