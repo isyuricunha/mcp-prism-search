@@ -21,6 +21,7 @@ const sections = [
     <script is:inline src="/app.js" defer></script>
   </head>
   <body>
+    <div id="background-layer" aria-hidden="true"></div>
     <div id="login" class="login-shell" hidden>
       <form id="login-form" class="card login-card">
         <div class="brand"><span class="mark" aria-hidden="true">◇</span> Prism Search</div>
@@ -71,6 +72,11 @@ const sections = [
           <div class="card"><h2>Cache status</h2><p class="muted">Inspect and remove expired or corrupt cache entries. Active entries are preserved.</p><pre id="cache-stats"></pre><div class="provider-actions"><button id="prune" type="button">Prune expired entries</button><button id="clear-cache" class="danger" type="button">Clear cache</button></div></div>
         </section>
         <section id="settings" class="page" hidden>
+          <div class="card appearance-card">
+            <h2>Appearance</h2>
+            <label class="switch-label appearance-row"><input id="starfield-toggle" class="switch" type="checkbox" role="switch" aria-describedby="starfield-hint" />Starfield Depth</label>
+            <p id="starfield-hint" class="muted">Optional animated background.</p>
+          </div>
           <form id="settings-form" class="card">
             <h2>Search settings</h2><p class="muted">Environment variables override dashboard settings. Changes apply to subsequent searches. Health still takes precedence over your preferred engine.</p>
             <label for="timeout">Provider timeout (seconds)</label><input id="timeout" type="number" min="2" max="120" required />
@@ -94,5 +100,6 @@ const sections = [
       </form>
     </dialog>
     <noscript><p class="card">Enable JavaScript to use the local administration interface.</p></noscript>
+    <script>import "../effects/appearance";</script>
   </body>
 </html>

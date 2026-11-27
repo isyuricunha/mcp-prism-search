@@ -108,3 +108,9 @@ dialog::backdrop { background: var(--overlay); }
 }
 @media(max-width: 400px) { .provider-actions .key-field { flex-basis: 100%; } .dialog-actions { flex-direction: column-reverse; } }
 @media(prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto!important; transition: none!important; animation: none!important; } }
+
+/* The canonical optional effect owns only this decorative layer. */
+#background-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#login, #dashboard { position: relative; z-index: 1; }
+.appearance-row { justify-content: space-between; flex-direction: row-reverse; }
+.appearance-row:has(input:disabled) { opacity: .65; }
