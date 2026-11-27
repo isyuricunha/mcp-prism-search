@@ -663,7 +663,23 @@ $("settings-form").addEventListener("submit",async event=>{
 });
 function renderDefaultSettings(force=false,useBuiltins=false){
   if(!state)return;
-  if(defaultsDirty&&!force)return;
+  if(defaultsDirty&&!force){
+    for(const field of state.defaults?.fields||[]){
+      const input=$("default-"+field.id);
+      if(!input)continue;
+      if(field.locked){
+        if(field.type==="array"&&field.choices){
+          for(const node of input.querySelectorAll("input"))node.checked=field.value.includes(node.value);
+        }else input.value=field.type==="array"?field.value.join(", "):field.value;
+      }
+      input.disabled=field.locked||defaultsPending;
+      const lock=input.closest(".default-field").querySelector("[data-default-lock]");
+      if(lock)lock.textContent=field.locked?"Managed by "+field.env:"";
+    }
+    syncDefaultSelection();
+    $("save-defaults").disabled=defaultsPending||!(state.defaults?.fields||[]).some(f=>!f.locked);
+    return;
+  }
   defaultsDirty=useBuiltins;
   const fields=state.defaults?.fields||[];
   const root=$("default-fields");
@@ -682,6 +698,7 @@ function renderDefaultSettings(force=false,useBuiltins=false){
     const id="default-"+field.id;
     const hint=element("p",field.description,"muted small");hint.id=id+"-help";
     const lock=element("span",field.locked?"Managed by "+field.env:"","muted small");
+    lock.dataset.defaultLock="";
     let input;
     if(field.type==="array"&&field.choices){
       input=element("fieldset","","default-provider-picker");input.id=id;

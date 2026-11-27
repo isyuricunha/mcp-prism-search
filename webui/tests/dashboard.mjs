@@ -253,7 +253,17 @@ try{
  await page.locator("#default-search_max_results").fill("7");
  await page.locator("#default-search_mode").selectOption("keyless");
  await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
- assert.equal(await page.locator("#default-search_max_results").inputValue(),"7");
+  assert.equal(await page.locator("#default-search_max_results").inputValue(),"7");
+  const maxField=data.defaults.fields.find(f=>f.id==="search_max_results");
+  maxField.locked=true;maxField.value=12;
+  await page.evaluate(()=>refresh());
+  assert.equal(await page.locator("#default-search_max_results").inputValue(),"12");
+  assert.equal(await page.locator("#default-search_max_results").isDisabled(),true);
+  assert.equal(await page.locator("#default-search_mode").inputValue(),"keyless");
+  maxField.locked=false;maxField.value=10;
+  await page.evaluate(()=>refresh());
+  assert.equal(await page.locator("#default-search_max_results").isDisabled(),false);
+  await page.locator("#default-search_max_results").fill("7");
  await page.locator("#save-defaults").click();
  await page.waitForFunction(()=>document.querySelector("#defaults-feedback").textContent.includes("Defaults saved"));
  assert.equal(data.defaults.fields.find(f=>f.id==="search_max_results").value,7);
