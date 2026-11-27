@@ -359,8 +359,13 @@ async def ddg_search(
     if cached_value is not None:
         try:
             cached = SearchResponse.model_validate(cached_value)
-            if cached.provider != "duckduckgo_html" or runtime.enabled("ddg_html"):
+            valid_providers = {"duckduckgo_html", "ddgs"} if provider == "auto" else {provider}
+            if (cached.query.strip() == request.query and cached.provider in valid_providers
+                    and not cached.error and not cached.answers and not cached.answer_attempts
+                    and (cached.provider != "duckduckgo_html" or runtime.enabled("ddg_html"))
+                    and _final_results(cached.results, request) == cached.results):
                 return cached.model_copy(update={"cached": True})
+            cache.delete(payload)
         except Exception:  # noqa: BLE001 - poisoned/stale cache must not break the tool.
             cache.delete(payload)
 

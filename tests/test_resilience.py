@@ -306,3 +306,23 @@ def test_tinyfish_stops_when_page_has_only_duplicate_urls(monkeypatch):
         transport=httpx.MockTransport(handler), **kw))
     results = asyncio.run(tinyfish.search(SearchRequest(query="query"), 10, 5))
     assert len(results) == 1 and calls == [0, 1]
+
+
+def test_legacy_search_cache_rejects_wrong_query(tmp_path, monkeypatch):
+    from mcp_prism_search import search
+    from mcp_prism_search.models import SearchRequest, SearchResponse, SearchResult
+
+    monkeypatch.setenv("SEARCH_PROVIDER", "duckduckgo_html")
+    store = cache.JsonFileCache(tmp_path, "search", 60)
+    row = SearchResult(title="Old", url="https://example.org", snippet="")
+    payload = search._cache_payload(SearchRequest(query="query"),
+                                    provider="duckduckgo_html", ddgs_backend=None)
+    store.set(payload, SearchResponse(query="wrong", provider="duckduckgo_html",
+                                     results=[row], cached=False, error=None).model_dump())
+
+    async def retrieve(*args):
+        return [row.model_copy(update={"title": "New"})]
+
+    monkeypatch.setattr(search, "_search_with_duckduckgo_html", retrieve)
+    result = asyncio.run(search.ddg_search("query", cache=store))
+    assert not result.cached and result.results[0].title == "New"
