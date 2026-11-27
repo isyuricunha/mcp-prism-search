@@ -229,3 +229,31 @@ def test_non_public_ip_addresses_are_not_fetchable(address):
 def test_redirect_url_length_is_bounded():
     with pytest.raises(security.UnsafeUrlError, match="safety limit"):
         security.validate_url_shape("https://example.org/" + "x" * 8192)
+
+
+def test_deep_search_keeps_successful_pages_and_completes_progress(monkeypatch):
+    from mcp_prism_search.models import FetchResponse, SearchResponse, SearchResult
+
+    rows = [SearchResult(title=str(i), url=f"https://example.org/{i}", snippet="")
+            for i in range(2)]
+    progress = []
+
+    async def retrieve(**kwargs):
+        return SearchResponse(query="query", provider="ddgs", results=rows,
+                              cached=False, error=None)
+
+    async def page(url, **kwargs):
+        if url.endswith("/0"):
+            raise RuntimeError("private detail")
+        return FetchResponse(url=url, final_url=url, title="Good", content="Evidence",
+                             content_type="text/plain", cached=False, success=True, error=None)
+
+    async def report(done, total):
+        progress.append((done, total))
+
+    monkeypatch.setattr(fetch, "ddg_search", retrieve)
+    monkeypatch.setattr(fetch, "web_fetch", page)
+    result = asyncio.run(fetch.ddg_deep_search("query", max_pages=5, progress_callback=report))
+    assert len(result.pages) == len(result.failed_pages) == 1
+    assert "private detail" not in result.failed_pages[0].error
+    assert progress == [(0, 6), (1, 6), (2, 6), (3, 6), (6, 6)]

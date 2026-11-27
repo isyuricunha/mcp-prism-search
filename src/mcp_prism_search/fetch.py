@@ -358,20 +358,28 @@ async def ddg_deep_search(
     selected_sources = search_response.results[: request.max_pages]
     semaphore = asyncio.Semaphore(get_max_concurrency(request.max_concurrency))
 
+    await _safe_progress(1, total_steps)
+    completed = 1
+
     async def fetch_source(source_url: str) -> FetchResponse:
+        nonlocal completed
         async with semaphore:
-            return await web_fetch(source_url, max_chars=request.max_chars_per_page)
+            try:
+                page = await web_fetch(source_url, max_chars=request.max_chars_per_page)
+            except Exception as exc:  # noqa: BLE001 - isolate per-page failures.
+                page = _error_response(source_url, "Fetch failed: " + type(exc).__name__)
+            completed += 1
+            await _safe_progress(float(completed), total_steps)
+            return page
 
     fetched_pages = await asyncio.gather(*(fetch_source(source.url) for source in selected_sources))
-    await _safe_progress(1, total_steps)
+    if completed < total_steps:
+        await _safe_progress(total_steps, total_steps)
     pages: list[DeepSearchPage] = []
     failed_pages: list[FailedPage] = []
     cached_flags = [search_response.cached]
 
-    for index, (source, page) in enumerate(
-        zip(selected_sources, fetched_pages, strict=True), start=2
-    ):
-        await _safe_progress(float(index), total_steps)
+    for source, page in zip(selected_sources, fetched_pages, strict=True):
         cached_flags.append(page.cached)
         if page.success:
             pages.append(
