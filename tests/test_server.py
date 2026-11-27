@@ -187,3 +187,15 @@ def test_cache_tools_declare_closed_world_annotations():
         assert by_name["web_search"].open_world_hint is True
 
     asyncio.run(verify())
+
+
+def test_bearer_scheme_is_case_insensitive_but_token_is_not():
+    async def app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+
+    middleware = BearerTokenAuthMiddleware(app, "fixture-Token")
+    for header, expected in [(b"bEaReR  fixture-Token", 200),
+                             (b"Bearer fixture-token", 401),
+                             (b"Basic fixture-Token", 401)]:
+        response = asyncio.run(_call_middleware(middleware, [(b"authorization", header)]))
+        assert response[0]["status"] == expected

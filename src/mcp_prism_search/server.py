@@ -125,6 +125,10 @@ class BearerTokenAuthMiddleware:
             )
 
         authorization = _authorization_header(scope)
+        if authorization is not None:
+            scheme, separator, credential = authorization.partition(" ")
+            if separator and scheme.lower() == "bearer":
+                authorization = "Bearer " + credential.lstrip(" ")
         if authorization is None or not _safe_token_match(
             authorization, self.expected_authorization
         ):
