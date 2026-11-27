@@ -657,3 +657,21 @@ def test_panel_store_missing_key_preserves_database(tmp_path):
         PanelStore(directory)
     assert store.path.read_bytes() == before
     assert not (directory / "encryption.key").exists()
+
+
+@pytest.mark.parametrize("symlink", [True, False])
+def test_panel_store_rejects_unsafe_key(tmp_path, symlink):
+    directory = tmp_path / "admin"
+    directory.mkdir(mode=0o700)
+    key = directory / "encryption.key"
+    if symlink:
+        target = tmp_path / "external"
+        target.write_text("keep")
+        key.symlink_to(target)
+    else:
+        key.write_text("invalid")
+        key.chmod(0o644)
+    with pytest.raises(RuntimeError, match="encryption key"):
+        PanelStore(directory)
+    if symlink:
+        assert target.read_text() == "keep"
