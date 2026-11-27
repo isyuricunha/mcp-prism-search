@@ -4,8 +4,8 @@ const layer = document.getElementById("background-layer")!;
 const toggle = document.getElementById("starfield-toggle") as HTMLInputElement;
 const hint = document.getElementById("starfield-hint")!;
 let dispose: (() => void) | undefined;
-let enabled = false;
-try { enabled = localStorage.getItem("prism-starfield") === "true"; } catch {}
+let enabled = true;
+try { enabled = localStorage.getItem("prism-starfield") !== "false"; } catch {}
 
 function sync() {
   const dark = document.documentElement.dataset.theme !== "yu-daylight";

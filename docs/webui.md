@@ -147,4 +147,4 @@ See [provider policy](providers.md) and [deployment](deployment.md).
 
 ### Optional animated background
 
-Settings → Appearance → Starfield Depth enables the canonical YuTheme Canvas effect (off by default). It is available only in Dark, remembers the browser-local preference, pauses by disposing its canvas while the tab is hidden, and renders a static frame for reduced-motion users. White mode suspends it without resetting the preference. No server process or package dependency is added.
+Settings → Appearance → Starfield Depth controls the canonical YuTheme Canvas effect (on by default for Dark). Explicit browser-local off preferences are preserved. It is available only in Dark, remembers the browser-local preference, pauses by disposing its canvas while the tab is hidden, and renders a static frame for reduced-motion users. White mode suspends it without resetting the preference. No server process or package dependency is added.
