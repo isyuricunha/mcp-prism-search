@@ -204,14 +204,25 @@ def _result_from_payload(payload: dict[str, Any]) -> SearchResult | None:
 def valid_result_url(url: str) -> bool:
     try:
         parsed = urlparse(url)
-        return bool(
+        if not (
             parsed.scheme in {"http", "https"} and parsed.hostname
             and parsed.username is None and parsed.password is None
             and parsed.port != 0 and len(url) <= 8192
             and not any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == chr(92)
                         for c in url)
-        )
-    except ValueError:
+        ):
+            return False
+        host = httpx.URL(url).raw_host.decode("ascii").rstrip(".")
+        if ":" in host:
+            from ipaddress import IPv6Address
+
+            IPv6Address(host)
+            return "%" not in host
+        return bool(host and all(
+            re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label, re.I)
+            for label in host.split(".")
+        ))
+    except (ValueError, httpx.InvalidURL, UnicodeError):
         return False
 
 

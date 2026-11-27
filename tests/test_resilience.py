@@ -675,3 +675,20 @@ def test_fetch_classifies_html_by_exact_media_type(mime, success):
                                   b"<html>Evidence</html>", "https://example.org", "utf-8")
     response = fetch._response_to_fetch_response("https://example.org", raw, 1000)
     assert response.success is success
+
+
+@pytest.mark.parametrize("url", [
+    "https://%65xample.org", "https://example.org%2fother", "https://a..b",
+    "https://example.org;bad", "https://[fe80::1%25eth0]", "https://０.example",
+])
+def test_search_rejects_ambiguous_or_invalid_authority(url):
+    from mcp_prism_search.search import valid_result_url
+
+    assert not valid_result_url(url)
+
+
+def test_search_accepts_valid_internationalized_host_and_ipv6():
+    from mcp_prism_search.search import valid_result_url
+
+    assert valid_result_url("https://bücher.example/")
+    assert valid_result_url("https://[2606:4700::1111]/")
