@@ -682,11 +682,11 @@ async def cache_stats() -> dict[str, Any]:
 async def cache_prune(
     expired_only: Annotated[
         bool,
-        Field(description=ARGUMENT_DESCRIPTIONS["expired_only"]),
+        Field(strict=True, description=ARGUMENT_DESCRIPTIONS["expired_only"]),
     ] = False,
     dry_run: Annotated[
         bool,
-        Field(description=ARGUMENT_DESCRIPTIONS["dry_run"]),
+        Field(strict=True, description=ARGUMENT_DESCRIPTIONS["dry_run"]),
     ] = False,
 ) -> dict[str, Any]:
     """Prune expired entries, stale temporary files and oversized entries.

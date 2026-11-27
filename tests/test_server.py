@@ -235,3 +235,17 @@ def test_cache_prune_description_explains_dry_run_and_expired_scope():
         assert "Dry-run never deletes" in tool.description
 
     asyncio.run(verify())
+
+
+def test_mcp_prune_requires_literal_boolean_flags(tmp_path, monkeypatch):
+    from mcp import Client
+
+    monkeypatch.setenv("MCP_CACHE_DIR", str(tmp_path))
+
+    async def verify():
+        async with Client(mcp) as client:
+            for args in [{"dry_run": "false"}, {"expired_only": 0}]:
+                response = await client.call_tool("cache_prune", args)
+                assert response.is_error
+
+    asyncio.run(verify())
