@@ -224,3 +224,14 @@ def test_stdio_lifecycle_runs_and_cancels_periodic_pruning(monkeypatch):
         assert stopped.is_set()
 
     asyncio.run(verify())
+
+
+def test_cache_prune_description_explains_dry_run_and_expired_scope():
+    async def verify():
+        listing = await mcp.list_tools()
+        tools = listing[0] if isinstance(listing, tuple) else listing
+        tool = next(tool for tool in tools if tool.name == "cache_prune")
+        assert "preserves fresh entries" in tool.description
+        assert "Dry-run never deletes" in tool.description
+
+    asyncio.run(verify())

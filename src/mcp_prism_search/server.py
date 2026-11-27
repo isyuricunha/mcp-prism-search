@@ -689,7 +689,11 @@ async def cache_prune(
         Field(description=ARGUMENT_DESCRIPTIONS["dry_run"]),
     ] = False,
 ) -> dict[str, Any]:
-    """Prune expired, corrupt, temporary, and oversized cache files."""
+    """Prune expired entries, stale temporary files and oversized entries.
+
+    Full pruning also enforces configured age and size limits. Expired-only
+    pruning preserves fresh entries. Dry-run never deletes files.
+    """
 
     return (await asyncio.to_thread(
         cache_ops.prune_cache, expired_only=expired_only, dry_run=dry_run
