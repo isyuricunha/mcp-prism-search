@@ -205,6 +205,9 @@ try{
 
  await page.locator("#native-panel > summary").click();
  await page.locator("#native-query").fill("test answer");
+ assert.equal(await page.locator("#native-provider").inputValue(),"");
+ assert.equal(await page.locator("#native-run").isDisabled(),true);
+ await page.locator("#native-provider").selectOption("exa");
  await page.locator("#native-run").click();
  await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
  assert.equal(lastNative,null);
@@ -222,6 +225,8 @@ try{
  await audit("native-answer-white");
  await page.locator("#theme").click();
  await page.locator('input[name=native-mode][value=research]').check();
+ assert.equal(await page.locator("#native-run").isDisabled(),true);
+ await page.locator("#native-provider").selectOption("exa");
  assert.equal(await page.locator("#native-run").isDisabled(),false);
  await page.locator("#native-effort").selectOption("deep");
  await page.locator("#native-run").click();

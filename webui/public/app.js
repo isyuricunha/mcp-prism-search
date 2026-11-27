@@ -717,7 +717,7 @@ function nativeMode(){return document.querySelector("input[name=native-mode]:che
 function renderNativeOptions(){
   const mode=nativeMode(),select=$("native-provider"),old=select.value;
   const caps=(state?.native||[]).filter(p=>p[mode]);
-  select.replaceChildren();
+  select.replaceChildren(new Option("Choose a provider",""));
   for(const p of caps){
     const option=new Option(providerName(p.id)+(p.available?"":" — setup required"),p.id);
     option.disabled=!p.available; select.append(option);
@@ -726,12 +726,12 @@ function renderNativeOptions(){
   if(caps.some(p=>p.id===old&&p.available))select.value=old;
   else if(configured&&configured!=="explicit"){
     if(caps.some(p=>p.id===configured&&p.available))select.value=configured;
-    else select.selectedIndex=-1;
+    else select.value="";
   }
-  else if(caps.some(p=>p.available))select.value=caps.find(p=>p.available).id;
-  else select.selectedIndex=-1;
+  else select.value="";
   const selectedCap=caps.find(p=>p.id===select.value&&p.available);
-  $("native-pricing").textContent=selectedCap?.pricing||"No configured provider for this capability. Add an API key in Providers.";
+  $("native-pricing").textContent=selectedCap?.pricing||
+    (caps.some(p=>p.available)?"Choose an available provider to review pricing.":"No configured provider for this capability. Add an API key in Providers.");
   $("native-links").replaceChildren();
   if(selectedCap)$("native-links").append(link("API documentation",mode==="research"?(selectedCap.research_docs||selectedCap.docs):selectedCap.docs),link("Pricing",selectedCap.pricing_url));
   const effortSelect=$("native-effort"),previousEffort=effortSelect.value;
