@@ -588,3 +588,19 @@ def test_sse_reader_fragmented_utf8():
         return [item async for item in native._sse_data(response)]
 
     assert asyncio.run(collect()) == ["café", "next"]
+
+
+def test_sse_reject_compressed():
+    class Unexpected(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            pytest.fail("compressed stream must not be consumed")
+            yield b""
+
+    async def collect():
+        response = httpx.Response(
+            200, headers={"Content-Encoding": "gzip"}, stream=Unexpected(),
+        )
+        return [item async for item in native._sse_data(response)]
+
+    with pytest.raises(ValueError, match="encoding"):
+        asyncio.run(collect())
