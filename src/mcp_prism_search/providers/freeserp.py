@@ -6,6 +6,7 @@ import httpx
 
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 SEARCH_URL = "https://freeserp.ai/api.php"
 
@@ -14,8 +15,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     params = {"q": request.query, "index": "web", "size": str(min(count, 100))}
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-        response = await client.get(SEARCH_URL, params=params)
-        response.raise_for_status()
+        response = await bounded_request(client, "GET", SEARCH_URL, params=params)
         data = response.json()
 
     rows = data if isinstance(data, list) else (data.get("results") or [])

@@ -6,6 +6,7 @@ import httpx
 
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 SEARCH_URL = "https://api.keenable.ai/v1/search/public"
 HEADERS = {
@@ -18,8 +19,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     body = {"query": request.query, "max_results": min(count, 20)}
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-        response = await client.post(SEARCH_URL, json=body, headers=HEADERS)
-        response.raise_for_status()
+        response = await bounded_request(client, "POST", SEARCH_URL, json=body, headers=HEADERS)
         data = response.json()
 
     rows = data if isinstance(data, list) else (data.get("results") or data.get("data") or [])

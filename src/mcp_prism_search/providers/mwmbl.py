@@ -9,6 +9,7 @@ import httpx
 
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 _lock: asyncio.Lock | None = None
 _loop: asyncio.AbstractEventLoop | None = None
@@ -29,8 +30,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         await asyncio.sleep(max(0.0, 1.0 - (time.monotonic() - _last_request)))
         _last_request = time.monotonic()
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-            response = await client.get(SEARCH_URL, params=params)
-            response.raise_for_status()
+            response = await bounded_request(client, "GET", SEARCH_URL, params=params)
             data = response.json()
 
     from mcp_prism_search.search import valid_result_url

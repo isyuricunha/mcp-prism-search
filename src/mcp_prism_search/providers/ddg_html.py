@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 HTML_URL = "https://html.duckduckgo.com/html/"
 HEADERS = {
@@ -90,7 +91,6 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(timeout), follow_redirects=False, headers=HEADERS
     ) as client:
-        response = await client.get(HTML_URL, params=params)
-        response.raise_for_status()
+        response = await bounded_request(client, "GET", HTML_URL, params=params)
 
     return parse_results(response.text, count)

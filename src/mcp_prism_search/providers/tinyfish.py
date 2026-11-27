@@ -7,6 +7,7 @@ import httpx
 from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 SEARCH_URL = "https://api.search.tinyfish.ai"
 RECENCY_MINUTES = {"day": 1440, "week": 10080, "month": 43200, "year": 525600}
@@ -34,8 +35,9 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         timeout=httpx.Timeout(timeout), headers={"X-API-Key": api_key},
     ) as client:
         for page in range(MAX_PAGE + 1):
-            response = await client.get(SEARCH_URL, params={**params, "page": page})
-            response.raise_for_status()
+            response = await bounded_request(
+                client, "GET", SEARCH_URL, params={**params, "page": page}
+            )
             rows = response.json()["results"]
             if not isinstance(rows, list):
                 raise ValueError("Invalid TinyFish search results")

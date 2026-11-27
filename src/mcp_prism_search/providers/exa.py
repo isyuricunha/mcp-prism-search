@@ -9,6 +9,7 @@ import httpx
 from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 SEARCH_URL = "https://api.exa.ai/search"
 
@@ -33,8 +34,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         ).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-        response = await client.post(SEARCH_URL, json=body, headers=headers)
-        response.raise_for_status()
+        response = await bounded_request(client, "POST", SEARCH_URL, json=body, headers=headers)
         data = response.json()
 
     from mcp_prism_search.search import valid_result_url

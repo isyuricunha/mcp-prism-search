@@ -13,6 +13,7 @@ import httpx
 from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 SEARCH_URL = "https://s.jina.ai/"
 
@@ -29,10 +30,10 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     }
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-        response = await client.get(
+        response = await bounded_request(
+            client, "GET",
             f"{SEARCH_URL}{quote(request.query, safe='')}", headers=headers
         )
-        response.raise_for_status()
         data = response.json()
 
     from mcp_prism_search.search import valid_result_url

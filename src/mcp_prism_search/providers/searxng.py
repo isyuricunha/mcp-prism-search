@@ -7,6 +7,7 @@ import httpx
 from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 SAFE_SEARCH = {"off": "0", "moderate": "1", "strict": "2"}
 
@@ -25,8 +26,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         params["time_range"] = time_filter_code
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-        response = await client.get(f"{base_url}/search", params=params)
-        response.raise_for_status()
+        response = await bounded_request(client, "GET", f"{base_url}/search", params=params)
         data = response.json()
 
     from mcp_prism_search.search import valid_result_url
