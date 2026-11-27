@@ -107,6 +107,9 @@ async def combined_search(
                 pass
             outcome = "ok" if answer else "empty"
             return results, answer
+    except asyncio.CancelledError:
+        outcome = "cancelled"
+        raise
     except httpx.HTTPStatusError as exc:
         outcome = f"HTTP {exc.response.status_code}"
         raise native.NativeError(outcome) from None

@@ -505,3 +505,19 @@ def test_sse_reader_accepts_multiline_events_and_bounds_buffers(monkeypatch):
                     b"\ndata: " + b"x" * 20 + b"\n\n"):
         with pytest.raises(ValueError, match="exceeds limit"):
             asyncio.run(collect(content))
+
+
+def test_combined_ai_cancellation_is_not_upstream_failure(configure, monkeypatch):
+    from mcp_prism_search import runtime
+    from mcp_prism_search.models import SearchRequest
+
+    metrics = []
+    monkeypatch.setattr(runtime, "record_metric", lambda *args: metrics.append(args))
+
+    async def handler(req):
+        raise asyncio.CancelledError
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(ai_search.combined_search("tavily", SearchRequest(query="test"), 5, 5))
+    assert len(metrics) == 1 and metrics[0][:2] == ("tavily:answer", "cancelled")
