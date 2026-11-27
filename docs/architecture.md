@@ -2,8 +2,9 @@
 
 `mcp-prism-search` is a Python 3.12 MCP server built on the official
 `mcp` SDK (2.x, `MCPServer` API) with FastMCP-style tool decorators.
-It exposes deterministic research primitives over stdio or streamable HTTP.
-The agent/client reasons over the returned data; the server never calls models.
+It exposes research primitives over stdio or streamable HTTP. Ordinary retrieval
+is deterministic; optional, explicitly authorized provider-native synthesis is
+available without running a local language model.
 
 ## Module map
 
@@ -20,6 +21,9 @@ The agent/client reasons over the returned data; the server never calls models.
 | `domains.py` | Domain normalization, allow/block/preferred result controls |
 | `models.py` | Pydantic request/response models (strict, `extra="forbid"`), shared `SearchRequestBase`, cache payload helper |
 | `text.py` | Whitespace normalization, HTML text extraction with boilerplate removal, truncation |
+| `upstream.py` | Bounded direct HTTP provider responses, identity encoding and redirect refusal |
+| `native.py`, `ai_search.py` | Provider-native synthesis, explicit cost authorization, bounded streams and combined responses |
+| `observability.py` | Sanitized structured events, bounded local history, optional OpenTelemetry |
 
 ## Request flow
 
@@ -29,6 +33,10 @@ MCP client
   ▼
 MCPServer tool call
   │
+  ├─ web_search ──▶ search.py ──▶ provider registry / bounded HTTP adapters
+  │                      │
+  │                      └─ optional administrator-authorized provider synthesis
+  │
   ├─ ddg_search ──▶ search.py ──▶ DuckDuckGo HTML endpoint (or ddgs)
   │                      │
   │                      ▼
@@ -36,8 +44,8 @@ MCPServer tool call
   │
   ├─ web_fetch ──▶ fetch.py
   │                ├─ validate_url_shape (scheme, host, literal IP)
-  │                ├─ validate_resolved_addresses (DNS → blocklist)
-  │                ├─ resolve_safe_address (single validated IP)
+  │                ├─ cache hit: validate original hostname DNS
+  │                ├─ live fetch: resolve_safe_address (one DNS lookup per hop)
   │                ├─ GET pinned to that IP (Host/SNI preserved)
   │                ├─ streamed body, hard byte cap (FETCH_MAX_BYTES)
   │                └─ per-hop re-validation on redirects (≤ 5)
@@ -94,10 +102,12 @@ cache and filtering semantics. Legacy DuckDuckGo behavior below is unchanged.
 - Writes are atomic: `tempfile` + `os.replace` (no partial files visible).
 - Creation time is read from the file **mtime** (each file is written exactly
   once), so pruning never parses file contents.
-- Pruning runs as a background worker thread in HTTP mode (interval:
-  `CACHE_PRUNE_INTERVAL_SECONDS`) and once at startup (`CACHE_PRUNE_ON_START`).
-  It removes expired, corrupt, temporary, and oversized files. It never runs
-  inline with cache reads/writes, so the event loop is never blocked by it.
+- Pruning runs in a background worker thread in HTTP and STDIO modes (interval:
+  `CACHE_PRUNE_INTERVAL_SECONDS`) and optionally at startup (`CACHE_PRUNE_ON_START`).
+  Full pruning removes expired and oversized entries, stale temporary files and
+  entries exceeding configured retention limits. Expired-only pruning preserves
+  fresh entries; malformed JSON is rejected when read. Periodic maintenance does
+  not perform a synchronous prune on each request.
 - A cache directory that cannot be created (permissions) degrades the cache
   to a logged no-op instead of failing tool calls.
 
@@ -119,9 +129,11 @@ by semantic-release from conventional commits.
 
 Domain controls are opt-in. If you do not pass `blocked_domains`,
 `allowed_domains`, `preferred_domains`, or `search_window`, `ddg_search`
-requests exactly `max_results` from DuckDuckGo and preserves DuckDuckGo's
-default ranking order after URL deduplication. The server does not apply a
-built-in source bias, source boost, or domain blocklist.
+requests exactly `max_results` from DuckDuckGo. Results are validated,
+deduplicated and deterministically ranked using query-term coverage in titles
+and snippets plus a lightweight domain-trust heuristic. Titles and snippets
+are bounded before final ranking to 500 and 4,000 characters, respectively.
+No implicit domain blocklist is applied to ordinary retrieval.
 
 When any domain control is provided, the server requests a larger internal
 search result window from the provider before applying dedupe and domain
