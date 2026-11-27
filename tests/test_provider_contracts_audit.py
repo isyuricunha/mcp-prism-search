@@ -171,3 +171,21 @@ def test_tavily_filter_contract(monkeypatch, safe):
         allowed_domains=["example.org"], blocked_domains=["blocked.example"], time_filter="day"),
         1, 5))
     assert len(rows) == 1 and rows[0].snippet == "Evidence"
+
+
+def test_serper_result_window(monkeypatch):
+    from mcp_prism_search.providers import serper
+
+    monkeypatch.setenv("SERPER_API_KEY", "fixture-key")
+
+    def handler(req):
+        assert json.loads(req.content) == {"q": "needle", "num": 10}
+        return httpx.Response(200, json={"organic": [
+            None, {"title": "Invalid", "link": "javascript:bad"},
+            {"title": "First", "link": "https://example.org/1", "snippet": "One"},
+            {"title": "Second", "link": "https://example.org/2"},
+        ]})
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(serper.search(SearchRequest(query="needle"), 1, 5))
+    assert [r.title for r in rows] == ["First"]
