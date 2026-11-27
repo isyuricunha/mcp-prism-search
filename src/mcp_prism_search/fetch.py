@@ -114,8 +114,11 @@ def _pinned_request_url(url: str, safe_ip: str) -> str:
 
 
 def _original_host_header(url: str) -> str:
-    parsed = urlparse(url)
-    return parsed.netloc
+    parsed = httpx.URL(url)
+    host = parsed.raw_host.decode("ascii")
+    if ":" in host:
+        host = "[" + host + "]"
+    return host if parsed.port is None else f"{host}:{parsed.port}"
 
 
 async def _get_with_validated_redirects(
@@ -132,7 +135,7 @@ async def _get_with_validated_redirects(
         await validate_fetch_url(current_url)
         safe_ip, _port = await resolve_safe_address(current_url)
         parsed = urlparse(current_url)
-        hostname = parsed.hostname or ""
+        hostname = httpx.URL(current_url).raw_host.decode("ascii")
         request = client.build_request(
             "GET",
             _pinned_request_url(current_url, safe_ip),

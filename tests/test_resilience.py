@@ -354,3 +354,11 @@ def test_fetch_unknown_charset_falls_back_to_utf8():
                                    "Olá".encode(), "https://example.org", "invalid-charset")
     result = fetch._response_to_fetch_response("https://example.org", raw, 1000)
     assert result.success and result.content == "Olá"
+
+
+@pytest.mark.parametrize(("url", "host"), [
+    ("https://bücher.example/a", "xn--bcher-kva.example"),
+    ("https://[2001:4860:4860::8888]:8443/", "[2001:4860:4860::8888]:8443"),
+])
+def test_pinned_fetch_host_header_is_ascii_and_preserves_authority(url, host):
+    assert fetch._original_host_header(url) == host
