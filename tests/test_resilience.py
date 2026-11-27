@@ -257,3 +257,30 @@ def test_deep_search_keeps_successful_pages_and_completes_progress(monkeypatch):
     assert len(result.pages) == len(result.failed_pages) == 1
     assert "private detail" not in result.failed_pages[0].error
     assert progress == [(0, 6), (1, 6), (2, 6), (3, 6), (6, 6)]
+
+
+@pytest.mark.parametrize("bad_url", ["https://other.example", "http://127.0.0.1"])
+def test_fetch_cache_rejects_mismatched_or_unsafe_url(tmp_path, monkeypatch, bad_url):
+    from mcp_prism_search.models import FetchRequest, FetchResponse
+
+    url = "https://example.org"
+    store = cache.JsonFileCache(tmp_path, "fetch", 60)
+    request = FetchRequest(url=url)
+    value = FetchResponse(
+        url=bad_url, final_url=bad_url, title="Wrong", content="Other page",
+        content_type="text/plain", success=True, cached=False, error=None,
+    )
+    store.set(fetch._cache_payload(request) | {"_max_bytes": fetch.get_fetch_max_bytes()},
+              value.model_dump())
+
+    async def valid(url):
+        pass
+
+    async def failed(*args):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(fetch, "validate_fetch_url", valid)
+    monkeypatch.setattr(fetch, "_get_with_validated_redirects", failed)
+    response = asyncio.run(fetch.web_fetch(url, cache=store))
+    assert not response.cached and not response.success
+    assert not list(store.cache_dir.glob("*.json"))

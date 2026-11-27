@@ -275,9 +275,12 @@ async def web_fetch(
     cached_value = cache.get(payload)
     if cached_value is not None:
         try:
-            return FetchResponse.model_validate(cached_value).model_copy(
-                update={"cached": True}
-            )
+            cached = FetchResponse.model_validate(cached_value)
+            validate_url_shape(cached.final_url)
+            if (cached.url == request.url and cached.success and not cached.error
+                    and len(cached.content) <= request.max_chars):
+                return cached.model_copy(update={"cached": True})
+            cache.delete(payload)
         except Exception:  # noqa: BLE001 - poisoned/stale cache must not break the tool.
             cache.delete(payload)
 
