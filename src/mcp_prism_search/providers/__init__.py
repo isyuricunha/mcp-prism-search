@@ -138,7 +138,7 @@ def configured(spec: ProviderSpec) -> bool:
         return True
     value = runtime.setting(spec.needs) or ""
     if spec.needs == "SEARXNG_URL":
-        return bool(value.strip())
+        return searxng.valid_instance_url(value.strip())
     return bool(value and all(33 <= ord(char) <= 126 for char in value))
 
 

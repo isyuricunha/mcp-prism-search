@@ -12,10 +12,21 @@ from mcp_prism_search.upstream import bounded_request
 SAFE_SEARCH = {"off": "0", "moderate": "1", "strict": "2"}
 
 
+def valid_instance_url(value: str) -> bool:
+    from urllib.parse import urlsplit
+
+    from mcp_prism_search.search import valid_result_url
+
+    if not valid_result_url(value):
+        return False
+    parsed = urlsplit(value)
+    return not parsed.query and not parsed.fragment
+
+
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
     base_url = (runtime.setting("SEARXNG_URL") or "").strip().rstrip("/")
-    if not base_url:
-        raise ValueError("SearXNG URL is not configured")
+    if not valid_instance_url(base_url):
+        raise ValueError("SearXNG instance URL is invalid or missing")
     params: dict[str, str | int] = {
         "q": request.query,
         "format": "json",

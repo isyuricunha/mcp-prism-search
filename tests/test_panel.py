@@ -528,3 +528,18 @@ def test_invalid_environment_api_keys_are_not_available(panel, monkeypatch, valu
     row = next(p for p in client.get("/api/overview").json()["providers"] if p["id"] == "exa")
     assert not row["configured"] and not row["available"] and row["managed"]
     assert "exa" not in providers.available_providers()
+
+
+@pytest.mark.parametrize("value", [
+    "file:///etc/passwd", "https://example.org/search?format=json",
+    "https://example.org/#fragment", "https://example.org:wrong",
+])
+def test_malformed_searxng_instance_is_not_available(panel, monkeypatch, value):
+    client, _, _ = panel
+    monkeypatch.setenv("SEARXNG_URL", value)
+    sign_in(client)
+    row = next(p for p in client.get("/api/overview").json()["providers"]
+               if p["id"] == "searxng")
+    assert not row["configured"] and not row["available"]
+    monkeypatch.setenv("SEARXNG_URL", "http://127.0.0.1:8080/searx")
+    assert "searxng" in providers.available_providers()
