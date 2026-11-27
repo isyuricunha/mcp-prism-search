@@ -119,3 +119,19 @@ def test_search_domain_controls_apply_allowed_then_blocked_then_preferred() -> N
     filtered = apply_search_domain_controls(results, request)
 
     assert [result.title for result in filtered] == ["C", "A"]
+
+
+def test_unicode_domain_matches_ascii_idna():
+    assert domain_matches("docs.xn--bcher-kva.example", "bücher.example")
+    assert not domain_matches("xn--bcher-kva.example.evil.test", "bücher.example")
+    assert domain_matches("2001:4860:4860::8888", "[2001:4860:4860::8888]")
+
+
+def test_invalid_domain_filter_is_not_silently_removed():
+    import pytest
+
+    from mcp_prism_search.models import SearchRequest
+
+    for value in ("*.example.org", "user@example.org", "invalid domain"):
+        with pytest.raises(ValueError, match="Invalid domain"):
+            SearchRequest(query="test", allowed_domains=[value])

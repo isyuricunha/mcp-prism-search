@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable, Sequence
+from ipaddress import ip_address
 from urllib.parse import urlparse
 
 
@@ -11,9 +13,25 @@ def normalize_domain(value: str) -> str:
     if not raw_value:
         return ""
 
+    try:
+        # Bare IPv6 literals do not have URL authority syntax.
+        return str(ip_address(raw_value))
+    except ValueError:
+        pass
     parsed = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
-    hostname = parsed.hostname or raw_value.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
-    normalized = hostname.rstrip(".")
+    if parsed.username is not None or parsed.password is not None or not parsed.hostname:
+        raise ValueError("Invalid domain")
+    normalized = parsed.hostname.rstrip(".")
+    try:
+        return str(ip_address(normalized))
+    except ValueError:
+        pass
+    normalized = normalized.encode("idna").decode("ascii")
+    if len(normalized) > 253 or any(
+        not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in normalized.split(".")
+    ):
+        raise ValueError("Invalid domain")
     if normalized.startswith("www."):
         normalized = normalized[4:]
     return normalized
@@ -32,8 +50,11 @@ def normalize_domains(values: Iterable[str]) -> list[str]:
 
 
 def domain_matches(hostname: str, domain: str) -> bool:
-    normalized_hostname = normalize_domain(hostname)
-    normalized_domain = normalize_domain(domain)
+    try:
+        normalized_hostname = normalize_domain(hostname)
+        normalized_domain = normalize_domain(domain)
+    except ValueError:
+        return False
     if not normalized_hostname or not normalized_domain:
         return False
     return normalized_hostname == normalized_domain or normalized_hostname.endswith(
@@ -42,8 +63,11 @@ def domain_matches(hostname: str, domain: str) -> bool:
 
 
 def url_matches_domains(url: str, domains: Sequence[str]) -> bool:
-    parsed = urlparse(url)
-    if not parsed.hostname:
+    try:
+        parsed = urlparse(url)
+        if not parsed.hostname:
+            return False
+    except ValueError:
         return False
     return any(domain_matches(parsed.hostname, domain) for domain in domains)
 
