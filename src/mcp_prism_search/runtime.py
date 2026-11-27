@@ -60,7 +60,8 @@ def record_metric(name: str, outcome: str, elapsed: float, result_count=None) ->
     from mcp_prism_search.observability import emit
 
     emit("provider", outcome, provider=name, elapsed=elapsed, result_count=result_count)
-    if _state:
+    # Client cancellation is not evidence of upstream provider failure.
+    if _state and outcome != "cancelled":
         try:
             _state.record(name, outcome, elapsed)
         except Exception:  # noqa: BLE001 - telemetry must not affect retrieval.

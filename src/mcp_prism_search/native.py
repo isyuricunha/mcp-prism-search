@@ -513,6 +513,9 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
                         result = _decode(provider, mode, response.json(), effort)
             outcome = "ok"
             return result
+        except asyncio.CancelledError:
+            outcome = "cancelled"
+            raise
         except httpx.HTTPStatusError as exc:
             outcome = f"HTTP {exc.response.status_code}"
             raise NativeError(

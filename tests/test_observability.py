@@ -139,3 +139,25 @@ def test_log_history_survives_deeply_nested_corruption_and_reports_write_failure
         assert obs.history()["healthy"] is False
     obs.emit("provider", "ok", provider="keenable")
     assert obs.history()["healthy"] is True
+
+
+def test_cancelled_provider_is_logged_without_counting_as_upstream_error(logs, monkeypatch):
+    from mcp_prism_search import runtime, search
+    from mcp_prism_search.models import SearchRequest
+
+    class Store:
+        def record(self, *args):
+            pytest.fail("Cancellation must not penalize provider metrics")
+
+    async def cancelled(*args):
+        raise asyncio.CancelledError
+
+    previous = runtime.state()
+    runtime.install(Store())
+    try:
+        monkeypatch.setattr(providers, "run_provider", cancelled)
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(search._search_one("keenable", SearchRequest(query="test"), 5, 5))
+    finally:
+        runtime.install(previous)
+    assert obs.history()["events"][0]["outcome"] == "cancelled"

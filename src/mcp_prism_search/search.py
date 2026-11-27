@@ -524,6 +524,9 @@ async def _search_one(
             except Exception as exc:  # noqa: BLE001 - preserve successful retrieval.
                 answer_status[name] = type(exc).__name__
         return filtered, f"{name}: ok ({len(filtered)})" if filtered else f"{name}: empty"
+    except asyncio.CancelledError:
+        runtime.record_metric(name, "cancelled", monotonic() - start)
+        raise
     except TimeoutError:
         status = "timeout"
     except httpx.HTTPStatusError as exc:
