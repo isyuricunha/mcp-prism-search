@@ -78,3 +78,22 @@ def test_registered_ddg_html_contract(monkeypatch):
         SearchRequest(query="C++", safe_search="strict", time_filter="month"), 1, 4))
     assert [(r.title, r.url, r.snippet) for r in rows] == [
         ("A", "https://example.org", "Evidence")]
+
+
+def test_wikipedia_title_and_snippet(monkeypatch):
+    from mcp_prism_search.providers import wikipedia
+
+    def handler(req):
+        assert req.url.params["action"] == "query"
+        assert req.url.params["list"] == "search"
+        assert req.url.params["srsearch"] == "São Paulo"
+        assert req.url.params["srlimit"] == "20"
+        assert "mcp-prism-search" in req.headers["user-agent"]
+        return httpx.Response(200, json={"query": {"search": [
+            None, {"title": ""}, {"title": "São Paulo", "snippet": "<b>City</b> in Brazil"},
+        ]}})
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(wikipedia.search(SearchRequest(query="São Paulo"), 50, 5))
+    assert rows[0].url == "https://en.wikipedia.org/wiki/S%C3%A3o_Paulo"
+    assert rows[0].snippet == "City in Brazil"
