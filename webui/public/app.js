@@ -526,9 +526,16 @@ function renderSettings(force=false){
   const settings=state.settings;
   if(settingsDirty&&!force){
     for(const key of ["timeout","search_ttl","fetch_ttl"]){
-      if(settings.locked.includes(key)){$(key).value=settings[key];$(key).disabled=true;$(key+"-lock").textContent="Managed by server environment.";}
+      const field=$(key),locked=settings.locked.includes(key);
+      if(locked)field.value=settings[key];
+      field.disabled=locked;$(key+"-lock").textContent=locked?"Managed by server environment.":"";
     }
-    if(settings.locked.includes("preferred")){$("preferred-field").disabled=true;$("preferred-lock").textContent="Managed by server environment.";}
+    const locked=settings.locked.includes("preferred");
+    $("preferred-field").disabled=locked;$("preferred-lock").textContent=locked?"Managed by server environment.":"";
+    if(locked){
+      for(const radio of $("preferred").querySelectorAll("input"))radio.checked=radio.value===(settings.preferred||"");
+      $("preferred-label").textContent=settings.preferred?providerName(settings.preferred):"Default order";
+    }
     return;
   }
   settingsDirty=false;

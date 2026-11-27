@@ -226,6 +226,15 @@ try{
  await nav("Settings");await page.locator("#timeout").fill("23");
  await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
  assert.equal(await page.locator("#timeout").inputValue(),"23");
+ data.settings.locked=["timeout","preferred"];data.settings.timeout=15;data.settings.preferred="keenable";
+ await page.evaluate(()=>refresh());
+ assert.equal(await page.locator("#timeout").inputValue(),"15");
+ assert.equal(await page.locator("#timeout").isDisabled(),true);
+ assert.equal(await page.locator('input[name=preferred-engine][value=keenable]').isChecked(),true);
+ data.settings.locked=[];data.settings.preferred=null;
+ await page.evaluate(()=>refresh());
+ assert.equal(await page.locator("#timeout").isDisabled(),false);
+ await page.locator("#timeout").fill("23");
  await page.locator("#preferred-label").click();
  await page.locator('input[name=preferred-engine][value=freeserp]').check();
  let releaseSettings;
