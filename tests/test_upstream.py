@@ -44,3 +44,22 @@ def test_bounded_provider_response_closes_stream(monkeypatch, headers, chunks):
         asyncio.run(keenable.search(SearchRequest(query="test"), 5, 5))
     assert stream.closed
     assert stream.read <= 1
+
+
+def test_native_oversize_response_does_not_retry(monkeypatch):
+    from mcp_prism_search import native
+
+    monkeypatch.setenv("EXA_API_KEY", "fixture-key")
+    monkeypatch.setattr(upstream, "MAX_RESPONSE_BYTES", 1024)
+    calls = []
+    original = httpx.AsyncClient
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, headers={"content-length": "4096"}, stream=Chunks([b"x"]))
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(handler), **kw))
+    with pytest.raises(native.NativeError, match="invalid or unavailable"):
+        asyncio.run(native.synthesize("question", "exa", "answer", allow_cost=True))
+    assert len(calls) == 1

@@ -14,6 +14,7 @@ from mcp_prism_search import native, providers, runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.native_models import NativeResponse
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 ENABLED_ENV = "MCP_AI_SEARCH_ENABLED"
 PROVIDERS_ENV = "MCP_AI_SEARCH_PROVIDERS"
@@ -75,8 +76,9 @@ async def combined_search(
                     or runtime.setting(spec.needs) != credential):
                 raise native.NativeError("Provider AI is no longer authorized")
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
+                response = await bounded_request(
+                    client, "POST", url, headers=headers, json=payload
+                )
                 data = response.json()
             rows = data["results"]["web"] if name == "youcom" else data["results"]
             if not isinstance(rows, list):

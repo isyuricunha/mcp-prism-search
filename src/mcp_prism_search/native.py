@@ -14,6 +14,7 @@ import httpx
 
 from mcp_prism_search import providers, runtime
 from mcp_prism_search.native_models import Effort, Mode, NativeResponse, Source
+from mcp_prism_search.upstream import bounded_request
 
 AnswerProvider = Literal["tavily", "exa", "youcom", "brave", "tinyfish"]
 ResearchProvider = Literal["exa", "youcom", "tavily", "brave", "jina", "tinyfish"]
@@ -349,11 +350,12 @@ async def _tiny_research(client, headers, query: str, effort: Effort) -> NativeR
         if run_id and not completed:
             try:
                 async with asyncio.timeout(10):
-                    await client.post(
+                    await bounded_request(
+                        client, "POST",
                         TINY_RESEARCH_BASE + "/v1/research-run/" + run_id + "/cancel",
                         headers=headers, timeout=10,
                     )
-            except (httpx.HTTPError, TimeoutError):
+            except (httpx.HTTPError, TimeoutError, ValueError):
                 pass
 
 
@@ -362,15 +364,17 @@ TAVILY_POLL_SECONDS = 2
 
 async def _tavily_research(client, headers, payload):
     # One creation request. Poll the existing job, never resubmit it.
-    response = await client.post("https://api.tavily.com/research", headers=headers, json=payload)
-    response.raise_for_status()
+    response = await bounded_request(
+        client, "POST", "https://api.tavily.com/research", headers=headers, json=payload
+    )
     job = response.json()["request_id"]
     if not isinstance(job, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", job):
         raise ValueError("Invalid task ID")
     while True:
         await asyncio.sleep(TAVILY_POLL_SECONDS)
-        response = await client.get("https://api.tavily.com/research/" + job, headers=headers)
-        response.raise_for_status()
+        response = await bounded_request(
+            client, "GET", "https://api.tavily.com/research/" + job, headers=headers
+        )
         data = response.json()
         if data.get("status") == "completed":
             return data
@@ -512,8 +516,9 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
                             source_kind="grounding",
                         )
                     else:
-                        response = await client.post(url, headers=headers, json=payload)
-                        response.raise_for_status()
+                        response = await bounded_request(
+                            client, "POST", url, headers=headers, json=payload
+                        )
                         result = _decode(provider, mode, response.json(), effort)
             outcome = "ok"
             return result
