@@ -161,3 +161,15 @@ def test_cancelled_provider_is_logged_without_counting_as_upstream_error(logs, m
     finally:
         runtime.install(previous)
     assert obs.history()["events"][0]["outcome"] == "cancelled"
+
+
+def test_exporter_shutdown_failure_does_not_prevent_history_cleanup(logs, monkeypatch):
+    class BrokenExporter:
+        def shutdown(self):
+            raise RuntimeError("unavailable")
+
+    monkeypatch.setattr(obs, "_otel_provider", BrokenExporter())
+    obs.close()
+    assert obs._history is None
+    assert obs._writer_lock is None
+    assert obs._otel_provider is None

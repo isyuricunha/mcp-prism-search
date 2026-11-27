@@ -183,9 +183,13 @@ def configure_otel():
 def close():
     global _history, _otel_provider, _tracer, _writer_lock
     if _otel_provider is not None:
-        _otel_provider.shutdown()
-        _otel_provider = None
-        _tracer = trace.NoOpTracer()
+        try:
+            _otel_provider.shutdown()
+        except Exception:  # noqa: BLE001 - telemetry must not prevent local cleanup.
+            emit("diagnostic", "error", level="WARNING")
+        finally:
+            _otel_provider = None
+            _tracer = trace.NoOpTracer()
     for handler in list(_logger.handlers):
         _logger.removeHandler(handler)
         handler.close()
