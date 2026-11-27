@@ -236,3 +236,12 @@ def test_freeserp_response_envelope(monkeypatch, payload, valid):
     else:
         with pytest.raises(ValueError, match="Invalid FreeSerp"):
             asyncio.run(freeserp.search(SearchRequest(query="test"), 5, 5))
+
+
+def test_mwmbl_malformed_response(monkeypatch):
+    from mcp_prism_search.providers import mwmbl
+
+    monkeypatch.setattr(mwmbl, "_last_request", 0.0)
+    mock_http(monkeypatch, lambda req: httpx.Response(200, json={"error": "failure"}))
+    with pytest.raises(ValueError, match="Invalid Mwmbl"):
+        asyncio.run(mwmbl.search(SearchRequest(query="test"), 5, 5))

@@ -35,8 +35,10 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
 
     from mcp_prism_search.search import valid_result_url
 
+    if not isinstance(data, dict) or not isinstance(data.get("results"), list):
+        raise ValueError("Invalid Mwmbl response")
     results: list[SearchResult] = []
-    for item in data.get("results", []):
+    for item in data["results"]:
         if not isinstance(item, dict):
             continue
         url = str(item.get("url") or "")
