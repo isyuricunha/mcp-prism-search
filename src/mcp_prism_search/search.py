@@ -600,7 +600,7 @@ async def aggregated_search(
 
     def response(results, error=None, actual=None):
         return SearchResponse(
-            query=query, provider=actual or mode, results=results, cached=False,
+            query=request.query, provider=actual or mode, results=results, cached=False,
             error=error, provider_attempts=attempts,
             answers=[answers[n] for n in answer_status if n in answers],
             answer_attempts=[f"{n}: {v}" for n, v in answer_status.items()],

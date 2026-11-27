@@ -308,3 +308,13 @@ def test_malformed_rows_do_not_discard_valid_provider_results(registry):
     rows, status = asyncio.run(search._search_one(
         "keenable", SearchRequest(query="needle"), 5, 5))
     assert len(rows) == 1 and status == "keenable: ok (1)"
+
+
+def test_search_echoes_normalized_query_on_cache_hit(registry, tmp_path):
+    register, calls = registry
+    register("keenable", [result("https://a.test/")])
+    cache = JsonFileCache(tmp_path, "search", 3600)
+    first = asyncio.run(search.aggregated_search(" needle ", cache=cache))
+    second = asyncio.run(search.aggregated_search("needle", cache=cache))
+    assert first.query == second.query == "needle"
+    assert second.cached and len(calls) == 1
