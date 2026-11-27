@@ -79,17 +79,9 @@ def record(name: str, results: list[SearchResult] | None, error: str | None) -> 
 # Explicit preference order from live testing on the target deployment.
 # Providers not listed here go last, alphabetically.
 PREFERRED_ORDER = [
-    "bing_html",
+    "keenable", "freeserp", "bing_rss", "ddgs:yahoo", "mwmbl", "youcom_keyless",
+    "searxng", "tavily", "exa", "brave", "youcom", "serper", "jina",
     "ddg_html",
-    "ddgs:bing",
-    "ddgs:brave",
-    "ddgs:yahoo",
-    "ddgs:yandex",
-    "freeserp",
-    "keenable",
-    "mwmbl",
-    "4get",
-    "searxng",
 ]
 
 
@@ -104,8 +96,8 @@ def build_chain(requested: str, available: dict[str, ProviderSpec]) -> list[str]
     ordered = sorted(
         available,
         key=lambda name: (
-            preference_rank.get(name, len(preference_rank)),
             -health_for(name).score,
+            preference_rank.get(name, len(preference_rank)),
         ),
     )
     return ordered

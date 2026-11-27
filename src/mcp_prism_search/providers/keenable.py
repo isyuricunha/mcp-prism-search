@@ -15,7 +15,7 @@ HEADERS = {
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
-    body = {"query": request.query, "limit": min(count, 20)}
+    body = {"query": request.query, "max_results": min(count, 20)}
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         response = await client.post(SEARCH_URL, json=body, headers=HEADERS)

@@ -19,16 +19,11 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         "format": "json",
         "safesearch": SAFE_SEARCH[request.safe_search],
     }
-    time_filter_code = {"day": "d", "week": "w", "month": "m", "year": "y"}.get(
-        request.time_filter or ""
+    time_filter_code = (
+        request.time_filter if request.time_filter in {"day", "month", "year"} else None
     )
     if time_filter_code:
         params["time_range"] = time_filter_code
-    if request.allowed_domains:
-        # SearXNG has no native allowlist; constrain via site: operators.
-        params["q"] = request.query + " " + " ".join(
-            f"site:{domain}" for domain in request.allowed_domains
-        )
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         response = await client.get(f"{base_url}/search", params=params)

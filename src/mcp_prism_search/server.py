@@ -33,7 +33,6 @@ from mcp_prism_search.models import (
     SearchResponse,
     TimeFilter,
 )
-from mcp_prism_search.providers import available_providers
 from mcp_prism_search.search import aggregated_search as perform_aggregated_search
 from mcp_prism_search.search import ddg_search as perform_ddg_search
 
@@ -77,7 +76,7 @@ mcp = MCPServer(
     name="mcp-prism-search",
     version=__version__,
     instructions=(
-        "Deterministic DuckDuckGo search and safe webpage fetching tools. "
+        "Multi-provider web search and safe webpage fetching tools. "
         "This server does not call LLMs, summarize, or generate reports."
     ),
     log_level=_validated_log_level(),
@@ -285,11 +284,10 @@ async def web_search(
         Field(
             default="auto",
             description=(
-                "Search provider name, or 'auto' to walk the fallback chain. "
-                "General providers: bing_html, ddg_html, ddgs:bing, ddgs:brave, "
-                "ddgs:yahoo, ddgs:yandex, 4get (needs FOURGET_BASE), mwmbl, "
-                "freeserp, keenable, searxng (needs SEARXNG_URL). Vertical: "
-                "wikipedia, hackernews."
+                "Search one provider by name, auto for fallback, or all for parallel search. "
+                "General providers: keenable, freeserp, bing_rss, ddgs:yahoo, mwmbl, "
+                 "ddg_html, youcom_keyless, searxng, tavily, exa, brave, youcom, serper, jina. "
+                "Some require configuration. Use providers to select several."
             ),
         ),
     ] = "auto",
@@ -321,13 +319,17 @@ async def web_search(
         list[str] | None,
         Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
-) -> dict[str, Any]:
+    providers: Annotated[
+        list[str] | None,
+        Field(description="Explicit provider names to search in parallel.", max_length=20),
+    ] = None,
+) -> SearchResponse:
     """Aggregate web search across providers with automatic fallback."""
 
-    available = sorted(available_providers("general"))
     response = await perform_aggregated_search(
         query=query,
-        provider=provider if provider in {"auto", "all", *available} else "auto",
+        provider=provider,
+        providers=providers,
         max_results=max_results,
         safe_search=safe_search,
         time_filter=time_filter,
@@ -337,7 +339,9 @@ async def web_search(
         preferred_domains=preferred_domains,
         kind="general",
     )
-    return response.model_dump(mode="json")
+    if response.error:
+        raise ToolError(response.error)
+    return response
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
@@ -360,7 +364,7 @@ async def vertical_search(
         int,
         Field(default=5, ge=1, le=20, description=ARGUMENT_DESCRIPTIONS["max_results"]),
     ] = 5,
-) -> dict[str, Any]:
+) -> SearchResponse:
     """Search one keyless vertical source (wikipedia, hackernews)."""
 
     response = await perform_aggregated_search(
@@ -369,7 +373,9 @@ async def vertical_search(
         max_results=max_results,
         kind="vertical",
     )
-    return response.model_dump(mode="json")
+    if response.error:
+        raise ToolError(response.error)
+    return response
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))

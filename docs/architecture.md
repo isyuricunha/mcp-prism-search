@@ -10,7 +10,8 @@ The agent/client reasons over the returned data; the server never calls models.
 | Module | Responsibility |
 |---|---|
 | `server.py` | MCPServer wiring, tool definitions, bearer auth middleware, HTTP settings, background prune loop, `/health` route |
-| `search.py` | DuckDuckGo HTML endpoint search (BeautifulSoup parsing), optional `ddgs` provider, time/safe filters, redirect URL resolution, dedupe, provider fallback |
+| `search.py` | Multi-provider orchestration, cache, health-ordered fallback, parallel selection, ranking and legacy DuckDuckGo search |
+| `providers/` | Provider registry and engine-specific API adapters |
 | `fetch.py` | SSRF-checked webpage fetching with IP pinning, redirect chain validation, streamed byte cap, clean text extraction, deep search orchestration |
 | `cache.py` | File-based TTL JSON cache (one file per key), atomic writes, background-capable pruning, stats and clear tools |
 | `security.py` | URL shape validation, hostname/IP blocklists, DNS resolution checks, safe-address pinning helper |
@@ -78,6 +79,11 @@ Layered SSRF defenses in `security.py` + `fetch.py`:
 Known residual risk: a hostile origin can still serve oversized or malicious
 *content* within the byte cap; the server treats fetched text as untrusted
 data and returns it verbatim to the client.
+
+## Aggregated search
+
+See [provider policy](providers.md) for modes, provider selection, timeout,
+cache and filtering semantics. Legacy DuckDuckGo behavior below is unchanged.
 
 ## Cache design
 

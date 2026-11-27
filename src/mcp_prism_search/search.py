@@ -460,80 +460,43 @@ async def ddg_search(
     )
 
 
-async def _aggregate_all(
-    chain: list[str],
-    request: SearchRequest,
-    timeout_seconds: int,
-    cache: JsonFileCache | None,
-) -> SearchResponse:
-    """Fan out to every provider in the chain concurrently and merge results.
+async def _search_one(name: str, request: SearchRequest, count: int, timeout: int):
+    """Return results and an accurate, credential-free attempt status."""
+    from mcp_prism_search.providers import record, run_provider
 
-    Round-robin interleaving preserves per-provider diversity; dedupe by
-    normalized URL drops repeats. At least one provider must return results
-    for the call to be considered a success.
-    """
-    import asyncio
-
-    from mcp_prism_search.providers import run_provider
-
-    window = max(request.max_results, request.search_window or 0) or request.max_results
-    tasks = {
-        name: asyncio.ensure_future(run_provider(name, request, window, timeout_seconds))
-        for name in chain
-    }
-
-    per_provider: dict[str, list[SearchResult]] = {}
-    errors: list[str] = []
-    done_set: set = set()
-    pending = set(tasks.values())
-    while pending:
-        done_set, pending = await asyncio.wait(pending, timeout=timeout_seconds)
-        for task in done_set:
-            name = next(n for n, t in tasks.items() if t is task)
+    try:
+        async with asyncio.timeout(timeout):
+            raw = await run_provider(name, request, count, timeout)
+        valid = []
+        for item in raw:
             try:
-                per_provider[name] = task.result()
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"{name}: error: {exc}")
-                per_provider[name] = []
-    # tasks that never completed within the timeout
-    for name, task in tasks.items():
-        if task not in done_set and not task.done():
-            task.cancel()
-            per_provider[name] = []
-            errors.append(f"{name}: timeout")
+                url = urlparse(item.url)
+                if url.scheme in {"http", "https"} and url.hostname:
+                    valid.append(item)
+            except ValueError:
+                continue
+        filtered = apply_domain_controls(
+            _dedupe_results(valid),
+            get_url=lambda item: item.url,
+            allowed_domains=request.allowed_domains,
+            blocked_domains=request.blocked_domains,
+            preferred_domains=[],
+        )
+        record(name, valid, None)
+        return filtered, f"{name}: ok ({len(filtered)})" if filtered else f"{name}: empty"
+    except TimeoutError:
+        status = "timeout"
+    except httpx.HTTPStatusError as exc:
+        status = f"HTTP {exc.response.status_code}"
+    except Exception as exc:  # noqa: BLE001 - isolate upstream failures.
+        status = type(exc).__name__
+    record(name, None, status)
+    return [], f"{name}: error ({status})"
 
-    attempts = []
-    for name in chain:
-        if name in per_provider:
-            attempts.append(f"{name}: ok ({len(per_provider[name])})")
-        elif any(name in error for error in errors):
-            attempts.append(f"{name}: error")
-        else:
-            attempts.append(f"{name}: empty")
-    for error in errors:
-        attempts.append(error)
 
-    merged: list[SearchResult] = []
-    seen: set[str] = set()
-    max_len = max((len(v) for v in per_provider.values()), default=0)
-    for index in range(max_len):
-        for name in chain:
-            provider_results = per_provider.get(name) or []
-            if index < len(provider_results):
-                item = provider_results[index]
-                key = item.url.rstrip("/").lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                merged.append(item)
-
-    return SearchResponse(
-        query=request.query,
-        provider="all",
-        results=merged[: request.max_results],
-        cached=False,
-        error=None if merged else ("; ".join(errors) or "All providers returned no results"),
-        provider_attempts=attempts,
+def _final_results(results: list[SearchResult], request: SearchRequest) -> list[SearchResult]:
+    return apply_search_domain_controls(
+        rank_results(_dedupe_results(results), request.query), request
     )
 
 
@@ -541,6 +504,7 @@ async def aggregated_search(
     query: str,
     *,
     provider: str = "auto",
+    providers: list[str] | None = None,
     max_results: int = 10,
     search_window: int | None = None,
     safe_search: str = "off",
@@ -551,8 +515,8 @@ async def aggregated_search(
     kind: str = "general",
     cache: JsonFileCache | None = None,
 ) -> SearchResponse:
-    """Aggregate across providers: fallback chain + ranking + tally."""
-    from mcp_prism_search.providers import record, resolve_chain, run_provider
+    """Search one provider, a health-ordered fallback chain or a parallel selection."""
+    from mcp_prism_search.providers import resolve_chain
 
     request = SearchRequest(
         query=query,
@@ -566,58 +530,69 @@ async def aggregated_search(
     )
     cache = cache or build_search_cache()
     attempts: list[str] = []
+    mode = "selected" if providers is not None else provider
+
+    def response(results, error=None, actual=None):
+        return SearchResponse(
+            query=query, provider=actual or mode, results=results, cached=False,
+            error=error, provider_attempts=attempts,
+        )
 
     try:
-        chain = resolve_chain(provider, kind)
-    except Exception as exc:  # noqa: BLE001 - unknown provider is a clean error.
-        return SearchResponse(
-            query=request.query,
-            provider=provider,
-            results=[],
-            cached=False,
-            error=str(exc),
-        )
+        if providers is not None:
+            if provider not in {"auto", "all"} or not providers:
+                raise ValueError("Provide a nonempty providers list without a single provider.")
+            chain = list(dict.fromkeys(providers))
+            for name in chain:
+                resolve_chain(name, kind)
+                if name in {"auto", "all"}:
+                    raise ValueError("Select explicit provider names in providers.")
+        else:
+            chain = resolve_chain(provider, kind)
+    except ValueError as exc:
+        return response([], str(exc))
 
     if not chain:
-        return SearchResponse(
-            query=request.query,
-            provider=provider,
-            results=[],
-            cached=False,
-            error="No search providers configured for this environment",
-        )
+        return response([], "No search providers configured for this environment")
 
-    timeout_seconds = get_ddg_timeout_seconds()
-
-    if provider == "all":
-        return await _aggregate_all(chain, request, timeout_seconds, cache)
-
-    for name in chain:
-        count = max(request.max_results, request.search_window or 0) or request.max_results
-        try:
-            results = await run_provider(name, request, count, timeout_seconds)
-        except Exception as exc:  # noqa: BLE001 - provider failures must not crash the server.
-            attempts.append(f"{name}: error: {exc}")
-            continue
-        record(name, results, None)
-        if results:
-            attempts.append(f"{name}: ok ({len(results)})")
-            return SearchResponse(
-                query=request.query,
-                provider=provider,
-                results=results[: request.max_results],
-                cached=False,
-                error=None,
-                provider_attempts=attempts,
-            )
-        attempts.append(f"{name}: empty")
-
-    record(provider, None, "all failed")
-    return SearchResponse(
-        query=request.query,
-        provider=provider,
-        results=[],
-        cached=False,
-        error="; ".join(attempts) or "All search providers failed",
-        provider_attempts=attempts,
+    parallel = provider == "all" or providers is not None
+    payload = request.to_cache_payload(
+        _aggregator_version=2, _mode=mode, _kind=kind,
+        _providers=sorted(chain) if mode == "auto" else chain,
     )
+    cached = cache.get(payload, ttl_seconds=search_ttl_for_query(query))
+    if cached is not None:
+        try:
+            return SearchResponse.model_validate(cached).model_copy(update={"cached": True})
+        except ValueError:
+            cache.delete(payload)
+
+    timeout = get_ddg_timeout_seconds()
+    count = max(request.max_results, provider_request_size(request))
+    actual = None
+    merged: list[SearchResult] = []
+    if parallel:
+        batches = await asyncio.gather(
+            *(_search_one(name, request, count, timeout) for name in chain)
+        )
+        attempts.extend(status for _, status in batches)
+        # Interleave before stable ranking so tied scores preserve source diversity.
+        for index in range(max((len(rows) for rows, _ in batches), default=0)):
+            merged.extend(rows[index] for rows, _ in batches if index < len(rows))
+    else:
+        for name in chain:
+            rows, status = await _search_one(name, request, count, timeout)
+            attempts.append(status)
+            if rows:
+                merged = rows
+                actual = name
+                break
+
+    results = _final_results(merged, request)
+    result = response(
+        results, None if results else "; ".join(attempts) or "No search results", actual
+    )
+    # Do not cache degraded parallel responses or failures.
+    if results and (not parallel or all(": ok (" in status for status in attempts)):
+        cache.set(payload, _cacheable_search_response(result))
+    return result

@@ -11,7 +11,7 @@ SEARCH_URL = "https://freeserp.ai/api.php"
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
-    params = {"q": request.query, "size": str(min(count, 100))}
+    params = {"q": request.query, "index": "web", "size": str(min(count, 100))}
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         response = await client.get(SEARCH_URL, params=params)
@@ -23,7 +23,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     for item in rows:
         url = str(item.get("url") or item.get("link") or "")
         title = normalize_whitespace(str(item.get("title") or ""))
-        snippet = normalize_whitespace(str(item.get("summary") or item.get("snippet") or ""))
+        snippet = normalize_whitespace(str(item.get("snippet") or item.get("summary") or ""))
         if not url.startswith("http") or not title:
             continue
         results.append(SearchResult(title=title, url=url, snippet=snippet))

@@ -32,24 +32,10 @@ def patched_client(module, handler):
         module.httpx.AsyncClient = original
 
 
-def test_tavily_keyless_sends_access_mode_header(monkeypatch) -> None:
+def test_tavily_requires_key(monkeypatch) -> None:
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
-    captured: dict = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["mode"] = request.headers.get("x-tavily-access-mode")
-        captured["auth"] = request.headers.get("authorization")
-        return httpx.Response(
-            200,
-            json={"results": [{"title": "T", "url": "https://example.com/", "content": "c"}]},
-        )
-
-    with patched_client(tavily, handler):
-        results = asyncio.run(tavily.search(_request("test"), 5, 10))
-
-    assert captured["mode"] == "keyless"
-    assert captured["auth"] is None
-    assert results[0].url == "https://example.com/"
+    with pytest.raises(RuntimeError, match="TAVILY_API_KEY"):
+        asyncio.run(tavily.search(_request(), 5, 10))
 
 
 def test_tavily_with_key_uses_bearer(monkeypatch) -> None:
@@ -125,13 +111,15 @@ def test_serper_parses_organic(monkeypatch) -> None:
     assert results[0].url == "https://s.example/"
 
 
-def test_youcom_parses_hits(monkeypatch) -> None:
+def test_youcom_parses_v1_results(monkeypatch) -> None:
     monkeypatch.setenv("YDC_API_KEY", "y")
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"hits": [{"title": "Y", "url": "https://y.example/", "description": "d"}]},
+            json={"results": {"web": [
+                {"title": "Y", "url": "https://y.example/", "description": "d"}
+            ]}},
         )
 
     with patched_client(youcom, handler):

@@ -1,8 +1,4 @@
-"""Tavily search provider — 1,000 free credits/month, plus a keyless mode.
-
-With TAVILY_API_KEY set: authenticated requests (Bearer tvly-...).
-Without: keyless mode via the X-Tavily-Access-Mode header (rate-limited).
-"""
+"""Authenticated Tavily search provider."""
 
 from __future__ import annotations
 
@@ -14,16 +10,13 @@ from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
 
 SEARCH_URL = "https://api.tavily.com/search"
-KEYLESS_HEADERS = {"X-Tavily-Access-Mode": "keyless"}
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
     api_key = os.getenv("TAVILY_API_KEY")
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    else:
-        headers.update(KEYLESS_HEADERS)
+    if not api_key:
+        raise RuntimeError("TAVILY_API_KEY is not set")
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 
     body: dict = {
         "query": request.query,

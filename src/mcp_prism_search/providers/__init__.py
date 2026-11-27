@@ -10,14 +10,11 @@ import os
 
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.providers import (  # noqa: F401
-    bing_html,
     bing_rss,
     brave,
     ddg_html,
-    ddg_lite,
     ddgs_lib,
     exa,
-    fourget,
     freeserp,
     hackernews,
     jina,
@@ -27,8 +24,8 @@ from mcp_prism_search.providers import (  # noqa: F401
     serper,
     tavily,
     wikipedia,
-    yandex_tr,
     youcom,
+    youcom_keyless,
 )
 from mcp_prism_search.providers.base import (  # noqa: F401
     ProviderHealth,
@@ -55,27 +52,12 @@ def build_registry() -> None:
         SPECS[name] = _spec(name, kind, needs, description, search_fn)
 
     # Keyless general web (live-tested from server IP)
-    add("bing_html", "general", None,
-        "Bing SERP scraping (bing.com/search, li.b_algo).",
-        bing_html.search)
     add("ddg_html", "general", None,
         "DuckDuckGo HTML endpoint scraping (IP-reputation dependent).",
         ddg_html.search)
-    add("ddg_lite", "general", None,
-        "DuckDuckGo lite endpoint (lightweight HTML SERP).",
-        ddg_lite.search)
-    add("ddgs:bing", "general", None,
-        "Bing web results via the ddgs multi-backend library.",
-        ddgs_lib.make_search(backend="bing"))
     add("ddgs:yahoo", "general", None,
         "Yahoo web results (Bing feed) via ddgs.",
         ddgs_lib.make_search(backend="yahoo"))
-    add("ddgs:brave", "general", None,
-        "Brave results via the ddgs library.",
-        ddgs_lib.make_search(backend="brave"))
-    add("ddgs:yandex", "general", None,
-        "Yandex results via the ddgs library (fragile from some IPs).",
-        ddgs_lib.make_search(backend="yandex"))
     add("bing_rss", "general", None,
         "Bing RSS XML search (stable, no key).",
         bing_rss.search)
@@ -89,10 +71,13 @@ def build_registry() -> None:
         "Keenable keyless web search (extracted text snippets).",
         keenable.search)
 
+    add("youcom_keyless", "general", None,
+        "You.com public MCP search (100 queries per day).",
+        youcom_keyless.search)
+
     # Keyed general web (free tiers verified in docs)
-    add("tavily", "general", None,
-        "Tavily search: 1,000 credits/month free, or keyless mode (rate-limited). "
-        "Set TAVILY_API_KEY for the authenticated tier.",
+    add("tavily", "general", "TAVILY_API_KEY",
+        "Tavily authenticated search (API key required).",
         tavily.search)
     add("exa", "general", "EXA_API_KEY",
         "Exa neural/keyword search (~1,430 free searches/month, no card).",

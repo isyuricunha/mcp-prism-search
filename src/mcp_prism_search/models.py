@@ -8,35 +8,22 @@ from mcp_prism_search.domains import normalize_domains
 
 SafeSearch = Literal["off", "moderate", "strict"]
 TimeFilter = Literal["day", "week", "month", "year"]
-SearchProvider = Literal[
-    "ddgs",
-    "duckduckgo_html",
-    "auto",
-    "all",
-    "bing_html",
-    "4get",
-    "mwmbl",
-    "freeserp",
-    "keenable",
-    "searxng",
-    "wikipedia",
-    "hackernews",
-]
+SearchProvider = str
 CacheNamespace = Literal["search", "fetch", "all"]
 
 ARGUMENT_DESCRIPTIONS = {
-    "query": "DuckDuckGo search query text.",
+    "query": "Web search query text.",
     "max_results": (
         "Final number of search results returned after URL dedupe and optional domain controls. "
         "This is not the provider request window."
     ),
     "search_window": (
-        "Internal provider result count requested from DuckDuckGo before URL dedupe, domain "
+        "Internal provider result count requested before URL dedupe, domain "
         "filtering, and final max_results capping. This is a result-count window, not a time "
         "range or number of days."
     ),
-    "safe_search": "DuckDuckGo safe search level: off, moderate, or strict.",
-    "time_filter": "DuckDuckGo time filter for search recency: day, week, month, or year.",
+    "safe_search": "Safe search level: off, moderate, or strict (provider support varies).",
+    "time_filter": "Recency: day, week, month, or year (provider support varies).",
     "blocked_domains": (
         "Exclusion list of domains to remove from search results. Exact domains and subdomains "
         "match; lookalike substring matches do not."

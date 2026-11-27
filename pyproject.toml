@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mcp-prism-search"
 version = "0.13.0"
-description = "MCP search aggregator: multi-provider keyless web search (Bing, DuckDuckGo, SearXNG, 4get, FreeSerp, Keenable, Mwmbl) with keyed free-tier providers (Tavily, Exa, Brave, You.com, Serper, Jina), fallback chains, deterministic ranking, caching, and SSRF-safe fetching."
+description = "MCP search aggregator: multi-provider keyless web search (Bing RSS, DuckDuckGo, SearXNG, FreeSerp, Keenable, Mwmbl) with keyed free-tier providers (Tavily, Exa, Brave, You.com, Serper, Jina), fallback chains, deterministic ranking, caching, and SSRF-safe fetching."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }

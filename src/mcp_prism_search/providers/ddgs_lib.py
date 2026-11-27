@@ -51,6 +51,10 @@ def make_search(backend: str):
 
     async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
         from ddgs import DDGS
+        from ddgs.ddgs import ENGINES
+
+        if backend not in ENGINES.get("text", {}):
+            raise ValueError(f"Unsupported DDGS backend: {backend}")
 
         def run() -> list[SearchResult]:
             with DDGS(timeout=timeout) as ddgs:

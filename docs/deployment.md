@@ -183,7 +183,8 @@ CACHE_MAX_AGE_SECONDS: "604800"
 CACHE_MAX_SIZE_MB: "512"
 ```
 
-The compose file keeps search DuckDuckGo-only by default:
+The compose file keeps the legacy DuckDuckGo tools DuckDuckGo-only by default.
+The aggregated `web_search` uses [provider policy](providers.md) independently:
 
 ```yaml
 SEARCH_PROVIDER: duckduckgo_html
@@ -471,7 +472,7 @@ Defaults are intentionally conservative:
 - `ddg_deep_search` defaults to 5 fetched pages and caps at 10.
 - Deep search concurrency defaults to 5.
 - Search and fetch results are cached to reduce repeated DuckDuckGo and website hits.
-- Search defaults to DuckDuckGo HTML only. `DDGS_BACKEND=auto` is broader
+- Legacy DuckDuckGo search defaults to DuckDuckGo HTML only. `DDGS_BACKEND=auto` is broader
   metasearch and can generate requests to additional upstream services.
 
 This project does not rotate proxies, bypass captchas, or attempt to evade rate limits. If DuckDuckGo blocks or rate limits requests, the tool returns structured errors instead of retrying aggressively.

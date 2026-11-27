@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import httpx
+from bs4 import BeautifulSoup
 
+from mcp_prism_search import __version__
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
 
 API_URL = "https://en.wikipedia.org/w/api.php"
-HEADERS = {"User-Agent": "mcp-prism-search/0.7 (personal MCP aggregator)"}
+HEADERS = {"User-Agent": f"mcp-prism-search/{__version__} (https://github.com/isyuricunha/mcp-prism-search)"}
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
@@ -28,7 +30,9 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     results: list[SearchResult] = []
     for item in data.get("query", {}).get("search", []):
         title = normalize_whitespace(str(item.get("title") or ""))
-        snippet = normalize_whitespace(str(item.get("snippet") or ""))
+        snippet = normalize_whitespace(
+            BeautifulSoup(str(item.get("snippet") or ""), "html.parser").get_text(" ")
+        )
         if not title:
             continue
         wiki_url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"

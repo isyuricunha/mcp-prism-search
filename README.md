@@ -3,8 +3,8 @@
 MCP search aggregator: one query, refracted across many keyless search engines.
 
 `mcp-prism-search` is a self-hosted Python MCP server (mcp SDK 2.x) that
-aggregates web search from multiple keyless engines — Bing, DuckDuckGo
-(HTML + lite), ddgs backends, FreeSerp, Keenable, Mwmbl, 4get, self-hosted
+aggregates web search from multiple keyless engines — Bing RSS, DuckDuckGo
+(HTML fallback), DDGS Yahoo, FreeSerp, Keenable, Mwmbl, You.com public MCP, self-hosted
 SearXNG — with automatic fallback chains, deterministic ranking, TTL caching,
 SSRF-safe webpage fetching, and keyless vertical sources (Wikipedia,
 HackerNews). Keyed providers with free tiers (Tavily, Exa, Brave, You.com,
@@ -18,6 +18,7 @@ LLMs, summarizes, or generates reports.
 | Document | Contents |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | Module map, request flow, layered SSRF/security model, domain controls, cache design |
+| [docs/providers.md](docs/providers.md) | Search modes, provider policy, quotas, migration notes |
 | [docs/development.md](docs/development.md) | Dev setup, test suite layout, commands, conventions, semantic-release, dependency policy |
 | [docs/deployment.md](docs/deployment.md) | Docker and docker-compose operation, HTTP hardening, health checks, LAN/proxy/tunnel examples, full env var reference |
 
@@ -25,7 +26,7 @@ LLMs, summarizes, or generates reports.
 
 | Tool | Description |
 |---|---|
-| `web_search` | Aggregated web search. `provider="auto"` walks the healthy fallback chain; `provider="all"` fans out to every provider in parallel and merges results; or pin one provider by name. |
+| `web_search` | Aggregated web search. `provider="auto"` walks the healthy fallback chain; `provider="all"` fans out to every provider in parallel and merges results; pin one provider by name, or pass `providers` to search a selected set concurrently. |
 | `web_fetch` | SSRF-safe webpage fetch with IP pinning, redirect validation, streamed byte cap, and clean text extraction. |
 | `ddg_deep_search` | Search once, fetch the top pages concurrently, return raw page text with progress notifications. |
 | `vertical_search` | Search keyless vertical sources: `wikipedia`, `hackernews`. |
@@ -42,19 +43,20 @@ All tools publish typed `outputSchema` and return validated
 
 | Provider | What it is |
 |---|---|
-| `bing_html` | Bing SERP scraping — the most permissive engine from datacenter IPs |
-| `ddg_html` / `ddg_lite` | DuckDuckGo HTML and lite endpoints (IP-reputation dependent) |
-| `ddgs:bing` / `ddgs:yahoo` / `ddgs:brave` / `ddgs:yandex` | ddgs library multi-backend |
-| `freeserp` | FreeSerp own-index SERP (keyless JSON API) |
-| `keenable` | Keenable web search with extracted text |
-| `mwmbl` | Mwmbl community index (keyless, AGPL) |
+| `keenable` | Keyless API with extracted text snippets; preferred for general web search |
+| `freeserp` | Independent page-level web index, keyless JSON API |
+| `bing_rss` | Bing XML search with direct links |
+| `ddgs:yahoo` | Yahoo results through DDGS |
+| `mwmbl` | Independent community index; anonymous quota and rate limit |
+| `youcom_keyless` | Official public MCP search, 100 queries/day |
+| `ddg_html` | Last-resort DuckDuckGo HTML endpoint (IP-reputation dependent) |
 | `wikipedia` / `hackernews` | Keyless vertical sources |
 
 **Keyed (free tiers verified against official docs):**
 
 | Provider | Free tier | Env var |
 |---|---|---|
-| `tavily` | 1,000 credits/month, or keyless mode | `TAVILY_API_KEY` (optional — works keyless) |
+| `tavily` | Authenticated free tier | `TAVILY_API_KEY` |
 | `exa` | ~1,430 searches/month (no card) | `EXA_API_KEY` |
 | `brave` | ~1,000 searches/month (card required at signup, prepay $0) | `BRAVE_API_KEY` |
 | `youcom` | $100 one-time credit | `YDC_API_KEY` |
@@ -85,11 +87,19 @@ curl -s http://127.0.0.1:49317/health   # -> {"ok": true}
 Then call it from any MCP client at `http://127.0.0.1:49317/mcp` with
 `Authorization: Bearer <token>`.
 
-Search across every keyless engine at once:
+Search across all configured general engines (including keyed engines if configured):
 
 ```json
 {"query": "model context protocol", "provider": "all", "max_results": 15}
 ```
+
+Search only selected providers in parallel:
+
+```json
+{"query": "model context protocol", "providers": ["keenable", "freeserp"], "max_results": 10}
+```
+
+See [provider policy](docs/providers.md) for quotas, fallback behavior and migration notes.
 
 ## Security
 
