@@ -802,8 +802,16 @@ function appendNativeSources(list,sources){
 function nativeMode(){return document.querySelector("input[name=native-mode]:checked").value;}
 function updateNativeCount(){
   const input=$("native-query"),limit=Number(input.dataset.limit||4000),count=Array.from(input.value).length;
-  input.setCustomValidity(count>limit?"Use at most "+limit+" characters.":"");
+  input.setCustomValidity(count>limit?"Use at most "+limit+" characters.":
+    count&&!input.value.trim()?"Enter a non-empty question.":"");
   $("native-count").textContent=count+" / "+limit;
+  syncNativeRun();
+}
+function syncNativeRun(){
+  const mode=nativeMode(),provider=$("native-provider").value;
+  const available=state?.native?.some(p=>p.id===provider&&p.available&&p[mode]);
+  $("native-run").disabled=nativePending||!available||!$("native-query").validity.valid||
+    (mode==="research"&&!$("native-effort").value);
 }
 $("native-query").addEventListener("input",()=>{updateNativeCount();feedback("native-feedback");});
 function renderNativeOptions(){
@@ -840,7 +848,7 @@ function renderNativeOptions(){
   effortSelect.disabled=nativePending||!selectedCap;
   $("native-effort-field").hidden=mode!=="research";
   $("native-run").textContent=nativePending?"Working…":mode==="answer"?"Generate answer":"Run research";
-  $("native-run").disabled=nativePending||!selectedCap||(mode==="research"&&!effortSelect.value);
+  syncNativeRun();
   select.disabled=nativePending||!caps.some(p=>p.available);
 }
 for(const input of document.querySelectorAll("input[name=native-mode]"))input.addEventListener("change",()=>{$("native-provider").value="";$("native-effort").value="";renderNativeOptions();});

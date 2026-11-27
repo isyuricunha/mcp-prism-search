@@ -363,7 +363,12 @@ try{
  assert.equal(await page.locator("#native-run").isDisabled(),true);
  await page.locator("#native-provider").selectOption("tinyfish");
  assert.equal(await page.locator("#native-query").getAttribute("maxlength"),"4000");
+ await page.locator("#native-query").fill("   ");
+ assert.equal(await page.locator("#native-run").isDisabled(),true);
+ await page.locator("#native-query").fill("x".repeat(2001));
+ assert.equal(await page.locator("#native-run").isDisabled(),true);
  await page.locator("#native-query").fill("😀".repeat(2000));
+ assert.equal(await page.locator("#native-run").isDisabled(),false);
  assert.equal(await page.locator("#native-count").textContent(),"2000 / 2000");
  assert.equal(await page.locator("#native-query").evaluate(n=>n.validity.valid),true);
  await page.locator("#native-query").fill("test answer");
