@@ -425,3 +425,21 @@ def test_cache_unusable_directory(tmp_path):
     assert cache.delete({"query": "test"}) is False
     assert get_cache_stats(tmp_path).total_files == 0
     assert (tmp_path / "search").read_text() == "not a directory"
+
+
+def test_cache_scan_non_entries(tmp_path):
+    namespace = tmp_path / "search"
+    namespace.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep")
+    (namespace / "link.json").symlink_to(outside)
+    (namespace / "directory.json").mkdir()
+    (namespace / "notes.txt").write_text("keep")
+    _write_cache_file(namespace / "entry.json", created_at=time.time())
+    assert get_cache_stats(tmp_path).total_files == 1
+    stats = clear_cache(namespace="search", confirm=True, root_dir=tmp_path)
+    assert stats.deleted_files == 1
+    assert outside.read_text() == "keep"
+    assert (namespace / "link.json").is_symlink()
+    assert (namespace / "directory.json").is_dir()
+    assert (namespace / "notes.txt").exists()
