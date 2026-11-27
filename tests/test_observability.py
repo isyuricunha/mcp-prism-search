@@ -222,3 +222,16 @@ def test_history_private_permissions(tmp_path):
         assert path.read_text() == "preserve"
     finally:
         obs.close()
+
+
+def test_operation_cancelled_resets_context(logs):
+    @obs.operation("web_search")
+    async def cancelled():
+        raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(cancelled())
+    rows = obs.history()["events"]
+    assert [row["outcome"] for row in rows] == ["cancelled", "started"]
+    assert rows[0]["request_id"] == rows[1]["request_id"]
+    assert obs.request_id.get() is None
