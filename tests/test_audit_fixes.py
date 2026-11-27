@@ -137,7 +137,8 @@ def test_fetch_poisoned_cache_is_invalidated(tmp_path) -> None:
 # --- fetch: byte cap + IP pinning ---------------------------------------------
 
 
-def test_fetch_byte_cap_aborts_large_body() -> None:
+def test_fetch_byte_cap_aborts_large_body(tmp_path) -> None:
+    cache = JsonFileCache(tmp_path, "fetch", 3600)
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -160,7 +161,9 @@ def test_fetch_byte_cap_aborts_large_body() -> None:
         factory.return_value = REAL_ASYNC_CLIENT(
             transport=httpx.MockTransport(handler), timeout=15
         )
-        result = asyncio.run(fetch_module.web_fetch(url="https://example.com/", max_chars=1000))
+        result = asyncio.run(
+            fetch_module.web_fetch(url="https://example.com/", max_chars=1000, cache=cache)
+        )
 
     # the oversized body is truncated with an actionable notice, not an error
     assert result.success
@@ -170,7 +173,8 @@ def test_fetch_byte_cap_aborts_large_body() -> None:
     assert captured["host"] == "example.com"  # Host header preserved during pinning
 
 
-def test_small_body_succeeds_with_host_preserved_in_pin() -> None:
+def test_small_body_succeeds_with_host_preserved_in_pin(tmp_path) -> None:
+    cache = JsonFileCache(tmp_path, "fetch", 3600)
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -196,7 +200,7 @@ def test_small_body_succeeds_with_host_preserved_in_pin() -> None:
         factory.return_value = REAL_ASYNC_CLIENT(
             transport=httpx.MockTransport(handler), timeout=15
         )
-        result = asyncio.run(fetch_module.web_fetch(url="https://example.com/page"))
+        result = asyncio.run(fetch_module.web_fetch(url="https://example.com/page", cache=cache))
 
     assert result.success
     assert captured["host"] == "example.com"

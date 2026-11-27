@@ -15,6 +15,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from mcp_prism_search import __version__
 from mcp_prism_search import cache as cache_ops
 from mcp_prism_search.cache import (
     _get_env_bool,
@@ -74,7 +75,7 @@ def _validated_log_level() -> str:
 
 mcp = MCPServer(
     name="mcp-prism-search",
-    version="0.6.0",
+    version=__version__,
     instructions=(
         "Deterministic DuckDuckGo search and safe webpage fetching tools. "
         "This server does not call LLMs, summarize, or generate reports."
@@ -320,7 +321,7 @@ async def web_search(
         list[str] | None,
         Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
-) -> dict:
+) -> dict[str, Any]:
     """Aggregate web search across providers with automatic fallback."""
 
     available = sorted(available_providers("general"))
@@ -359,7 +360,7 @@ async def vertical_search(
         int,
         Field(default=5, ge=1, le=20, description=ARGUMENT_DESCRIPTIONS["max_results"]),
     ] = 5,
-) -> dict:
+) -> dict[str, Any]:
     """Search one keyless vertical source (wikipedia, hackernews)."""
 
     response = await perform_aggregated_search(
@@ -507,7 +508,7 @@ async def ddg_deep_search(
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
-async def cache_stats() -> dict:
+async def cache_stats() -> dict[str, Any]:
     """Return cache file counts and byte totals for each cache namespace."""
 
     return cache_ops.get_cache_stats().to_dict()
@@ -523,7 +524,7 @@ async def cache_prune(
         bool,
         Field(description=ARGUMENT_DESCRIPTIONS["dry_run"]),
     ] = False,
-) -> dict:
+) -> dict[str, Any]:
     """Prune expired, corrupt, temporary, and oversized cache files."""
 
     return cache_ops.prune_cache(expired_only=expired_only, dry_run=dry_run).to_dict()
@@ -539,7 +540,7 @@ async def cache_clear(
         bool,
         Field(description=ARGUMENT_DESCRIPTIONS["confirm"]),
     ],
-) -> dict:
+) -> dict[str, Any]:
     """Clear one cache namespace, or all namespaces, when confirm is true."""
 
     return cache_ops.clear_cache(namespace=namespace, confirm=confirm).to_dict()

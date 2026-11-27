@@ -45,6 +45,7 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=$(openssl rand -hex 32) MCP_PORT=8000 \
 | `tests/test_search.py` | HTML result parsing, redirect resolution, ddgs compat shims, dedupe, provider request sizing, deep search |
 | `tests/test_cache.py` | read/write, expiry, corrupt files, prune (expired/size/dry-run), stats, clear |
 | `tests/test_server.py` | HTTP settings (fail-closed defaults, wildcard opt-out), transport security, bearer middleware, tool schemas |
+| `tests/test_protocol.py` | MCP client discovery, tool listing and structured responses in modern and legacy protocol modes |
 | `tests/test_security.py` | URL shape validation and IP/hostname blocklists |
 | `tests/test_domains.py` | domain normalization and allow/block/preferred controls |
 | `tests/test_audit_fixes.py` | regression tests for every audit finding and improvement (time filter, cache poisoning invalidation, byte cap, IP pinning, CGNAT blocklist, ToolError contract, progress reporting, `/health`, placeholder token rejection) |
@@ -71,12 +72,12 @@ Notes:
 
 ## Dependency policy
 
-- Runtime dependencies carry lower bounds (`mcp>=2.2,<3`, and so on).
+- Runtime dependencies carry lower bounds (`mcp>=2.3,<3`, and so on).
 - `requirements-lock.txt` is the committed lock used by the Dockerfile for
   reproducible image builds; regenerate it after changing dependencies:
 
 ```bash
-.venv/bin/pip freeze | grep -v '^-e\|^mcp-ddg' > requirements-lock.txt
+.venv/bin/pip freeze | grep -v '^-e\|^mcp-prism-search==' > requirements-lock.txt
 ```
 
 - The release workflow builds the Docker image on every push to `main`
