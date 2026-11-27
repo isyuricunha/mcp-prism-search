@@ -206,3 +206,19 @@ def test_history_time_cutoff(logs):
         handle.write(json.dumps(dict(row, timestamp="2000-01-01T00:00:00+00:00")) + "\n")
     cutoff = datetime(2020, 1, 1, tzinfo=UTC).timestamp()
     assert obs.history(provider="exa", since=cutoff)["events"] == [row]
+
+
+def test_history_private_permissions(tmp_path):
+    directory = tmp_path / "logs"
+    tmp_path.chmod(0o700)
+    directory.mkdir(mode=0o700)
+    path = directory / "events.jsonl"
+    path.write_text("preserve")
+    path.chmod(0o644)
+    obs.configure("INFO", directory)
+    try:
+        assert obs.history()["enabled"] is False
+        obs.emit("provider", "ok", provider="exa")
+        assert path.read_text() == "preserve"
+    finally:
+        obs.close()
