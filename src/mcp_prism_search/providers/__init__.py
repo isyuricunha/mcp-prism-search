@@ -152,7 +152,10 @@ async def run_provider(
 ) -> list[SearchResult]:
     if not SPECS:
         build_registry()
-    return await SPECS[name].search(request, count, timeout)
+    spec = available_providers().get(name)
+    if spec is None:
+        raise ValueError("Provider is no longer available")
+    return await spec.search(request, count, timeout)
 
 
 def resolve_chain(requested: str, kind: str | None = None) -> list[str]:

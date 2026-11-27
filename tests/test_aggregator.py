@@ -172,3 +172,9 @@ def test_provider_health_recovers_after_recent_successes():
         health.bump("ok")
     assert health.score == 1 and health.total == 132
     assert len(health.recent) == 32
+
+
+def test_provider_disabled_after_chain_resolution_is_not_called(monkeypatch):
+    monkeypatch.setenv("MCP_DISABLED_PROVIDERS", "keenable")
+    with pytest.raises(ValueError, match="no longer available"):
+        asyncio.run(providers.run_provider("keenable", SearchRequest(query="test"), 5, 5))
