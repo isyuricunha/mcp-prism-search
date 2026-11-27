@@ -143,3 +143,17 @@ def test_domain_filter_does_not_strip_single_label_www_suffix():
     assert normalize_domain("www.example") == "www.example"
     assert normalize_domain("www.example.org") == "example.org"
     assert not domain_matches("evil.example", "www.example")
+
+
+def test_domain_filter_uses_idna2008_and_exact_ip_literals():
+    assert normalize_domain("faß.example") == "xn--fa-hia.example"
+    assert not domain_matches("fass.example", "faß.example")
+    assert not domain_matches("evil.8.8.8.8", "8.8.8.8")
+    assert domain_matches("8.8.8.8", "8.8.8.8")
+
+
+def test_domain_filter_rejects_embedded_control_characters():
+    import pytest
+
+    with pytest.raises(ValueError, match="Invalid domain"):
+        normalize_domain("exam\nple.org")

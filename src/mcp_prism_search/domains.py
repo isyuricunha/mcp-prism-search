@@ -7,8 +7,12 @@ from collections.abc import Callable, Iterable, Sequence
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
+import httpx
+
 
 def normalize_domain(value: str) -> str:
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise ValueError("Invalid domain")
     raw_value = value.strip().lower()
     if not raw_value:
         return ""
@@ -27,7 +31,10 @@ def normalize_domain(value: str) -> str:
         return str(ip_address(normalized))
     except ValueError:
         pass
-    normalized = normalized.encode("idna").decode("ascii")
+    try:
+        normalized = httpx.URL("https://" + normalized).raw_host.decode("ascii")
+    except (httpx.InvalidURL, UnicodeError):
+        raise ValueError("Invalid domain") from None
     if len(normalized) > 253 or any(
         not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
         for label in normalized.split(".")
@@ -58,9 +65,13 @@ def domain_matches(hostname: str, domain: str) -> bool:
         return False
     if not normalized_hostname or not normalized_domain:
         return False
-    return normalized_hostname == normalized_domain or normalized_hostname.endswith(
-        f".{normalized_domain}"
-    )
+    if normalized_hostname == normalized_domain:
+        return True
+    try:
+        ip_address(normalized_domain)
+    except ValueError:
+        return normalized_hostname.endswith(f".{normalized_domain}")
+    return False
 
 
 def url_matches_domains(url: str, domains: Sequence[str]) -> bool:
