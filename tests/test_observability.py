@@ -186,3 +186,12 @@ def test_panel_operation_rate_limit_retains_http_status(logs):
     row = obs.history()["events"][0]
     assert row["outcome"] == "limited" and row["status_code"] == 429
     assert row["level"] == "WARNING"
+
+
+@pytest.mark.parametrize("timestamp", [None, "not-a-date", "2026-11-27T17:00:00", 123])
+def test_history_rejects_untrusted_timestamps(logs, timestamp):
+    obs.emit("provider", "ok", provider="keenable")
+    row = obs.history()["events"][0]
+    with (logs / "events.jsonl").open("a") as handle:
+        handle.write(json.dumps(dict(row, timestamp=timestamp)) + "\n")
+    assert obs.history()["events"] == [row]
