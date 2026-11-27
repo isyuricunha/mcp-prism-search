@@ -566,3 +566,12 @@ def test_native_sse_ignores_empty_data_events(configure, monkeypatch):
         200, text=stream, headers={"content-type": "text/event-stream"}))
     result = asyncio.run(native.synthesize("question", "brave", "answer", allow_cost=True))
     assert result.answer == "Answer"
+
+
+def test_combined_invalid_rows_do_not_consume_requested_result_window(configure, monkeypatch):
+    mock_http(monkeypatch, lambda req: httpx.Response(200, json={
+        "answer": "AI", "results": [None, {"title": "Bad", "url": "javascript:bad"}, ROW],
+    }))
+    result = asyncio.run(search.aggregated_search(
+        "question", provider="tavily", max_results=1))
+    assert len(result.results) == 1 and result.results[0].url == ROW["url"]

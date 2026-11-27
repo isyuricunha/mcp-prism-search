@@ -84,7 +84,7 @@ async def combined_search(
             if not isinstance(rows, list):
                 raise ValueError("Invalid results")
             results = []
-            for row in rows[:count]:
+            for row in rows:
                 if not isinstance(row, dict):
                     continue
                 source = native._source(1, row)
@@ -97,6 +97,8 @@ async def combined_search(
                             )
                         ),
                     ))
+                    if len(results) >= count:
+                        break
             # Valid retrieval must survive a missing or malformed synthesis.
             answer = None
             try:
