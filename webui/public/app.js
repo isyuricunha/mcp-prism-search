@@ -189,10 +189,20 @@ function renderOverview() {
     metric("Search cache hit rate",hits+misses ? (100*hits/(hits+misses)).toFixed(1)+"%" : "—",number(hits)+" hits · "+number(misses)+" misses"),
     metric("Rate limits",number(metrics.reduce((n,m)=>n+m.limited,0)),"HTTP 429 · included in errors")
   );
-  const version = server?.version ? "v"+server.version : "Version unavailable";
-  $("sidebar-version").textContent = version;
+  const version = server?.version || "Version unavailable";
+  const kind=server?.build_kind;
+  const buildLabel=kind==="release"?"Release version":kind==="development"?"Local development":"Unidentified build";
+  const commit=typeof server?.commit==="string"&&/^[0-9a-f]{7,40}$/.test(server.commit)?server.commit:null;
+  const versionLink=$("sidebar-version"),buildDetail=$("sidebar-build");
+  versionLink.textContent=kind==="release"?"v"+version:buildLabel;
+  versionLink.title=version;
+  const repository="https://github.com/isyuricunha/mcp-prism-search";
+  if(kind==="release"&&/^[0-9]+[.][0-9]+[.][0-9]+$/.test(version))versionLink.href=repository+"/releases/tag/v"+version;
+  else if(kind==="development"&&commit)versionLink.href=repository+"/commit/"+commit;
+  else versionLink.removeAttribute("href");
+  buildDetail.hidden=!commit;buildDetail.textContent=commit?"Commit "+commit.slice(0,9):"";
   $("sidebar-sdk").textContent = server?.sdk_version ? "MCP SDK "+server.sdk_version : "SDK version unavailable";
-  const items = [["Prism Search",version],["Python MCP SDK",server?.sdk_version || "Unavailable"],["SDK protocol revision",server?.protocol_version || "Unavailable"],["Transport",server?.transport || "Unavailable"]];
+  const items = [["Prism Search",kind==="release"?"v"+version:version],["Build type",buildLabel],...(commit?[["Source commit",commit]]:[]),["Python MCP SDK",server?.sdk_version || "Unavailable"],["SDK protocol revision",server?.protocol_version || "Unavailable"],["Transport",server?.transport || "Unavailable"]];
   facts($("server-facts"),items); facts($("connection-facts"),items);
   facts($("readiness"),[
     ["Keyless web engines",providers.filter(p=>p.kind==="general"&&!p.env&&p.available).length],

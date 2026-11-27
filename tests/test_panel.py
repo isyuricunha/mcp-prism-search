@@ -169,11 +169,13 @@ def test_dashboard_reports_installed_versions(panel):
     from mcp.types import LATEST_PROTOCOL_VERSION
 
     from mcp_prism_search import __version__
+    from mcp_prism_search.version_info import build_info
 
     client, _, _ = panel
     sign_in(client)
     assert client.get("/api/overview").json()["server"] == {
         "version": __version__,
+        **build_info(__version__),
         "sdk_version": version("mcp"),
         "protocol_version": LATEST_PROTOCOL_VERSION,
         "transport": "streamable-http",
@@ -358,3 +360,23 @@ def test_successful_reauthentication_revokes_previous_cookie(panel):
     client.cookies.clear()
     client.cookies.set(COOKIE, second)
     assert client.get("/api/overview").status_code == 200
+
+
+
+@pytest.mark.parametrize(("installed", "kind", "commit"), [
+    ("0.15.3", "release", None),
+    ("0.15.4.dev1+g123abc456", "development", "123abc456"),
+    ("0.15.4.dev1+g123abc456.d20261127", "development", "123abc456"),
+    ("0.15.4.dev0", "development", None),
+    ("0.15.3+local", "development", None),
+    ("0.0.0+unknown", "unknown", None),
+    ("invalid", "unknown", None),
+])
+def test_dashboard_build_identity(panel, monkeypatch, installed, kind, commit):
+    client, _, _ = panel
+    monkeypatch.setattr("mcp_prism_search.panel.__version__", installed)
+    sign_in(client)
+    server = client.get("/api/overview").json()["server"]
+    assert server["version"] == installed
+    assert server["build_kind"] == kind
+    assert server["commit"] == commit

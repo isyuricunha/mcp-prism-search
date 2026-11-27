@@ -29,6 +29,7 @@ from mcp_prism_search.models import SafeSearch, SearchRequest
 from mcp_prism_search.native import Effort, NativeError, capabilities, synthesize
 from mcp_prism_search.panel_store import PanelStore
 from mcp_prism_search.search import aggregated_search, get_ddg_timeout_seconds
+from mcp_prism_search.version_info import build_info
 
 COOKIE = "prism_admin"
 SESSION_TTL = 8 * 3600
@@ -176,6 +177,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         return JSONResponse({
             "server": {
                 "version": __version__,
+                **build_info(__version__),
                 "sdk_version": version("mcp"),
                 "protocol_version": LATEST_PROTOCOL_VERSION,
                 "transport": "streamable-http",

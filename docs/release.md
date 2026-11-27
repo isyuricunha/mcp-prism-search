@@ -9,6 +9,15 @@ explicitly (the Docker context deliberately excludes .git). A non-tagged
 source checkout uses a development version; an unversioned Docker build
 reports 0.0.0+unknown. Runtime package metadata is authoritative.
 
+The dashboard distinguishes tagged release versions, local development
+builds (with the Git commit when Hatch VCS embeds it), and unidentified
+builds. It always preserves the exact installed version in server details.
+A clean source checkout at an exact release tag has the same version as
+that release; the version alone does not prove its installation origin.
+Rebuild Docker images or reinstall editable source packages after Git
+updates to refresh installed metadata. The dashboard never substitutes a
+remote latest version for the installed version.
+
 ## Publication
 
 1. Plan against the triggering commit, or an explicitly requested latest

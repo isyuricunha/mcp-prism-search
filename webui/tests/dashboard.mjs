@@ -31,7 +31,7 @@ async function nativeComplete(response){
    !document.querySelector("#native-result").hidden);
 }
 const provider=(id,extra={})=>({id,kind:"general",description:"A search engine for web research.",enabled:true,available:true,credential:false,editable:false,managed:false,env:null,...extra});
-let data={defaults:JSON.parse(await fs.readFile(new URL("./defaults-fixture.json",import.meta.url),"utf8")),native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7-test",sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
+let data={defaults:JSON.parse(await fs.readFile(new URL("./defaults-fixture.json",import.meta.url),"utf8")),native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7",build_kind:"release",commit:null,sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
 await page.route("http://prism-test.invalid/**",async route=>{
  const url=new URL(route.request().url());
  const pathname=url.pathname;
@@ -78,8 +78,24 @@ try{
  await page.locator("#password").fill("test-only-password");
  await page.getByRole("button",{name:"Sign in",exact:true}).click();
  await page.locator("#dashboard").waitFor({state:"visible"});
- assert.equal(await page.locator("#sidebar-version").textContent(),"v9.8.7-test");
+ assert.equal(await page.locator("#sidebar-version").textContent(),"v9.8.7");
+ assert.ok((await page.locator("#sidebar-version").getAttribute("href")).endsWith("/releases/tag/v9.8.7"));
  assert.ok((await page.locator("#server-facts").textContent()).includes("2.3.0"));
+ const originalServer={...data.server};
+ data.server={...originalServer,version:"9.8.8.dev1+g123abc456",build_kind:"development",commit:"123abc456"};
+ await page.evaluate(()=>refresh());
+ assert.equal(await page.locator("#sidebar-version").textContent(),"Local development");
+ assert.equal(await page.locator("#sidebar-build").textContent(),"Commit 123abc456");
+ assert.ok((await page.locator("#sidebar-version").getAttribute("href")).endsWith("/commit/123abc456"));
+ assert.ok((await page.locator("#server-facts").textContent()).includes("9.8.8.dev1+g123abc456"));
+ data.server={...originalServer,version:"0.0.0+unknown",build_kind:"unknown",commit:null};
+ await page.evaluate(()=>refresh());
+ assert.equal(await page.locator("#sidebar-version").textContent(),"Unidentified build");
+ assert.equal(await page.locator("#sidebar-version").getAttribute("href"),null);
+ assert.equal(await page.locator("#sidebar-build").isVisible(),false);
+ data.server=originalServer;
+ await page.evaluate(()=>refresh());
+ assert.equal(await page.locator("#sidebar-version").textContent(),"v9.8.7");
  const viewports=[1440,900,768,720,450,375];
  for(const width of viewports){
   await page.setViewportSize({width,height:900});
