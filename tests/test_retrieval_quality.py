@@ -55,3 +55,12 @@ def test_final_results_bound_title_and_snippet_context():
     assert 0 < len(bounded.title) <= MAX_RESULT_TITLE
     assert 0 < len(bounded.snippet) <= MAX_RESULT_SNIPPET
     assert bounded.url == result.url
+
+
+def test_context_bounded_ranking_is_idempotent_for_cache_validation():
+    first = row("Generic", "https://a.example/", "x" * 5000 + " needle")
+    second = row("Generic", "https://b.example/", "needle")
+    request = SearchRequest(query="needle")
+    final = _final_results([first, second], request)
+    assert final[0].url == second.url
+    assert _final_results(final, request) == final

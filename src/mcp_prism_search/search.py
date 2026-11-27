@@ -551,11 +551,11 @@ MAX_RESULT_SNIPPET = 4000
 
 
 def _final_results(results: list[SearchResult], request: SearchRequest) -> list[SearchResult]:
-    ranked = apply_search_domain_controls(rank_results(results, request.query), request)
-    return [row.model_copy(update={
+    bounded = [row.model_copy(update={
         "title": row.title[:MAX_RESULT_TITLE].rstrip(),
         "snippet": row.snippet[:MAX_RESULT_SNIPPET].rstrip(),
-    }) for row in ranked]
+    }) for row in results if isinstance(row, SearchResult)]
+    return apply_search_domain_controls(rank_results(bounded, request.query), request)
 
 
 async def aggregated_search(
