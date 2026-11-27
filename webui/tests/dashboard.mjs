@@ -142,7 +142,10 @@ try{
  await page.getByRole("dialog").getByRole("button",{name:"Clear cache",exact:true}).click();
  await page.waitForFunction(()=>document.querySelector("#cache-feedback").textContent.includes("Removed"));
  assert.equal(cleared,1);
- await nav("Playground");await page.locator("#query").fill("test query");
+ await nav("Playground");
+ assert.equal(await page.locator("#query").getAttribute("maxlength"),"4000");
+ await page.locator("#query").fill("test query");
+ assert.equal(await page.locator("#query-count").textContent(),"10 / 4000");
  const firstSearch=responseFor("/api/search",d=>d.mode===undefined);
  await page.getByRole("button",{name:"Run search"}).click();
  await searchComplete(firstSearch);

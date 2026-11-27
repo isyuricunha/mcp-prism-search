@@ -25,7 +25,7 @@ from starlette.staticfiles import StaticFiles
 from mcp_prism_search import __version__, cache, providers, runtime
 from mcp_prism_search.ai_search import ENABLED_ENV, PROVIDERS_ENV, SUPPORTED, policy
 from mcp_prism_search.defaults import Recency, describe_defaults, update_defaults
-from mcp_prism_search.models import SafeSearch
+from mcp_prism_search.models import SafeSearch, SearchRequest
 from mcp_prism_search.native import Effort, NativeError, capabilities, synthesize
 from mcp_prism_search.panel_store import PanelStore
 from mcp_prism_search.search import aggregated_search, get_ddg_timeout_seconds
@@ -78,8 +78,8 @@ class ClearCache(BaseModel):
 
 class Query(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    query: str = Field(min_length=1, max_length=1000)
-    providers: list[str] | None = Field(default=None, min_length=1, max_length=50)
+    query: str = Field(min_length=1, max_length=4000)
+    providers: list[str] | None = Field(default=None, min_length=1, max_length=20)
     mode: Literal["default", "selected", "auto", "keyless", "all"] | None = None
     max_results: int | None = Field(default=None, ge=1, le=30)
     safe_search: SafeSearch | None = None
@@ -157,6 +157,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
 
     async def overview(request):
         rows = []
+        query_schema = SearchRequest.model_json_schema()["properties"]["query"]
         available = providers.available_providers()
         for name, spec in providers.SPECS.items():
             env = spec.needs
@@ -180,6 +181,10 @@ def create_app(password: str, store: PanelStore, assets: Path,
             "providers": rows, "metrics": store.metrics(), "counters": store.counters(),
             "settings": current_settings(),
             "defaults": describe_defaults(),
+            "limits": {
+                "query_max_chars": query_schema["maxLength"],
+                "selected_providers_max": 20,
+            },
             "native": capabilities(),
             "cache": (await asyncio.to_thread(cache.get_cache_stats)).to_dict(),
         })

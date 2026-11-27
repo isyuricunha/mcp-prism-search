@@ -109,7 +109,7 @@ function showLogin() {
   $("search-ai-cards").replaceChildren();$("search-ai-attempts").replaceChildren();$("search-ai-results").hidden=true;
   $("native-provider").value="";$("native-effort").value="";
   $("native-query").value = ""; $("native-answer").textContent = ""; $("native-sources").replaceChildren(); $("native-result").hidden=true; feedback("native-feedback");
-  $("query").value = ""; $("query-count").textContent = "0 / 1000"; $("search-output").hidden = true;
+  $("query").value = ""; updateQueryCount(); $("search-output").hidden = true;
   $("endpoint").value = ["localhost","127.0.0.1"].includes(location.hostname) ? "http://127.0.0.1:49317/mcp" : ""; connection();
   $("password").value = ""; $("password").type = "password";
   $("password-visibility").textContent = "Show"; $("password-visibility").setAttribute("aria-pressed","false");
@@ -386,7 +386,12 @@ $("max-results").addEventListener("input",syncSearchMode);
 $("reset-search-options").addEventListener("click",()=>resetSearchOptions());
 $("select-keyless").addEventListener("click",()=>{selected.clear();for(const p of state.providers)if(p.kind==="general"&&p.available&&!p.env)selected.add(p.id);renderChoices();});
 $("clear-selection").addEventListener("click",()=>{selected.clear();renderChoices();});
-$("query").addEventListener("input",()=>{$("query-count").textContent=$("query").value.length+" / 1000";feedback("search-error");syncSearchMode();});
+function updateQueryCount(){
+  const input=$("query");
+  input.maxLength=state?.limits?.query_max_chars||4000;
+  $("query-count").textContent=input.value.length+" / "+input.maxLength;
+}
+$("query").addEventListener("input",()=>{updateQueryCount();feedback("search-error");syncSearchMode();});
 function renderSearch(data){
   $("search-output").hidden=false; $("search-source").textContent=data.cached?"Cached result":"Live attempt";
   const rows=Array.isArray(data.results)?data.results:[],attempts=data.provider_attempts||[];
@@ -474,7 +479,7 @@ function renderSettings(force=false){
 $("settings-form").addEventListener("input",()=>{settingsDirty=true;feedback("settings-feedback");});
 $("reset-settings").addEventListener("click",()=>{if(state){renderSettings(true);feedback("settings-feedback","Unsaved changes reset.");}});
 function render(){
-  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();renderDefaultSettings();
+  updateQueryCount();renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();renderDefaultSettings();
 }
 async function refresh(fresh=false){
   if(refreshPromise){if(!fresh)return refreshPromise;await refreshPromise.catch(()=>{});return refresh(true);}

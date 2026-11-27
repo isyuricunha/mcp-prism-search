@@ -75,7 +75,7 @@ const sections = [
         <section id="playground" class="page" hidden aria-labelledby="page-title">
           <form id="search-form" class="card">
             <div class="stack"><h2>Search the web</h2><p class="muted">Run the same general search engine selection used by MCP clients. Cached results may be reused. Search terms are sent to the chosen providers.</p></div>
-            <div class="field"><label for="query">Search query</label><textarea id="query" required maxlength="1000" rows="3" placeholder="e.g. Python asyncio TaskGroup documentation"></textarea><span id="query-count" class="muted small">0 / 1000</span></div>
+            <div class="field"><label for="query">Search query</label><textarea id="query" required maxlength="4000" aria-describedby="query-count" rows="3" placeholder="e.g. Python asyncio TaskGroup documentation"></textarea><span id="query-count" class="muted small">0 / 4000</span></div>
             <p id="search-default-summary" class="muted small" role="status">Loading server defaults…</p>
             <details id="search-overrides" class="search-options"><summary>Search options <span class="muted small">Optional overrides</span></summary>
               <fieldset><legend>Search mode</legend><div class="mode-grid">

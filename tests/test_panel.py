@@ -281,3 +281,27 @@ def test_defaults_api_schema_and_shared_resolution(panel, monkeypatch):
     assert row["enabled_locked"] and not row["available"]
     assert client.put("/api/providers/keenable", headers=HEADERS,
                       json={"enabled": True}).status_code == 400
+
+
+def test_playground_limits_match_mcp(panel, monkeypatch):
+    from mcp_prism_search.models import SearchResponse
+
+    client, _, _ = panel
+    sign_in(client)
+    limits = client.get("/api/overview").json()["limits"]
+    assert limits == {"query_max_chars": 4000, "selected_providers_max": 20}
+
+    async def fake(query, **kwargs):
+        return SearchResponse(query=query, provider="keenable", results=[],
+                              cached=False, error=None)
+
+    monkeypatch.setattr("mcp_prism_search.panel.aggregated_search", fake)
+    assert client.post("/api/search", headers=HEADERS, json={
+        "query": "x" * 4000,
+    }).status_code == 200
+    assert client.post("/api/search", headers=HEADERS, json={
+        "query": "x" * 4001,
+    }).status_code == 400
+    assert client.post("/api/search", headers=HEADERS, json={
+        "query": "test", "providers": ["keenable"] * 21,
+    }).status_code == 400
