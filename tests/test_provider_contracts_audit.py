@@ -97,3 +97,30 @@ def test_wikipedia_title_and_snippet(monkeypatch):
     rows = asyncio.run(wikipedia.search(SearchRequest(query="São Paulo"), 50, 5))
     assert rows[0].url == "https://en.wikipedia.org/wiki/S%C3%A3o_Paulo"
     assert rows[0].snippet == "City in Brazil"
+
+
+@pytest.mark.parametrize("domains,query", [
+    (["example.org"], "needle site:example.org"),
+    (["example.org", "other.example"], "needle"),
+])
+def test_brave_domain_pushdown(monkeypatch, domains, query):
+    from mcp_prism_search.providers import brave
+
+    monkeypatch.setenv("BRAVE_API_KEY", "fixture-key")
+
+    def handler(req):
+        assert req.url.params["q"] == query
+        assert req.url.params["count"] == "20"
+        assert req.url.params["safesearch"] == "strict"
+        assert req.url.params["freshness"] == "py"
+        return httpx.Response(200, json={"web": {"results": [
+            {"title": "Bad", "url": "javascript:bad"},
+            {"title": "Good", "url": "https://example.org"},
+            {"title": "Duplicate", "url": "https://example.org"},
+        ]}})
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(brave.search(SearchRequest(
+        query="needle", allowed_domains=domains, time_filter="year", safe_search="strict"),
+        50, 5))
+    assert [r.title for r in rows] == ["Good"]
