@@ -198,6 +198,8 @@ def _dedupe_results(
     results: list[SearchResult],
     max_results: int | None = None,
 ) -> list[SearchResult]:
+    if max_results is not None and max_results <= 0:
+        return []
     seen: set[str] = set()
     deduped: list[SearchResult] = []
     for result in results:
@@ -205,7 +207,10 @@ def _dedupe_results(
             parsed = urlparse(result.url)
             if (parsed.scheme not in {"http", "https"} or not parsed.hostname
                     or parsed.username is not None or parsed.password is not None
-                    or parsed.port == 0 or any(c.isspace() for c in result.url)):
+                    or parsed.port == 0 or any(
+                        c.isspace() or ord(c) < 32 or ord(c) == 127 or c == "\\"
+                        for c in result.url
+                    )):
                 continue
             normalized_url = normalize_url_for_dedupe(result.url)
         except ValueError:

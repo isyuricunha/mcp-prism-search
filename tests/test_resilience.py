@@ -526,3 +526,22 @@ def test_legacy_ddgs_cannot_bypass_disabled_registered_backend(tmp_path, monkeyp
     result = asyncio.run(search.ddg_search("test", cache=store))
     assert result.error and not result.cached and not result.results
     assert store.get(payload) is None
+
+
+@pytest.mark.parametrize("url", [
+    "https://example.org/\x00path", "https://example.org/\x7fpath",
+    "https://example.org\\@other.org/", "https://example.org/\\path",
+])
+def test_result_dedupe_rejects_ambiguous_control_or_backslash_urls(url):
+    from mcp_prism_search.models import SearchResult
+    from mcp_prism_search.search import _dedupe_results
+
+    assert not _dedupe_results([SearchResult(title="Test", url=url, snippet="")])
+
+
+def test_result_dedupe_zero_limit():
+    from mcp_prism_search.models import SearchResult
+    from mcp_prism_search.search import _dedupe_results
+
+    assert not _dedupe_results(
+        [SearchResult(title="Test", url="https://example.org", snippet="")], 0)
