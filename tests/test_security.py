@@ -75,3 +75,19 @@ def test_dns_resolution_order(monkeypatch):
 
     monkeypatch.setattr(socket, "getaddrinfo", resolve)
     assert _resolve_hostname("example.com", 443) == ["1.1.1.1", "2606:4700::1111"]
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_dns_resolution_failure(monkeypatch, empty):
+    import socket
+
+    from mcp_prism_search.security import _resolve_hostname
+
+    def resolve(*args, **kwargs):
+        if empty:
+            return []
+        raise socket.gaierror("simulated failure")
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    with pytest.raises(UnsafeUrlError, match="DNS resolution"):
+        _resolve_hostname("example.com", 443)
