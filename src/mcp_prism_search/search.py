@@ -243,6 +243,17 @@ def _ddgs_text_kwargs(
     return kwargs
 
 
+def _legacy_ddgs_allowed(backend: str) -> bool:
+    from mcp_prism_search import providers, runtime
+
+    if not providers.SPECS:
+        providers.build_registry()
+    disabled = {name.split(":", 1)[1] for name in providers.SPECS
+                if name.startswith("ddgs:") and not runtime.enabled(name)}
+    requested = set(backend.split(","))
+    return not (disabled & requested or ("auto" in requested and disabled))
+
+
 def _search_with_ddgs(
     request: SearchRequest,
     timeout_seconds: int,
@@ -250,9 +261,14 @@ def _search_with_ddgs(
 ) -> list[SearchResult]:
     from ddgs import DDGS
 
+    if not _legacy_ddgs_allowed(backend):
+        raise ValueError("Legacy DDGS backend disabled")
+
     with DDGS(timeout=timeout_seconds) as ddgs:
         text_signature = inspect.signature(ddgs.text)
         include_backend = _signature_accepts_parameter(text_signature, "backend")
+        if not include_backend and not _legacy_ddgs_allowed("auto"):
+            raise ValueError("DDGS cannot enforce disabled backends")
         kwargs = _ddgs_text_kwargs(request, backend, include_backend=include_backend)
         LOGGER.debug(
             "Running ddgs search with backend=%s",
@@ -261,7 +277,8 @@ def _search_with_ddgs(
         try:
             raw_results = ddgs.text(request.query, **kwargs)
         except TypeError as exc:
-            if include_backend and "backend" in str(exc):
+            if (include_backend and "backend" in str(exc)
+                    and _legacy_ddgs_allowed("auto")):
                 kwargs.pop("backend", None)
                 LOGGER.debug("Retrying ddgs search without backend parameter")
                 raw_results = ddgs.text(request.query, **kwargs)
@@ -363,6 +380,9 @@ async def ddg_search(
             if (cached.query.strip() == request.query and cached.provider in valid_providers
                     and not cached.error and not cached.answers and not cached.answer_attempts
                     and (cached.provider != "duckduckgo_html" or runtime.enabled("ddg_html"))
+                    and (cached.provider != "ddgs" or _legacy_ddgs_allowed(
+                        ddgs_backend or DEFAULT_DDGS_BACKEND
+                    ))
                     and _final_results(cached.results, request) == cached.results):
                 return cached.model_copy(update={"cached": True})
             cache.delete(payload)
@@ -402,6 +422,12 @@ async def ddg_search(
 
     if provider in {"ddgs", "auto"}:
         backend = ddgs_backend or DEFAULT_DDGS_BACKEND
+        if not _legacy_ddgs_allowed(backend):
+            provider_errors.append("Legacy DDGS backend disabled")
+            return SearchResponse(
+                query=request.query, provider=provider, results=[], cached=False,
+                error="; ".join(provider_errors), provider_attempts=provider_attempts,
+            )
         try:
             ddgs_results = apply_search_domain_controls(
                 rank_results(await asyncio.to_thread(

@@ -503,3 +503,26 @@ def test_fetch_cache_rejects_unsupported_cached_content_type(tmp_path, monkeypat
     monkeypatch.setattr(fetch, "_get_with_validated_redirects", failed)
     result = asyncio.run(fetch.web_fetch(url, cache=store))
     assert not result.cached and not result.success
+
+
+@pytest.mark.parametrize("backend", ["yahoo", "auto"])
+def test_legacy_ddgs_cannot_bypass_disabled_registered_backend(tmp_path, monkeypatch, backend):
+    from mcp_prism_search import search
+    from mcp_prism_search.models import SearchRequest, SearchResponse, SearchResult
+
+    monkeypatch.setenv("SEARCH_PROVIDER", "ddgs")
+    monkeypatch.setenv("DDGS_BACKEND", backend)
+    monkeypatch.setenv("MCP_DISABLED_PROVIDERS", "ddgs:yahoo")
+    monkeypatch.setattr(search, "get_ddgs_backend", lambda: backend)
+    store = cache.JsonFileCache(tmp_path, "search", 60)
+    payload = search._cache_payload(SearchRequest(query="test"), provider="ddgs",
+                                    ddgs_backend=backend)
+    store.set(payload, SearchResponse(
+        query="test", provider="ddgs", cached=False, error=None,
+        results=[SearchResult(title="Old", url="https://example.org", snippet="")],
+    ).model_dump())
+    monkeypatch.setattr(search, "_search_with_ddgs", lambda *args: pytest.fail(
+        "Disabled legacy provider must not be contacted"))
+    result = asyncio.run(search.ddg_search("test", cache=store))
+    assert result.error and not result.cached and not result.results
+    assert store.get(payload) is None
