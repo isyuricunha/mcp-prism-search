@@ -331,7 +331,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         Mount("/", app=StaticFiles(directory=assets, html=True)),
     ], lifespan=lifespan)
 
-    async def security(request, call_next):
+    async def authorize(request, call_next):
         local = request.url.hostname in {"localhost", "127.0.0.1"}
         if not local and request.url.scheme != "https":
             return error("HTTPS required", 403)
@@ -347,6 +347,10 @@ def create_app(password: str, store: PanelStore, assets: Path,
             response = await call_next(request)
         except (ValueError, ValidationError):
             response = error("Invalid request")
+        return response
+
+    async def security(request, call_next):
+        response = await authorize(request, call_next)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"

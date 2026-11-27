@@ -333,3 +333,13 @@ def test_panel_cache_clear_requires_boolean_true(panel, confirmation):
         "namespace": "all", "confirm": confirmation,
     }).status_code == 400
     assert store.get({"test": 1}) == {"value": "preserved"}
+
+
+def test_panel_security_headers_on_early_denials(panel):
+    client, _, _ = panel
+    for response in (client.get("/api/overview"),
+                     client.post("/api/login", json={})):
+        assert response.status_code in {401, 403}
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["x-frame-options"] == "DENY"
