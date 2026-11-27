@@ -18,7 +18,9 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response = await bounded_request(client, "GET", SEARCH_URL, params=params)
         data = response.json()
 
-    rows = data if isinstance(data, list) else (data.get("results") or [])
+    rows = data.get("results") if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        raise ValueError("Invalid FreeSerp response")
     from mcp_prism_search.search import valid_result_url
 
     results: list[SearchResult] = []
