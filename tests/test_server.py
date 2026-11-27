@@ -308,3 +308,17 @@ def test_health_and_lifespan_auth():
 
     asyncio.run(verify())
     assert calls == [("http", "/health"), ("lifespan", None)]
+
+
+@pytest.mark.parametrize("transport,enabled,expected", [
+    ("invalid", "false", "Invalid MCP_TRANSPORT"),
+    ("stdio", "true", "requires MCP_TRANSPORT=http"),
+])
+def test_webui_requires_http(monkeypatch, transport, enabled, expected):
+    from mcp_prism_search import server
+
+    monkeypatch.setenv("MCP_TRANSPORT", transport)
+    monkeypatch.setenv("MCP_WEBUI_ENABLED", enabled)
+    monkeypatch.setattr(server, "_prune_cache_on_startup", lambda: None)
+    with pytest.raises(RuntimeError, match=expected):
+        server._run()
