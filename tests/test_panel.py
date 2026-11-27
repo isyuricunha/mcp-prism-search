@@ -554,3 +554,14 @@ def test_admin_settings_reject_noninteger_json_values(panel, payload):
     assert client.post("/api/search", headers=HEADERS, json={
         "query": "test", "max_results": True,
     }).status_code == 400
+
+
+def test_panel_rejects_oversized_json(panel):
+    client, store, _ = panel
+    sign_in(client)
+    before = dict(store.options)
+    response = client.put("/api/settings", content=b" " * 65537,
+                          headers={**HEADERS, "Content-Type": "application/json"})
+    assert response.status_code == 400
+    assert store.options == before
+    assert response.headers["Cache-Control"] == "no-store"
