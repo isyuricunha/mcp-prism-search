@@ -11,7 +11,9 @@ async def bounded_request(client, method: str, url: str, **kwargs) -> httpx.Resp
     # Request identity encoding to avoid allocating a decompression bomb before
     # checking the actual size. Refuse servers that disregard this preference.
     headers["Accept-Encoding"] = "identity"
-    async with client.stream(method, url, headers=headers, **kwargs) as response:
+    async with client.stream(
+        method, url, headers=headers, follow_redirects=False, **kwargs
+    ) as response:
         response.raise_for_status()
         if response.headers.get("content-encoding", "identity").strip().lower() not in {
             "", "identity",

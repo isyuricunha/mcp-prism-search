@@ -12,7 +12,7 @@ from mcp_prism_search.upstream import bounded_request
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
     params = {"q": request.query, "count": str(count), "format": "rss"}
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         response = await bounded_request(
             client, "GET", "https://www.bing.com/search", params=params
         )

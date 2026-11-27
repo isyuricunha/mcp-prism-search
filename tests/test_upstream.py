@@ -94,3 +94,23 @@ def test_sse_bounds_total_ignored_comment_traffic(monkeypatch):
     with pytest.raises(ValueError, match="stream exceeds"):
         asyncio.run(consume())
     assert stream.closed
+
+
+def test_bounded_request_never_reads_or_follows_redirect_body():
+    calls = []
+    stream = Chunks([b"x" * 65536])
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(302, headers={"location": "https://other.example"},
+                              stream=stream)
+
+    async def retrieve():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), follow_redirects=True,
+        ) as client:
+            return await upstream.bounded_request(client, "GET", "https://example.org")
+
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(retrieve())
+    assert len(calls) == 1 and stream.read == 0 and stream.closed
