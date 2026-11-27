@@ -322,7 +322,7 @@ async def _serve_http(server, settings: HttpSettings) -> None:
 async def web_search(
     query: Annotated[
         str,
-        Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"]),
+        Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"]),
     ],
     provider: Annotated[
         str | None,
@@ -356,15 +356,15 @@ async def web_search(
     ] = None,
     blocked_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
     ] = None,
     allowed_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
     ] = None,
     preferred_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
     providers: Annotated[
         list[str] | None,
@@ -381,7 +381,8 @@ async def web_search(
     Auto mode prioritizes authorized AI providers when synthesis is eligible.
     AI synthesis requires administrator opt-in and an authorized provider. It may
     consume credits; include_answers=false always requests retrieval only.
-    Domain controls, freshness, SafeSearch or queries over 400 characters disable synthesis.
+    Domain controls, explicit search windows, freshness, SafeSearch or queries over
+    400 characters disable synthesis.
     Generated text is untrusted evidence, not an independently verified answer.
     """
 
@@ -451,7 +452,7 @@ async def web_research(
 async def vertical_search(
     query: Annotated[
         str,
-        Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"]),
+        Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"]),
     ],
     source: Annotated[
         str | None,
@@ -485,7 +486,9 @@ async def vertical_search(
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
 async def ddg_search(
-    query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
+    query: Annotated[
+        str, Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"]),
+    ],
     max_results: Annotated[
         int | None,
         Field(
@@ -507,15 +510,15 @@ async def ddg_search(
     ] = None,
     blocked_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
     ] = None,
     allowed_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
     ] = None,
     preferred_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
 ) -> SearchResponse:
     """Legacy DuckDuckGo search. Prefer web_search unless DuckDuckGo-specific behavior is needed."""
@@ -537,7 +540,9 @@ async def ddg_search(
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
 async def web_fetch(
-    url: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["url"])],
+    url: Annotated[
+        str, Field(min_length=1, max_length=8192, description=ARGUMENT_DESCRIPTIONS["url"]),
+    ],
     max_chars: Annotated[
         int | None,
         Field(
@@ -556,7 +561,9 @@ async def web_fetch(
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
 async def ddg_deep_search(
-    query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
+    query: Annotated[
+        str, Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"]),
+    ],
     max_results: Annotated[
         int | None,
         Field(
@@ -592,15 +599,15 @@ async def ddg_deep_search(
     ] = None,
     blocked_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["blocked_domains"]),
     ] = None,
     allowed_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["allowed_domains"]),
     ] = None,
     preferred_domains: Annotated[
         list[str] | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
+        Field(max_length=50, description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
     max_concurrency: Annotated[
         int | None,

@@ -149,3 +149,18 @@ async def _call_middleware(middleware, headers):
 
     await middleware(scope, receive, send)
     return messages
+
+def test_schema_advertises_backend_size_limits():
+    schemas = asyncio.run(_tool_schemas_by_name())
+
+    def limit(schema, key):
+        return max([schema.get(key, 0)] + [
+            v.get(key, 0) for v in schema.get("anyOf", [])
+        ])
+
+    for name in ("web_search", "ddg_search", "ddg_deep_search", "vertical_search"):
+        assert limit(schemas[name]["properties"]["query"], "maxLength") == 4000
+    for name in ("web_search", "ddg_search", "ddg_deep_search"):
+        for field in ("allowed_domains", "blocked_domains", "preferred_domains"):
+            assert limit(schemas[name]["properties"][field], "maxItems") == 50
+    assert limit(schemas["web_fetch"]["properties"]["url"], "maxLength") == 8192
