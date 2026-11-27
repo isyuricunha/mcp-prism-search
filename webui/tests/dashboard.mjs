@@ -13,7 +13,7 @@ const page=await context.newPage();
 const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
-let holdSettings=null,failOverview=false;
+let holdSettings=null,failOverview=false,logsHealthy=true,failLogs=false;
 // Deliberate response latency exposes stale DOM/fixture assertions on fast runners.
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function responseFor(endpoint, predicate=()=>true){
@@ -42,7 +42,8 @@ await page.route("http://prism-test.invalid/**",async route=>{
    else if(pathname==="/api/overview"){if(failOverview){failOverview=false;status=503;body={error:"Unavailable"};}else body=data;}
    else if(pathname==="/api/logs"){
     const entries=[{timestamp:"2026-11-27T17:00:00Z",level:"WARNING",event:"provider",outcome:"limited",provider:"tinyfish",status_code:429,duration_ms:250,request_id:"0123456789abcdef0123456789abcdef"},{timestamp:"2026-11-27T16:59:00Z",level:"INFO",event:"operation",operation:"web_search",outcome:"ok",result_count:3}];
-    body={enabled:true,events:entries.filter(r=>(!url.searchParams.get("level")||r.level===url.searchParams.get("level"))&&(!url.searchParams.get("provider")||r.provider===url.searchParams.get("provider"))&&(!url.searchParams.get("search")||JSON.stringify(r).includes(url.searchParams.get("search")))),limit:200};
+    body={enabled:true,healthy:logsHealthy,events:entries.filter(r=>(!url.searchParams.get("level")||r.level===url.searchParams.get("level"))&&(!url.searchParams.get("provider")||r.provider===url.searchParams.get("provider"))&&(!url.searchParams.get("search")||JSON.stringify(r).includes(url.searchParams.get("search")))),limit:200};
+    if(failLogs){status=503;body={error:"Unavailable"};failLogs=false;}
    }
    else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);if(d.credential)p.credential=true;if(d.remove)p.credential=false;p.configured=!p.env||p.credential;p.enabled=d.enabled&&p.configured&&!p.enabled_locked;p.available=p.enabled;}
    else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;if(holdSettings)await holdSettings;}
@@ -119,6 +120,17 @@ try{
  await nav("Logs");
  await page.locator("#logs-live").uncheck();
  await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===2);
+ logsHealthy=false;
+ await page.locator("#logs-refresh").click();
+ await page.waitForFunction(()=>document.querySelector("#logs-health").textContent==="Write failed");
+ assert.ok((await page.locator("#logs-feedback").textContent()).includes("could not be saved"));
+ failLogs=true;
+ await page.locator("#logs-refresh").click();
+ await page.waitForFunction(()=>document.querySelector("#logs-health").textContent==="Refresh failed");
+ assert.equal(await page.locator("#logs-export").isDisabled(),true);
+ logsHealthy=true;
+ await page.locator("#logs-refresh").click();
+ await page.waitForFunction(()=>document.querySelector("#logs-health").textContent==="Recording");
  await page.locator("#logs-level").selectOption("WARNING");
  await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===1);
  assert.ok((await page.locator("#logs-list").textContent()).includes("HTTP 429"));

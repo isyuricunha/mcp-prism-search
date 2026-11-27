@@ -864,11 +864,16 @@ async function loadLogs(){
     const data=await api("logs?"+params.toString());
     if(epoch!==authEpoch||revision!==logsRevision)return;
     logRows=Array.isArray(data.events)?data.events:[];
-    $("logs-health").textContent=data.enabled?"Recording":"Not available";
-    $("logs-health").classList.toggle("ready",!!data.enabled);
-    renderLogs();feedback("logs-feedback",data.enabled?number(logRows.length)+" events · Updated "+new Date().toLocaleTimeString():"Persistent log history is not enabled.");
+    const healthy=data.enabled&&data.healthy!==false;
+    $("logs-health").textContent=healthy?"Recording":data.enabled?"Write failed":"Not available";
+    $("logs-health").classList.toggle("ready",healthy);
+    renderLogs();
+    feedback("logs-feedback",data.enabled?number(logRows.length)+" events · Updated "+new Date().toLocaleTimeString()+(healthy?"":" · Some events could not be saved."):"Persistent log history is not enabled.",data.enabled&&!healthy);
   }catch(error){
-    if(epoch===authEpoch&&revision===logsRevision)feedback("logs-feedback",error.message,true);
+    if(epoch===authEpoch&&revision===logsRevision){
+      $("logs-health").textContent="Refresh failed";$("logs-health").classList.remove("ready");
+      feedback("logs-feedback",error.message+(logRows.length?" Showing the last successful snapshot.":""),true);
+    }
   }finally{
     logsPending=false;$("logs-refresh").disabled=false;
     if(revision!==logsRevision&&state&&activePage==="logs")loadLogs();
