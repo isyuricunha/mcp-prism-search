@@ -141,3 +141,8 @@ def test_exa_grounding_requires_a_citation_array():
                 {"field": "answer", "citations": {"url": "https://example.org"}},
             ],
         }}, "lite")
+
+
+def test_native_sources_reject_encoded_host_without_losing_citation_index():
+    source = native._source(3, {"url": "https://%65xample.org", "title": "Citation"})
+    assert source.index == 3 and source.url is None and source.title == "Citation"

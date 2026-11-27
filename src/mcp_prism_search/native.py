@@ -8,7 +8,6 @@ import re
 from contextlib import asynccontextmanager
 from time import monotonic
 from typing import Literal
-from urllib.parse import urlsplit
 
 import httpx
 
@@ -109,15 +108,9 @@ def _source(index: int, row: object, url_key: str = "url") -> Source:
     # Preserve upstream citation indices, including invalid URLs. Never shift numbers.
     item = row if isinstance(row, dict) else {}
     url = item.get(url_key)
-    try:
-        parsed = urlsplit(url) if isinstance(url, str) else None
-        if (not parsed or parsed.scheme not in {"http", "https"}
-                or not parsed.hostname or parsed.username is not None
-                or parsed.password is not None or parsed.port == 0
-                or any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == chr(92)
-                       for c in url) or len(url) > 4096):
-            url = None
-    except ValueError:
+    from mcp_prism_search.search import valid_result_url
+
+    if not isinstance(url, str) or len(url) > 4096 or not valid_result_url(url):
         url = None
     excerpt = (item.get("content") or item.get("text") or item.get("description")
                or item.get("exactQuote") or item.get("snippet"))
