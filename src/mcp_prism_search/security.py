@@ -42,6 +42,10 @@ def is_unsafe_ip(value: str) -> bool:
     except ValueError:
         return False
 
+    # IPv4-mapped IPv6 must follow the embedded IPv4 policy too.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        return is_unsafe_ip(str(mapped))
     if any(ip in network for network in BLOCKED_NETWORKS):
         return True
     return any(
@@ -57,13 +61,24 @@ def is_unsafe_ip(value: str) -> bool:
 
 
 def validate_url_shape(url: str) -> None:
-    parsed = urlparse(url)
+    if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
+        raise UnsafeUrlError("Whitespace and control characters are not allowed in URLs")
+    try:
+        parsed = urlparse(url)
+        port = parsed.port
+        hostname = parsed.hostname
+    except ValueError:
+        raise UnsafeUrlError("Malformed URL") from None
+    if port == 0:
+        raise UnsafeUrlError("Invalid URL port")
+    if parsed.username is not None or parsed.password is not None:
+        raise UnsafeUrlError("URL credentials are not allowed")
     if parsed.scheme not in {"http", "https"}:
         raise UnsafeUrlError("Only http and https URLs are allowed")
-    if not parsed.hostname:
+    if not hostname:
         raise UnsafeUrlError("URL must include a hostname")
 
-    hostname = _normalize_hostname(parsed.hostname)
+    hostname = _normalize_hostname(hostname)
     if is_blocked_hostname(hostname):
         raise UnsafeUrlError(f"Blocked internal hostname: {hostname}")
     if is_unsafe_ip(hostname):
@@ -92,6 +107,7 @@ def _resolve_hostname(hostname: str, port: int) -> list[str]:
 
 
 def validate_resolved_addresses(url: str) -> None:
+    validate_url_shape(url)
     parsed = urlparse(url)
     hostname = parsed.hostname
     if hostname is None:
@@ -115,13 +131,13 @@ async def resolve_safe_address(url: str) -> tuple[str, int]:
     client re-resolve DNS, otherwise a short-TTL rebinding record can pass
     validation and point the connection at an internal address.
     """
+    validate_url_shape(url)
     parsed = urlparse(url)
     hostname = parsed.hostname
     if hostname is None:
         raise UnsafeUrlError("URL must include a hostname")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     addresses = await asyncio.to_thread(_resolve_hostname, hostname, port)
-    for address in addresses:
-        if not is_unsafe_ip(address):
-            return address, port
-    raise UnsafeUrlError(f"DNS resolved only unsafe IP addresses for {hostname}")
+    if any(is_unsafe_ip(address) for address in addresses):
+        raise UnsafeUrlError("DNS returned an unsafe address")
+    return addresses[0], port

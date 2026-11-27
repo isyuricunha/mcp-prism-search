@@ -50,7 +50,6 @@ LOGGER = logging.getLogger(__name__)
 KNOWN_PLACEHOLDER_TOKENS = {"change-me-now", "changeme", "secret", "token"}
 ACCEPTED_TRANSPORTS = {"stdio", "http", "streamable-http"}
 HEALTH_PATH = "/health"
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
 class KnownPlaceholderTokenError(RuntimeError):
@@ -250,7 +249,6 @@ async def _run_http_async(
     import uvicorn
 
     settings = settings or _configure_http_settings()
-    _BACKGROUND_TASKS.add(asyncio.create_task(_cache_prune_loop()))
     auth_token = _http_auth_token()
     if auth_token is None:
         if not _get_env_bool("MCP_ALLOW_UNAUTHENTICATED_HTTP", False):
@@ -283,6 +281,17 @@ async def _run_http_async(
         log_level=os.getenv("MCP_LOG_LEVEL", "INFO").lower(),
     )
     server = uvicorn.Server(config)
+    prune_task = asyncio.create_task(_cache_prune_loop())
+    try:
+        await _serve_http(server, settings)
+    finally:
+        prune_task.cancel()
+        await asyncio.gather(prune_task, return_exceptions=True)
+
+
+async def _serve_http(server, settings: HttpSettings) -> None:
+    import uvicorn
+
     if not _get_env_bool("MCP_WEBUI_ENABLED", False):
         await server.serve()
         return

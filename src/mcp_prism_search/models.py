@@ -100,6 +100,14 @@ class SearchRequestBase(StrictBaseModel):
         description=ARGUMENT_DESCRIPTIONS["preferred_domains"],
     )
 
+    @field_validator("query")
+    @classmethod
+    def nonempty_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Search query must not be blank")
+        return value
+
     @field_validator("blocked_domains", "allowed_domains", "preferred_domains")
     @classmethod
     def normalize_domain_options(cls, values: list[str]) -> list[str]:
@@ -134,19 +142,6 @@ class DeepSearchRequest(SearchRequestBase):
         le=12,
         description=ARGUMENT_DESCRIPTIONS["max_concurrency"],
     )
-
-
-class CachePruneRequest(StrictBaseModel):
-    expired_only: bool = Field(
-        default=False,
-        description=ARGUMENT_DESCRIPTIONS["expired_only"],
-    )
-    dry_run: bool = Field(default=False, description=ARGUMENT_DESCRIPTIONS["dry_run"])
-
-
-class CacheClearRequest(StrictBaseModel):
-    namespace: CacheNamespace = Field(description=ARGUMENT_DESCRIPTIONS["namespace"])
-    confirm: bool = Field(description=ARGUMENT_DESCRIPTIONS["confirm"])
 
 
 class SearchResult(StrictBaseModel):

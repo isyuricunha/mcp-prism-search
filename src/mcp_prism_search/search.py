@@ -123,7 +123,6 @@ def has_domain_controls(request: SearchRequest) -> bool:
 NEWS_HINT_TOKENS = {
     "news", "latest", "breaking", "today", "current", "updates", "happening",
 }
-NEWS_SEARCH_TTL_SECONDS = 1800
 _TRUSTED_DOMAINS = {
     "apnews.com", "reuters.com", "bbc.com", "bbc.co.uk", "theguardian.com",
     "nytimes.com", "washingtonpost.com", "dw.com", "euronews.com",
@@ -387,20 +386,20 @@ async def ddg_search(
     provider = cast(SearchProvider, get_search_provider())
     ddgs_backend = get_ddgs_backend() if provider in {"ddgs", "auto"} else None
     payload = _cache_payload(request, provider=provider, ddgs_backend=ddgs_backend)
+    from mcp_prism_search import runtime
+
     cached_value = cache.get(payload, ttl_seconds=search_ttl_for_query(request.query))
     if cached_value is not None:
         try:
-            return SearchResponse.model_validate(cached_value).model_copy(
-                update={"cached": True}
-            )
+            cached = SearchResponse.model_validate(cached_value)
+            if cached.provider != "duckduckgo_html" or runtime.enabled("ddg_html"):
+                return cached.model_copy(update={"cached": True})
         except Exception:  # noqa: BLE001 - poisoned/stale cache must not break the tool.
             cache.delete(payload)
 
     timeout_seconds = get_ddg_timeout_seconds()
     provider_errors: list[str] = []
     provider_attempts: list[str] = []
-
-    from mcp_prism_search import runtime
 
     if provider in {"duckduckgo_html", "auto"} and not runtime.enabled("ddg_html"):
         provider_errors.append("DuckDuckGo HTML provider disabled")
@@ -500,7 +499,9 @@ async def _search_one(
         for item in raw:
             try:
                 url = urlparse(item.url)
-                if url.scheme in {"http", "https"} and url.hostname:
+                if (url.scheme in {"http", "https"} and url.hostname
+                        and url.username is None and url.password is None
+                        and url.port != 0 and not any(c.isspace() for c in item.url)):
                     valid.append(item)
             except ValueError:
                 continue

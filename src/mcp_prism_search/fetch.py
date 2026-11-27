@@ -30,8 +30,6 @@ from mcp_prism_search.text import extract_html_text, is_plain_text_content, trun
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_FETCH_TIMEOUT_SECONDS = 15
-DEFAULT_MAX_CONCURRENCY = 5
 MAX_REDIRECTS = 5
 DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
 FETCH_HEADERS = {
@@ -130,7 +128,6 @@ async def _get_with_validated_redirects(
     connection to an internal address. The body is streamed and hard-capped."""
 
     current_url = url
-    response: httpx.Response | None = None
     for _ in range(MAX_REDIRECTS + 1):
         await validate_fetch_url(current_url)
         safe_ip, _port = await resolve_safe_address(current_url)
@@ -144,48 +141,43 @@ async def _get_with_validated_redirects(
         )
         response = await client.send(request, stream=True)
 
-        content_encoding = response.headers.get("content-encoding", "identity")
-        if content_encoding.lower() not in {"identity", ""}:
-            # A compressed body cannot be size-capped reliably while streaming.
-            await response.aclose()
-            raise UnsafeUrlError(
-                f"Server ignored Accept-Encoding: identity (returned {content_encoding!r})"
-            )
-
-        if response.status_code in {301, 302, 303, 307, 308}:
-            location = response.headers.get("location")
-            if location:
-                await response.aclose()
+        try:
+            if response.status_code in {301, 302, 303, 307, 308}:
+                location = response.headers.get("location")
+                if not location:
+                    raise UnsafeUrlError("Redirect missing Location header")
                 next_url = urljoin(current_url, location)
                 validate_url_shape(next_url)
                 current_url = next_url
                 continue
-            break
+            content_encoding = response.headers.get("content-encoding", "identity")
+            if content_encoding.lower() not in {"identity", ""}:
+                raise UnsafeUrlError("Server returned unsupported compressed content")
 
-        chunks: list[bytes] = []
-        kept = 0
-        total = 0
-        truncated = False
-        async for chunk in response.aiter_bytes():
-            total += len(chunk)
-            if total > max_bytes:
-                truncated = True
-                break
-            chunks.append(chunk)
-            kept += len(chunk)
-        await response.aclose()
-        return RawFetchedResponse(
-            status_code=response.status_code,
-            headers=response.headers,
-            content=b"".join(chunks),
-            logical_url=current_url,
-            charset=response.encoding,
-            truncated=truncated,
-            fetched_bytes=kept,
-        )
+            chunks: list[bytes] = []
+            kept = 0
+            truncated = False
+            async for chunk in response.aiter_bytes():
+                remaining = max_bytes - kept
+                if len(chunk) > remaining:
+                    chunks.append(chunk[:remaining])
+                    kept += remaining
+                    truncated = True
+                    break
+                chunks.append(chunk)
+                kept += len(chunk)
+            return RawFetchedResponse(
+                status_code=response.status_code,
+                headers=response.headers,
+                content=b"".join(chunks),
+                logical_url=current_url,
+                charset=response.encoding,
+                truncated=truncated,
+                fetched_bytes=kept,
+            )
+        finally:
+            await response.aclose()
 
-    if response is not None:
-        await response.aclose()
     raise UnsafeUrlError(f"Too many redirects; maximum is {MAX_REDIRECTS}")
 
 
@@ -271,9 +263,12 @@ async def web_fetch(
     )
 
     try:
-        await validate_fetch_url(request.url)
+        async with asyncio.timeout(get_fetch_timeout_seconds()):
+            await validate_fetch_url(request.url)
     except UnsafeUrlError as exc:
         return _error_response(request.url, str(exc))
+    except TimeoutError:
+        return _error_response(request.url, "DNS validation timed out")
 
     cache = cache or build_fetch_cache()
     payload = _cache_payload(request) | {"_max_bytes": get_fetch_max_bytes()}
@@ -287,9 +282,12 @@ async def web_fetch(
             cache.delete(payload)
 
     try:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(get_fetch_timeout_seconds()),
+        timeout = get_fetch_timeout_seconds()
+        async with asyncio.timeout(timeout), httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout),
             follow_redirects=False,
+            trust_env=False,
+            limits=httpx.Limits(max_keepalive_connections=0),
             headers=FETCH_HEADERS,
         ) as client:
             response = await _get_with_validated_redirects(
@@ -301,8 +299,10 @@ async def web_fetch(
         if fetch_response.success:
             cache.set(payload, _cacheable_fetch_response(fetch_response))
         return fetch_response
-    except Exception as exc:  # noqa: BLE001 - fetch failures must be returned as structured errors.
+    except UnsafeUrlError as exc:
         return _error_response(request.url, str(exc))
+    except Exception as exc:  # noqa: BLE001 - fetch failures must be structured.
+        return _error_response(request.url, "Fetch failed: " + type(exc).__name__)
 
 
 async def ddg_deep_search(

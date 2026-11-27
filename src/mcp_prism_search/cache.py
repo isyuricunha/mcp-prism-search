@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import stat
 import tempfile
@@ -454,7 +455,7 @@ class JsonFileCache:
         return self.cache_dir / f"{stable_cache_key(payload)}.json"
 
     def delete(self, payload: Any) -> bool:
-        if self.disabled_reason is not None:
+        if self.disabled_reason is not None or self.cache_dir.is_symlink():
             return False
         path = self.path_for(payload)
         try:
@@ -468,14 +469,18 @@ class JsonFileCache:
             return None
         path = self.path_for(payload)
         try:
+            if self.cache_dir.is_symlink() or path.is_symlink() or not path.is_file():
+                return None
             with path.open("r", encoding="utf-8") as cache_file:
                 envelope = json.load(cache_file)
-        except (FileNotFoundError, json.JSONDecodeError, OSError, TypeError):
+        except (ValueError, OSError, TypeError, RecursionError):
             return None
-
+        if not isinstance(envelope, dict):
+            return None
         created_at = envelope.get("created_at")
         value = envelope.get("value")
-        if not isinstance(created_at, int | float) or not isinstance(value, dict):
+        if (type(created_at) not in (int, float) or created_at > time.time()
+                or created_at < 0 or not math.isfinite(created_at) or not isinstance(value, dict)):
             return None
         effective_ttl = (self.ttl_seconds if ttl_seconds is None
                          else min(self.ttl_seconds, ttl_seconds))
@@ -486,12 +491,14 @@ class JsonFileCache:
     def set(self, payload: Any, value: dict[str, Any]) -> None:
         if self.disabled_reason is not None:
             return
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
         path = self.path_for(payload)
         envelope = {"created_at": time.time(), "value": value}
 
         temp_path: str | None = None
         try:
+            if self.cache_dir.is_symlink():
+                return
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
             with tempfile.NamedTemporaryFile(
                 "w",
                 encoding="utf-8",
@@ -506,6 +513,8 @@ class JsonFileCache:
             # fsync is intentionally skipped: the cache is ephemeral, and
             # os.replace keeps every write atomic without the disk sync cost.
             os.replace(temp_path, path)
+        except (OSError, ValueError, TypeError, RecursionError):
+            LOGGER.warning("Cache write failed in namespace %s", self.namespace)
         finally:
             if temp_path is not None:
                 with suppress(OSError):
