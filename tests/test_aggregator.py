@@ -237,3 +237,21 @@ def test_youcom_public_falls_back_to_valid_text_content(monkeypatch):
     monkeypatch.setattr(youcom_keyless, "Client", Client)
     rows = asyncio.run(youcom_keyless.search(SearchRequest(query="test"), 5, 5))
     assert [row.title for row in rows] == ["Good"]
+
+
+def test_mwmbl_pacing_lock_is_scoped_to_event_loop(monkeypatch):
+    from mcp_prism_search.providers import mwmbl
+
+    original = httpx.AsyncClient
+    async def response(req):
+        await asyncio.sleep(0)
+        return httpx.Response(200, json={"results": []})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(response), **kw))
+    async def exercise():
+        await asyncio.gather(*[mwmbl.search(SearchRequest(query="test"), 1, 2)
+                               for _ in range(2)])
+
+    asyncio.run(exercise())
+    asyncio.run(exercise())
