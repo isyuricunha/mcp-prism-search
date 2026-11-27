@@ -535,3 +535,10 @@ def test_sse_reader_ignores_initial_utf8_bom():
 def test_native_source_preserves_index_but_rejects_ambiguous_url(url):
     source = native._source(7, {"url": url, "title": "Evidence"})
     assert source.index == 7 and source.url is None and source.title == "Evidence"
+
+
+def test_native_json_depth_failure_is_sanitized(configure, monkeypatch):
+    mock_http(monkeypatch, lambda req: httpx.Response(
+        200, content=b"[" * 2000 + b"]" * 2000))
+    with pytest.raises(native.NativeError, match="invalid or unavailable"):
+        asyncio.run(native.synthesize("question", "exa", "answer", allow_cost=True))

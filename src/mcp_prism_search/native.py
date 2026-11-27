@@ -547,7 +547,7 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
             raise NativeError(f"{provider}: timed out; check usage before retrying.") from None
         except NativeError:
             raise
-        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
+        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
             raise NativeError(f"{provider}: invalid or unavailable native response.") from None
         finally:
             # Separate aggregate metric from ordinary retrieval; no query/answer storage.

@@ -120,7 +120,7 @@ async def combined_search(
         raise native.NativeError(outcome) from None
     except native.NativeError:
         raise
-    except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
         raise native.NativeError("invalid or unavailable response") from None
     finally:
         runtime.record_metric(name + ":answer", outcome, monotonic() - start)
