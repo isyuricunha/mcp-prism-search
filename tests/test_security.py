@@ -51,3 +51,10 @@ def test_html_extraction_removes_script_style_nav_and_footer() -> None:
     assert "do-not-include" not in extracted.content
     assert "Navigation should be removed" not in extracted.content
     assert "Footer should be removed" not in extracted.content
+
+
+def test_fetch_rejects_ambiguous_backslash_in_url_path():
+    from mcp_prism_search.security import UnsafeUrlError, validate_url_shape
+
+    with pytest.raises(UnsafeUrlError, match="backslashes"):
+        validate_url_shape("https://example.com/path" + chr(92) + "segment")

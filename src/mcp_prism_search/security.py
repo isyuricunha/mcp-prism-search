@@ -74,8 +74,10 @@ def is_unsafe_ip(value: str) -> bool:
 def validate_url_shape(url: str) -> None:
     if len(url) > 8192:
         raise UnsafeUrlError("URL exceeds the safety limit")
-    if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
-        raise UnsafeUrlError("Whitespace and control characters are not allowed in URLs")
+    if any(c.isspace() or ord(c) < 32 or ord(c) == 127 or c == chr(92) for c in url):
+        raise UnsafeUrlError(
+            "Whitespace, control characters and backslashes are not allowed in URLs"
+        )
     try:
         parsed = urlparse(url)
         port = parsed.port
