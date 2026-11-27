@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS dashboard-build
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS dashboard-build
 WORKDIR /ui
 COPY webui/package.json webui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -26,7 +26,11 @@ RUN pip install --no-cache-dir -r requirements-lock.txt
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY --from=dashboard-build /ui/dist /app/webui
-RUN pip install --no-cache-dir --no-deps .
+# Local source contexts omit .git. CI passes the verified tag version;
+# an unversioned source build is deliberately marked unknown.
+ARG PRISM_VERSION=0.0.0+unknown
+RUN SETUPTOOLS_SCM_PRETEND_VERSION="$PRISM_VERSION" pip install --no-cache-dir --no-deps . \
+    && python -c 'import sys; from importlib.metadata import version; assert version("mcp-prism-search") == sys.argv[1]' "$PRISM_VERSION"
 
 RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin mcp \
     && mkdir -p /data/cache \

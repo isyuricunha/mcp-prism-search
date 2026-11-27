@@ -1,209 +1,267 @@
-name: Release Docker Images
+name: CI and Release
 
 on:
+  pull_request:
+    branches: ["main"]
   push:
     branches: ["main"]
-    tags: ["v*"]
-    paths-ignore:
-      - "README.md"
-      - "LICENSE"
-      - "LICENSE.txt"
-      - "**/*.md"
-      - "docker-compose*.yml"
-      - ".github/**/*.md"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Retry the latest stable release tag (blank: calculate next release)"
+        required: false
+        type: string
+        default: ""
 
+# All production releases share one lane, including manual recovery.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('prism-pr-{0}', github.event.pull_request.number) || 'prism-release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 env:
+  # Preserve the established Docker Hub name for existing installations.
   IMAGE_NAME: mcp-ddg-research
   PYTHON_VERSION: "3.12"
+  SEMANTIC_RELEASE_VERSION: "10.7.0"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
-  release:
-    name: Test and create release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
+  validate:
+    name: Validate exact source and plan release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     outputs:
-      should_publish: ${{ steps.release_metadata.outputs.should_publish }}
-      release_commit_sha: ${{ steps.release_metadata.outputs.release_commit_sha }}
-      release_tag: ${{ steps.release_metadata.outputs.release_tag }}
-      release_version: ${{ steps.release_metadata.outputs.release_version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      sha: ${{ steps.plan.outputs.sha }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      artifact_name: prism-distributions-${{ github.run_attempt }}
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v6
+      - name: Check out triggering commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
-
-      - name: Pin checkout to workflow SHA
-        run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            git reset --hard "$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
-          else
-            git reset --hard "${GITHUB_SHA}"
-          fi
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: |
+            requirements-lock.txt
+            pyproject.toml
 
-      - name: Install dependencies
+      - name: Plan without mutating remote
+        id: plan
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]" build
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            {
+              echo "publish=false"
+              echo "sha=$(git rev-parse HEAD)"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "::error::Run releases from main only"
+            exit 1
+          fi
+          python -m venv "$RUNNER_TEMP/semantic-release"
+          "$RUNNER_TEMP/semantic-release/bin/pip" install "python-semantic-release==$SEMANTIC_RELEASE_VERSION"
+          export PATH="$RUNNER_TEMP/semantic-release/bin:$PATH"
+          # Semantic Release requires a named local branch; no branch is pushed.
+          git switch -C main "$GITHUB_SHA"
+          python scripts/release_plan.py --tag "$REQUESTED_TAG"
 
-      - name: Lint
-        run: python -m ruff check .
+      - name: Select planned source
+        env:
+          SOURCE_SHA: ${{ steps.plan.outputs.sha }}
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          git switch --detach "$SOURCE_SHA"
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            test -f scripts/release_guard.py || { echo "::error::Retry is supported for releases produced by this workflow"; exit 1; }
+            echo "SETUPTOOLS_SCM_PRETEND_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
+          fi
 
-      - name: Test
-        run: python -m pytest
+      - name: Install locked test environment
+        run: |
+          python -m pip install -r requirements-lock.txt
+          python -m pip install --no-deps -e .
+          python -m pip install build
+          python -m pip check
 
-      - name: Compile
-        run: python -m compileall -q src tests
+      - name: Lint, test and compile
+        run: |
+          python -m ruff check .
+          python -m pytest
+          python -m compileall -q src tests scripts
 
-      - name: Build package
-        run: python -m build
+      - name: Build and verify Python distributions
+        env:
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          python -m build
+          python scripts/verify_distribution.py dist
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            test "$(python -c 'from importlib.metadata import version; print(version("mcp-prism-search"))')" = "$RELEASE_VERSION"
+          fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: webui/package-lock.json
 
-      - name: Test dashboard
+      - name: Build and test dashboard
         working-directory: webui
         run: |
           npm ci --no-audit --no-fund
           npm run build
-          npx playwright-core install --with-deps chromium
+          npx playwright-core install --with-deps --only-shell chromium
           npm run test:browser
 
-      - name: Build Docker image
-        run: docker build -t "${IMAGE_NAME}:ci" .
-
-      - name: Semantic Release
-        if: github.ref_type == 'branch'
-        id: semantic
-        uses: python-semantic-release/python-semantic-release@v10.5.3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          git_committer_name: github-actions
-          git_committer_email: actions@users.noreply.github.com
-          changelog: "false"
-
-      - name: Resolve release metadata
-        id: release_metadata
-        env:
-          SEMANTIC_RELEASED: ${{ steps.semantic.outputs.released || 'false' }}
-          SEMANTIC_COMMIT_SHA: ${{ steps.semantic.outputs.commit_sha }}
-          SEMANTIC_TAG: ${{ steps.semantic.outputs.tag }}
-          SEMANTIC_VERSION: ${{ steps.semantic.outputs.version }}
+      - name: Docker build and smoke test (non-release)
+        if: steps.plan.outputs.publish != 'true'
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            tag="${GITHUB_REF_NAME}"
-            version="${tag#v}"
-            commit_sha="$(git rev-list -n 1 "${tag}")"
+          version=$(python -c 'from importlib.metadata import version; print(version("mcp-prism-search"))')
+          docker build --build-arg "PRISM_VERSION=$version" -t prism-ci:test .
+          docker run --rm --entrypoint python prism-ci:test -c 'import sys; from mcp_prism_search import __version__; assert __version__ == sys.argv[1]; print(__version__)' "$version"
 
-            {
-              echo "should_publish=true"
-              echo "release_commit_sha=${commit_sha}"
-              echo "release_tag=${tag}"
-              echo "release_version=${version}"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "${SEMANTIC_RELEASED}" = "true" ]; then
-            {
-              echo "should_publish=true"
-              echo "release_commit_sha=${SEMANTIC_COMMIT_SHA}"
-              echo "release_tag=${SEMANTIC_TAG}"
-              echo "release_version=${SEMANTIC_VERSION}"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          {
-            echo "should_publish=false"
-            echo "release_commit_sha=${GITHUB_SHA}"
-            echo "release_tag="
-            echo "release_version="
-          } >> "$GITHUB_OUTPUT"
-
-  publish_images:
-    name: Publish Docker images
-    runs-on: ubuntu-latest
-    needs: release
-    if: needs.release.outputs.should_publish == 'true'
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Check out release commit
-        uses: actions/checkout@v6
+      - name: Retain verified distributions
+        if: steps.plan.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          ref: ${{ needs.release.outputs.release_commit_sha }}
+          name: prism-distributions-${{ github.run_attempt }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish verified multiarch release
+    needs: validate
+    if: needs.validate.outputs.publish == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      packages: write
+    env:
+      RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      SOURCE_SHA: ${{ needs.validate.outputs.sha }}
+    steps:
+      - name: Check out validated commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Download verified distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.validate.outputs.artifact_name }}
+          path: dist
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
-      - name: Normalize image metadata
-        id: image
+      - name: Resolve registry names
+        id: images
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          GHCR_REPOSITORY: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
         run: |
-          ghcr_repository="${GHCR_REPOSITORY,,}"
           {
-            echo "dockerhub_image=${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
-            echo "ghcr_image=ghcr.io/${ghcr_repository}"
-            echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "dockerhub=${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
+            echo "ghcr=ghcr.io/${GITHUB_REPOSITORY,,}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+      - name: Tag the validated commit (no release commit)
+        run: |
+          git config user.name github-actions
+          git config user.email actions@users.noreply.github.com
+          python scripts/release_guard.py "$RELEASE_TAG" "$SOURCE_SHA"
+
+      - name: Build and push versioned images
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            PRISM_VERSION=${{ env.RELEASE_VERSION }}
           tags: |
-            ${{ steps.image.outputs.dockerhub_image }}:latest
-            ${{ steps.image.outputs.dockerhub_image }}:${{ needs.release.outputs.release_tag }}
-            ${{ steps.image.outputs.ghcr_image }}:latest
-            ${{ steps.image.outputs.ghcr_image }}:${{ needs.release.outputs.release_tag }}
+            ${{ steps.images.outputs.dockerhub }}:${{ env.RELEASE_TAG }}
+            ${{ steps.images.outputs.ghcr }}:${{ env.RELEASE_TAG }}
           labels: |
             org.opencontainers.image.title=mcp-prism-search
-            org.opencontainers.image.description=Multi-provider MCP web search with keyless fallback, optional native AI, safe fetching and caching.
-            org.opencontainers.image.version=${{ needs.release.outputs.release_tag }}
-            org.opencontainers.image.created=${{ steps.image.outputs.created }}
-            org.opencontainers.image.revision=${{ needs.release.outputs.release_commit_sha }}
+            org.opencontainers.image.version=${{ env.RELEASE_VERSION }}
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            org.opencontainers.image.description=Multi-provider MCP search with optional native AI and safe fetching.
+          cache-from: type=gha,scope=prism-multiarch
+          cache-to: type=gha,scope=prism-multiarch,mode=max
+
+      - name: Verify runtime and manifests
+        env:
+          DOCKERHUB_IMAGE: ${{ steps.images.outputs.dockerhub }}
+          GHCR_IMAGE: ${{ steps.images.outputs.ghcr }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for image in "$DOCKERHUB_IMAGE" "$GHCR_IMAGE"; do
+            docker buildx imagetools inspect "$image@$DIGEST" --raw | python scripts/verify_manifest.py
+            test "$(docker buildx imagetools inspect "$image:$RELEASE_TAG" --format '{{.Manifest.Digest}}')" = "$DIGEST"
+          done
+          for platform in linux/amd64 linux/arm64; do
+            docker run --rm --platform "$platform" --entrypoint python "$GHCR_IMAGE@$DIGEST" \
+              -c 'import sys; from mcp_prism_search import __version__; from importlib.metadata import version; assert __version__ == version("mcp-prism-search") == sys.argv[1]; print(__version__)' "$RELEASE_VERSION"
+          done
+
+      - name: Promote verified digest, not mutable build tags
+        env:
+          DOCKERHUB_IMAGE: ${{ steps.images.outputs.dockerhub }}
+          GHCR_IMAGE: ${{ steps.images.outputs.ghcr }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          python scripts/release_guard.py "$RELEASE_TAG" "$SOURCE_SHA" --promote
+          for image in "$DOCKERHUB_IMAGE" "$GHCR_IMAGE"; do
+            docker buildx imagetools create -t "$image:latest" "$image@$DIGEST"
+            test "$(docker buildx imagetools inspect "$image:latest" --format '{{.Manifest.Digest}}')" = "$DIGEST"
+          done
+
+      - name: Publish GitHub release and missing artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/publish_release.py "$RELEASE_TAG" dist
+          {
+            echo "### Published $RELEASE_TAG"
+            echo "Commit: `$SOURCE_SHA`"
+            echo "Docker Hub and GHCR: amd64 + arm64, verified version."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -10,8 +10,21 @@ Two supported modes:
 
 ## Docker
 
+For a source checkout, resolve the version before building (requires Python
+and the Hatch VCS build tools in your active virtual environment):
+
 ```bash
-docker build -t mcp-prism-search:local .
+python -m pip install hatchling hatch-vcs
+export PRISM_VERSION="$(python -m hatchling version)"
+```
+
+Repeat the version resolution after updating the source. Compose forwards
+PRISM_VERSION to the build; without it the image reports 0.0.0+unknown.
+Published images already contain their verified release version. See
+[release process](release.md).
+
+```bash
+docker build --build-arg "PRISM_VERSION=$PRISM_VERSION" -t mcp-prism-search:local .
 ```
 
 The image:
@@ -58,12 +71,15 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 ```bash
 git pull
-MCP_AUTH_TOKEN=$(openssl rand -hex 32) docker compose up -d --build
+export PRISM_VERSION="$(python -m hatchling version)"
+# Keep the existing private environment and token.
+docker compose up -d --build
 ```
 
 `requirements-lock.txt` keeps builds reproducible across updates. The
-release workflow builds and publishes images on every push to `main` and
-creates a GitHub release/tag from conventional commits.
+release workflow validates every push to `main` and publishes only when
+Conventional Commits produce a new version (or the latest tag is retried).
+It creates a GitHub release/tag without a release commit.
 
 ## Exposing beyond loopback
 
@@ -128,7 +144,7 @@ never loses user data.
 Build the local image:
 
 ```bash
-docker build -t mcp-prism-search:local .
+docker build --build-arg "PRISM_VERSION=$PRISM_VERSION" -t mcp-prism-search:local .
 ```
 
 Run the server over stdio. This mode is auth-free because the MCP client owns

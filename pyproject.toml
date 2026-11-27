@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.33,<2", "hatch-vcs==0.5.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "mcp-prism-search"
-version = "0.14.0"
+dynamic = ["version"]
 description = "MCP search aggregator: multi-provider keyless web search (Bing RSS, DuckDuckGo, SearXNG, FreeSerp, Keenable, Mwmbl) with keyed free-tier providers (TinyFish, Tavily, Exa, Brave, You.com, Serper, Jina), fallback chains, deterministic ranking, caching, and SSRF-safe fetching."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,6 +32,14 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/isyuricunha/mcp-prism-search"
 
+[tool.hatch.version]
+source = "vcs"
+tag-pattern = "^v(?P<version>[0-9]+[.][0-9]+[.][0-9]+)$"
+fallback-version = "0.0.0+unknown"
+
+[tool.hatch.version.raw-options]
+local_scheme = "node-and-date"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcp_prism_search"]
 
@@ -47,13 +55,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.semantic_release]
 allow_zero_version = true
-build_command = "python -m pip install build && python -m build"
-commit_message = "chore(release): {version} [skip ci]"
 commit_parser = "conventional"
 major_on_zero = false
 tag_format = "v{version}"
-version_toml = ["pyproject.toml:project.version"]
-version_variables = ["src/mcp_prism_search/__init__.py:__version__"]
 
 [tool.semantic_release.branches.main]
 match = "main"

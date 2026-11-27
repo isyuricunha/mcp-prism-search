@@ -171,8 +171,10 @@ try{
  await page.locator("#theme").click();
  await page.locator("#search-answers").uncheck();
  await page.locator("#run-search").click();
+ const optOutResponse=page.waitForResponse(response=>response.url().endsWith("/api/search")&&response.request().postDataJSON().include_answers===false);
  await page.getByRole("dialog").getByRole("button",{name:"Run search",exact:true}).click();
- await page.waitForFunction(()=>!document.querySelector("#run-search").disabled);
+ await optOutResponse;
+ await page.waitForFunction(()=>!document.querySelector("#run-search").disabled && document.querySelector("#search-ai-results").hidden);
  assert.equal(lastSearch.include_answers,false);
  assert.equal(await page.locator("#search-ai-results").isVisible(),false);
 

@@ -1,6 +1,9 @@
 services:
   ddg-research:
-    build: .
+    build:
+      context: .
+      args:
+        PRISM_VERSION: ${PRISM_VERSION:-0.0.0+unknown}
     image: mcp-prism-search:local
     container_name: mcp-prism-search
     restart: unless-stopped

@@ -393,7 +393,8 @@ or third-party accounts. Do not expose services publicly.
    virtualenv Python path and module mcp_prism_search.server.
    For a shared service, use Compose with loopback binding, a private
    random bearer token, explicit permitted Host/Origin values and the
-   documented writable cache directory. Store credentials outside Git.
+   documented writable cache directory. Resolve PRISM_VERSION from Git
+   using Hatch VCS as documented before building. Store credentials outside Git.
    Preserve existing credentials, services and client configurations.
 
 3. Register the server as prism-search using the client's supported MCP
@@ -449,6 +450,7 @@ content accuracy or anonymity.
 | [Web dashboard](docs/webui.md) | Optional administration interface, security and configuration |
 | [Deployment and operations](docs/deployment.md) | Docker, configuration, HTTP, cache, troubleshooting |
 | [Architecture](docs/architecture.md) | Modules, request flow, security model |
+| [CI/CD and releases](docs/release.md) | Versioning, validation, publication and recovery |
 | [Development](docs/development.md) | Tests, dependencies, contribution and release process |
 
 ## Development
@@ -475,3 +477,25 @@ for published versions.
 ## Optional provider-native AI
 
 Use `web_answer` for provider-generated answers and `web_research` for multi-step synthesis. Both standalone tools require a configured supported API key and explicit `allow_cost: true`. Normal search is retrieval-only by default; enable AI-enhanced search globally and authorize individual providers through the panel or environment to include provider-generated answers in `web_search`. Set `include_answers: false` for retrieval only. See [native AI tools and pricing](docs/native-ai.md).
+
+
+### Release versioning
+
+Releases are derived from Git tags using Hatch VCS. GitHub Actions calculates
+the next version with Python Semantic Release, validates the exact commit,
+creates a version tag without a release commit, publishes both architecture
+images, and promotes the verified digest. Python package metadata is the
+runtime version source, including in the WebUI. See
+[CI/CD and release recovery](docs/release.md).
+
+For a local Git-based Docker build, resolve the source version explicitly:
+
+```sh
+python -m pip install hatchling hatch-vcs
+PRISM_VERSION="$(python -m hatchling version)"
+docker build --build-arg "PRISM_VERSION=$PRISM_VERSION" -t mcp-prism-search:local .
+# Or export PRISM_VERSION before docker compose build.
+```
+
+A Docker source build without Git metadata or a supplied version reports
+`0.0.0+unknown` rather than pretending to be a published release.
