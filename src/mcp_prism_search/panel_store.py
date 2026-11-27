@@ -18,6 +18,13 @@ class PanelStore:
         if directory.is_symlink() or directory.stat().st_mode & 0o077:
             raise RuntimeError("Panel state directory must be private (0700)")
         key_path = directory / "encryption.key"
+        self.path = directory / "settings.sqlite3"
+        if self.path.is_symlink():
+            raise RuntimeError("Invalid panel database path")
+        if self.path.exists() and not key_path.is_file():
+            raise RuntimeError("Existing state encryption key is missing")
+        if key_path.is_symlink():
+            raise RuntimeError("Invalid panel encryption key path")
         try:
             fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         except FileExistsError:
@@ -28,9 +35,6 @@ class PanelStore:
         if key_path.is_symlink() or key_path.stat().st_mode & 0o077:
             raise RuntimeError("Panel encryption key must be private (0600)")
         self.cipher = Fernet(key_path.read_bytes())
-        self.path = directory / "settings.sqlite3"
-        if self.path.is_symlink():
-            raise RuntimeError("Invalid panel database path")
         self.credentials: dict[str, str] = {}
         self.flags: dict[str, bool] = {}
         self.options: dict[str, str] = {}

@@ -326,3 +326,16 @@ def test_legacy_search_cache_rejects_wrong_query(tmp_path, monkeypatch):
     monkeypatch.setattr(search, "_search_with_duckduckgo_html", retrieve)
     result = asyncio.run(search.ddg_search("query", cache=store))
     assert not result.cached and result.results[0].title == "New"
+
+
+def test_existing_state_without_key_never_generates_replacement(tmp_path):
+    from mcp_prism_search.panel_store import PanelStore
+
+    state = tmp_path / "state"
+    state.mkdir(mode=0o700)
+    database = state / "settings.sqlite3"
+    database.write_bytes(b"existing database")
+    with pytest.raises(RuntimeError, match="key is missing"):
+        PanelStore(state)
+    assert not (state / "encryption.key").exists()
+    assert database.read_bytes() == b"existing database"
