@@ -87,6 +87,11 @@ try{
  assert.equal(await page.locator("#sidebar-version").textContent(),"v9.8.7");
  assert.ok((await page.locator("#sidebar-version").getAttribute("href")).endsWith("/releases/tag/v9.8.7"));
  assert.ok((await page.locator("#server-facts").textContent()).includes("2.3.0"));
+ data.providers.find(p=>p.id==="tinyfish").display_name="TinyFish TinySearch";
+ data.metrics=[{name:"tinyfish:answer",requests:1,ok:1,empty:0,errors:0,limited:0,seconds:0.2}];
+ await page.evaluate(()=>refresh());
+ assert.ok((await page.locator("#metrics").textContent()).includes("TinyFish TinySearch · Answer"));
+ data.metrics=[];
  const originalServer={...data.server};
  data.server={...originalServer,version:"9.8.8.dev1+g123abc456",build_kind:"development",commit:"123abc456"};
  await page.evaluate(()=>refresh());
