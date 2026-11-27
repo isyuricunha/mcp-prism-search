@@ -280,3 +280,11 @@ def test_invalid_http_port(monkeypatch, port):
     monkeypatch.setenv("MCP_PORT", port)
     with pytest.raises(RuntimeError, match="Invalid MCP_PORT"):
         _configure_http_settings()
+
+
+def test_invalid_log_level(monkeypatch):
+    from mcp_prism_search.server import _validated_log_level
+
+    monkeypatch.setenv("MCP_LOG_LEVEL", " unsupported ")
+    with pytest.raises(RuntimeError, match="accepted values"):
+        _validated_log_level()
