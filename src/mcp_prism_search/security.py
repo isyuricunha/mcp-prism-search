@@ -20,6 +20,12 @@ BLOCKED_NETWORKS: tuple[IPv4Network | IPv6Network, ...] = (
     ip_network("::1/128"),
     ip_network("fc00::/7"),
     ip_network("fe80::/10"),
+    # Reject transition prefixes; the embedded destination is not necessarily
+    # subject to the same routing policy as a native global IPv6 address.
+    ip_network("64:ff9b::/96"),
+    ip_network("64:ff9b:1::/48"),
+    ip_network("2002::/16"),
+    ip_network("2001::/32"),
 )
 
 
@@ -42,12 +48,13 @@ def is_unsafe_ip(value: str) -> bool:
     except ValueError:
         return False
 
+    # Scoped literals are invalid even if their mapped address is public.
+    if getattr(ip, "scope_id", None) is not None:
+        return True
     # IPv4-mapped IPv6 must follow the embedded IPv4 policy too.
     mapped = getattr(ip, "ipv4_mapped", None)
     if mapped is not None:
         return is_unsafe_ip(str(mapped))
-    if getattr(ip, "scope_id", None) is not None:
-        return True
     if not ip.is_global or any(ip in network for network in BLOCKED_NETWORKS):
         return True
     return any(

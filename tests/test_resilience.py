@@ -406,3 +406,12 @@ def test_panel_store_rejects_nonregular_state_paths(tmp_path, name):
     (state / name).mkdir()
     with pytest.raises(RuntimeError, match="Invalid panel"):
         PanelStore(state)
+
+
+@pytest.mark.parametrize("address", [
+    "::ffff:8.8.8.8%eth0", "64:ff9b::a00:1", "64:ff9b:1::1",
+    "2002:7f00:1::1", "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+])
+def test_fetch_rejects_scoped_mapped_and_transition_ips(address):
+    assert security.is_unsafe_ip(address)
+    assert not security.is_unsafe_ip("2001:4860:4860::8888")
