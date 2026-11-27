@@ -11,7 +11,7 @@ import httpx
 
 
 def normalize_domain(value: str) -> str:
-    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+    if any(ord(c) < 32 or ord(c) == 127 or c == chr(92) for c in value):
         raise ValueError("Invalid domain")
     raw_value = value.strip().lower()
     if not raw_value:

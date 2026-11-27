@@ -174,3 +174,12 @@ def test_preferred_partition_evaluates_each_url_once():
         preferred_domains=["a.example"],
     ) == [items[0], items[2], items[1]]
     assert calls == items
+
+
+def test_domain_controls_reject_ambiguous_backslash_authority():
+    import pytest
+
+    from mcp_prism_search.domains import normalize_domain
+
+    with pytest.raises(ValueError, match="Invalid domain"):
+        normalize_domain("https://example.org" + chr(92) + "@other.example")
