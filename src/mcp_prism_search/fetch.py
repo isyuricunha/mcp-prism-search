@@ -132,7 +132,7 @@ async def _get_with_validated_redirects(
 
     current_url = url
     for _ in range(MAX_REDIRECTS + 1):
-        await validate_fetch_url(current_url)
+        validate_url_shape(current_url)
         safe_ip, _port = await resolve_safe_address(current_url)
         parsed = urlparse(current_url)
         hostname = httpx.URL(current_url).raw_host.decode("ascii")

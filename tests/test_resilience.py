@@ -362,3 +362,27 @@ def test_fetch_unknown_charset_falls_back_to_utf8():
 ])
 def test_pinned_fetch_host_header_is_ascii_and_preserves_authority(url, host):
     assert fetch._original_host_header(url) == host
+
+
+def test_redirect_resolution_uses_one_pinned_lookup_per_hop(monkeypatch):
+    calls = []
+
+    async def resolve(url):
+        calls.append(url)
+        return "93.184.216.34", 443
+
+    async def verify():
+        def handler(req):
+            if req.url.path == "/first":
+                return httpx.Response(302, headers={"location": "/second"})
+            return httpx.Response(200, content=b"hello")
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            result = await fetch._get_with_validated_redirects(
+                client, "https://example.org/first", 1000
+            )
+        assert result.logical_url.endswith("/second")
+
+    monkeypatch.setattr(fetch, "resolve_safe_address", resolve)
+    asyncio.run(verify())
+    assert calls == ["https://example.org/first", "https://example.org/second"]
