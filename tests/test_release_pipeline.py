@@ -109,12 +109,18 @@ def test_release_recovery_does_not_overwrite_existing_artifact(repository, monke
     module = importlib.import_module("publish_release")
     (tmp_path / "prism.whl").write_bytes(b"wheel")
     (tmp_path / "prism.tar.gz").write_bytes(b"sdist")
+    notes = "## v0.9.0\n\n### Features\n\n- Actual change\n"
+    (tmp_path / "release-notes.md").write_text(notes)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n" + notes)
     calls = []
 
     def run(args, **kwargs):
         calls.append(args)
         if args[2] == "view":
-            return subprocess.CompletedProcess(args, 0, '{"assets":[{"name":"prism.whl"}]}')
+            return subprocess.CompletedProcess(
+                args, 0, '{"body":"Curated notes","assets":'
+                '[{"name":"prism.whl"},{"name":"CHANGELOG.md"}]}'
+            )
         return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(subprocess, "run", run)
@@ -127,13 +133,17 @@ def test_failed_draft_release_is_completed(repository, monkeypatch, tmp_path):
     module = importlib.import_module("publish_release")
     (tmp_path / "prism.whl").write_bytes(b"wheel")
     (tmp_path / "prism.tar.gz").write_bytes(b"sdist")
+    notes = "## v0.9.0\n\n### Features\n\n- Actual change\n"
+    (tmp_path / "release-notes.md").write_text(notes)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n" + notes)
     calls = []
 
     def run(args, **kwargs):
         calls.append(args)
         if args[2] == "view":
             return subprocess.CompletedProcess(
-                args, 0, '{"isDraft":true,"assets":[{"name":"prism.whl"}]}'
+                args, 0, '{"isDraft":true,"body":"Curated notes","assets":'
+                '[{"name":"prism.whl"},{"name":"CHANGELOG.md"}]}'
             )
         return subprocess.CompletedProcess(args, 0)
 
@@ -147,6 +157,9 @@ def test_release_creation_includes_both_verified_artifacts(repository, monkeypat
     module = importlib.import_module("publish_release")
     (tmp_path / "prism.whl").write_bytes(b"wheel")
     (tmp_path / "prism.tar.gz").write_bytes(b"sdist")
+    notes = "## v0.9.0\n\n### Features\n\n- Actual change\n"
+    (tmp_path / "release-notes.md").write_text(notes)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n" + notes)
     calls = []
 
     def run(args, **kwargs):
@@ -157,4 +170,90 @@ def test_release_creation_includes_both_verified_artifacts(repository, monkeypat
     module.publish("v0.9.0", tmp_path)
     assert calls[1][2] == "create"
     assert "--verify-tag" in calls[1]
-    assert calls[1][-2:] == [str(tmp_path / "prism.whl"), str(tmp_path / "prism.tar.gz")]
+    assert "--notes-file" in calls[1]
+    assert "--generate-notes" not in calls[1]
+    assert calls[1][-3:] == [
+        str(tmp_path / "prism.whl"), str(tmp_path / "prism.tar.gz"),
+        str(tmp_path / "CHANGELOG.md"),
+    ]
+
+
+def test_release_requires_real_changelog_before_remote_write(repository, tmp_path):
+    module = importlib.import_module("publish_release")
+    (tmp_path / "prism.whl").write_bytes(b"wheel")
+    (tmp_path / "prism.tar.gz").write_bytes(b"sdist")
+    with pytest.raises(ValueError, match="required"):
+        module.publish("v0.9.0", tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog")
+    (tmp_path / "release-notes.md").write_text("**Full Changelog**: compare")
+    with pytest.raises(ValueError, match="real changes"):
+        module.publish("v0.9.0", tmp_path)
+
+
+def test_repair_link_only_release_preserves_assets(repository, monkeypatch, tmp_path):
+    module = importlib.import_module("publish_release")
+    (tmp_path / "prism.whl").write_bytes(b"wheel")
+    (tmp_path / "prism.tar.gz").write_bytes(b"sdist")
+    notes = "## v0.9.0\n\n### Features\n\n- Actual change\n"
+    (tmp_path / "release-notes.md").write_text(notes)
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n" + notes)
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[2] == "view":
+            return subprocess.CompletedProcess(
+                args, 0, '{"body":"**Full Changelog**: compare","assets":'
+                '[{"name":"prism.whl"},{"name":"prism.tar.gz"}]}'
+            )
+        return subprocess.CompletedProcess(args, 0)
+
+    monkeypatch.setattr(subprocess, "run", run)
+    module.publish("v0.9.0", tmp_path)
+    assert [c[2] for c in calls] == ["view", "upload", "edit"]
+    assert calls[1][-1].endswith("CHANGELOG.md")
+    assert calls[2][-1].endswith("release-notes.md")
+
+
+
+def test_changelog_section_uses_exact_range_and_keeps_commit_details(repository):
+    from types import SimpleNamespace
+
+    module = importlib.import_module("release_changelog")
+    sha = "a" * 40
+    commit = SimpleNamespace(
+        hexsha=sha, parents=[object()], summary="feat(search): add results"
+    )
+    merge = SimpleNamespace(hexsha="b" * 40, parents=[object(), object()])
+
+    def parse(value):
+        assert value is commit
+        return [SimpleNamespace(
+            include_in_changelog=True, scope="search", type="features",
+            descriptions=["add results", "Preserve result ordering."],
+            breaking_descriptions=[], bump=SimpleNamespace(name="MINOR"),
+        )]
+
+    def iter_commits(revision):
+        assert revision == "v0.9.0.." + sha
+        return [merge, commit]
+
+    result = module.section(
+        SimpleNamespace(iter_commits=iter_commits),
+        SimpleNamespace(parse=parse), "v0.10.0", sha, "v0.9.0",
+    )
+    assert "### Features" in result
+    assert "Preserve result ordering." in result
+    assert sha in result and merge.hexsha not in result
+    assert "compare/v0.9.0...v0.10.0" in result
+
+
+def test_changelog_rejects_empty_version_history(repository):
+    from types import SimpleNamespace
+
+    module = importlib.import_module("release_changelog")
+    with pytest.raises(ValueError, match="empty release note"):
+        module.section(
+            SimpleNamespace(iter_commits=lambda rev: []),
+            None, "v0.10.0", "a" * 40, "v0.9.0",
+        )

@@ -499,3 +499,5 @@ docker build --build-arg "PRISM_VERSION=$PRISM_VERSION" -t mcp-prism-search:loca
 
 A Docker source build without Git metadata or a supplied version reports
 `0.0.0+unknown` rather than pretending to be a published release.
+
+Release notes and the full generated changelog are available in [GitHub Releases](https://github.com/isyuricunha/mcp-prism-search/releases).

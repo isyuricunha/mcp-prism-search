@@ -23,9 +23,15 @@ reports 0.0.0+unknown. Runtime package metadata is authoritative.
    to the existing Docker Hub repository (mcp-ddg-research, preserved for
    existing users) and GHCR. Check manifests and runtime versions on both
    platforms before promoting the digest to latest.
-5. Publish the GitHub Release and verified Python distributions. Existing
+5. Publish the GitHub Release with the mandatory version-specific changelog,
+   cumulative CHANGELOG.md and verified Python distributions. The generator uses
+   the pinned Semantic Release Conventional Commit parser on exact Git tag
+   ranges (including commit details and links). This avoids misattribution
+   across old merge commits. Changelogs are generated in CI, not committed
+   to main. Missing notes block release publication. Existing
    release assets are not overwritten during recovery. A partially uploaded
-   draft is completed and published after missing assets are uploaded.
+   draft is completed and published after missing assets are uploaded. Empty or
+   legacy link-only notes are repaired; substantive existing notes are preserved.
 
 Actions are pinned to full commit SHAs. Dependabot proposes updates for review.
 The browser suite waits for matching network responses rather than assuming

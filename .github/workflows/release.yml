@@ -92,6 +92,15 @@ jobs:
           git switch -C main "$GITHUB_SHA"
           python scripts/release_plan.py --tag "$REQUESTED_TAG"
 
+      - name: Generate mandatory changelog from exact release history
+        if: steps.plan.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.plan.outputs.tag }}
+          SOURCE_SHA: ${{ steps.plan.outputs.sha }}
+        run: |
+          "$RUNNER_TEMP/semantic-release/bin/python" scripts/release_changelog.py \
+            "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/prism-release-notes"
+
       - name: Select planned source
         env:
           SOURCE_SHA: ${{ steps.plan.outputs.sha }}
@@ -155,6 +164,13 @@ jobs:
           docker build --build-arg "PRISM_VERSION=$version" -t prism-ci:test .
           docker run --rm --entrypoint python prism-ci:test -c 'import sys; from mcp_prism_search import __version__; assert __version__ == sys.argv[1]; print(__version__)' "$version"
 
+      - name: Stage required changelog
+        if: steps.plan.outputs.publish == 'true'
+        run: |
+          cp "$RUNNER_TEMP/prism-release-notes/CHANGELOG.md" dist/
+          cp "$RUNNER_TEMP/prism-release-notes/release-notes.md" dist/
+          test -s dist/CHANGELOG.md && test -s dist/release-notes.md
+
       - name: Retain verified distributions
         if: steps.plan.outputs.publish == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -178,11 +194,17 @@ jobs:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
       SOURCE_SHA: ${{ needs.validate.outputs.sha }}
     steps:
-      - name: Check out validated commit
+      - name: Check out release workflow source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.validate.outputs.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
+
+      - name: Preserve current release helper and select validated source
+        run: |
+          mkdir -p "$RUNNER_TEMP/prism-release-tools"
+          cp scripts/publish_release.py scripts/release_plan.py "$RUNNER_TEMP/prism-release-tools/"
+          git switch --detach "$SOURCE_SHA"
 
       - name: Download verified distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -300,7 +322,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/publish_release.py "$RELEASE_TAG" dist
+          python "$RUNNER_TEMP/prism-release-tools/publish_release.py" "$RELEASE_TAG" dist
           {
             echo "### Published $RELEASE_TAG"
             echo "Commit: `$SOURCE_SHA`"
