@@ -509,5 +509,13 @@ TinyFish TinyAnswer and TinyResearch are available through the explicit native t
 Structured stderr events and the optional dashboard Logs page provide sanitized operational history, correlation, filters and JSON export. See [observability and optional OpenTelemetry](docs/observability.md).
 
 Cache entries are bounded to 8 MiB each; oversized replacements are not published.
+Direct HTTP provider responses are capped at 8 MiB before decoding; native
+SSE streams are capped at 32 MiB total and 1,000,000 characters per event.
+Fixed provider endpoints do not follow redirects or accept compressed bodies.
+Search results return at most 500 title characters and 4,000 snippet characters
+per document. These limits do not replace provider quotas or billing policies.
+If an authorized combined search/synthesis fails, Prism does not retry the same
+paid request as ordinary retrieval; automatic mode can try another available
+provider. Check provider usage before retrying paid operations.
 
 Offline ranking quality regressions: run python -m pytest tests/test_retrieval_quality.py. These deterministic fixtures complement, but do not replace, live provider relevance evaluation.
