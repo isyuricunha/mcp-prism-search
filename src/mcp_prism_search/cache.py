@@ -10,6 +10,7 @@ import stat
 import tempfile
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass
 from hashlib import sha256
@@ -197,16 +198,14 @@ def _ensure_cache_namespace_dirs(root_dir: Path) -> None:
             namespace_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _iter_cache_files(root_dir: Path) -> list[_CacheFile]:
-    files: list[_CacheFile] = []
+def _iter_cache_files(root_dir: Path) -> Iterator[_CacheFile]:
     for namespace in CACHE_NAMESPACES:
         namespace_dir = root_dir / namespace
         if namespace_dir.is_symlink() or not namespace_dir.is_dir():
             continue
 
         with suppress(OSError):
-            entries = list(namespace_dir.iterdir())
-            for path in entries:
+            for path in namespace_dir.iterdir():
                 if path.suffix not in {".json", ".tmp"}:
                     continue
                 try:
@@ -215,16 +214,13 @@ def _iter_cache_files(root_dir: Path) -> list[_CacheFile]:
                     continue
                 if not stat.S_ISREG(file_stat.st_mode):
                     continue
-                files.append(
-                    _CacheFile(
-                        namespace=namespace,
-                        path=path,
-                        size=file_stat.st_size,
-                        mtime=file_stat.st_mtime,
-                        identity=_file_identity(file_stat),
-                    )
+                yield _CacheFile(
+                    namespace=namespace,
+                    path=path,
+                    size=file_stat.st_size,
+                    mtime=file_stat.st_mtime,
+                    identity=_file_identity(file_stat),
                 )
-    return files
 
 
 def _read_cache_created_at(cache_file: _CacheFile) -> float:

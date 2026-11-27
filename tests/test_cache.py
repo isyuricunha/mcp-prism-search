@@ -323,3 +323,16 @@ def test_clear_requires_literal_boolean(tmp_path, confirmation):
 def test_cache_namespace_cannot_escape_root(tmp_path):
     with pytest.raises(ValueError, match="Unknown cache namespace"):
         JsonFileCache(tmp_path, "../outside", 60)
+
+
+def test_cache_scan_is_lazy_and_preserves_totals(tmp_path):
+    from collections.abc import Iterator
+
+    from mcp_prism_search.cache import JsonFileCache, _iter_cache_files, get_cache_stats
+
+    store = JsonFileCache(tmp_path, "search", 60)
+    for i in range(20):
+        store.set({"index": i}, {"data": "entry"})
+    scan = _iter_cache_files(tmp_path)
+    assert isinstance(scan, Iterator)
+    assert len(list(scan)) == get_cache_stats(tmp_path).total_files == 20
