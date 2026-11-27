@@ -197,3 +197,14 @@ def test_aggregated_cache_rejects_wrong_query(tmp_path, monkeypatch):
     path.write_text(json.dumps(envelope))
     second = asyncio.run(search.aggregated_search("query", provider="keenable", cache=store))
     assert not second.cached and second.query == "query" and len(calls) == 2
+
+
+@pytest.mark.parametrize("content_type", ["text/html", "text/plain"])
+def test_character_limit_reports_truncation(content_type):
+    body = ("<main>" + "a" * 2000 + "</main>") if content_type == "text/html" else "a" * 2000
+    raw = fetch.RawFetchedResponse(
+        200, httpx.Headers({"content-type": content_type}),
+        body.encode(), "https://example.org", "utf-8", fetched_bytes=len(body),
+    )
+    response = fetch._response_to_fetch_response("https://example.org", raw, 1000)
+    assert response.success and response.truncated and len(response.content) == 1000

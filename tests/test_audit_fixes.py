@@ -105,9 +105,9 @@ def test_search_poisoned_cache_is_invalidated(tmp_path) -> None:
 
 def test_fetch_poisoned_cache_is_invalidated(tmp_path) -> None:
     cache = JsonFileCache(tmp_path, "fetch", 3600)
-    payload = FetchRequest(url="https://example.com/", max_chars=12000).to_cache_payload(
-        _max_bytes=fetch_module.get_fetch_max_bytes()
-    )
+    payload = fetch_module._cache_payload(
+        FetchRequest(url="https://example.com/", max_chars=12000)
+    ) | {"_max_bytes": fetch_module.get_fetch_max_bytes()}
     cache.set(payload, {"wrong": True})
     assert list(tmp_path.glob("fetch/*.json"))
 

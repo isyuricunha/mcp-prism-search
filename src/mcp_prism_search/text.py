@@ -17,6 +17,7 @@ TEXT_FILE_EXTENSIONS = (".md", ".markdown", ".txt", ".json", ".jsonl")
 class ExtractedText:
     title: str
     content: str
+    truncated: bool = False
 
 
 def normalize_whitespace(value: str) -> str:
@@ -76,4 +77,5 @@ def extract_html_text(html: str, max_chars: int) -> ExtractedText:
         if len(body_text) > len(best_text):
             best_text = body_text
 
-    return ExtractedText(title=title, content=truncate_text(best_text, max_chars))
+    return ExtractedText(title=title, content=truncate_text(best_text, max_chars),
+                         truncated=len(best_text) > max_chars)

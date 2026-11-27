@@ -273,7 +273,9 @@ def test_fetch_still_uses_cache_if_pruning_fails(monkeypatch, tmp_path) -> None:
         success=True,
         error=None,
     )
-    payload = request.model_dump(mode="json") | {"_max_bytes": 5242880}
+    from mcp_prism_search.fetch import _cache_payload
+
+    payload = _cache_payload(request) | {"_max_bytes": 5242880}
     cache.set(payload, response.model_dump(mode="json"))
 
     async def validate_without_dns(url: str) -> None:

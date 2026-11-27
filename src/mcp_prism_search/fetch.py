@@ -60,7 +60,7 @@ def get_max_concurrency(max_concurrency: int | None = None) -> int:
 
 
 def _cache_payload(request: FetchRequest) -> dict[str, Any]:
-    return request.to_cache_payload()
+    return request.to_cache_payload(_extraction_version=2)
 
 
 def _cacheable_fetch_response(response: FetchResponse) -> dict[str, Any]:
@@ -221,7 +221,7 @@ def _response_to_fetch_response(
             cached=False,
             success=True,
             error=None,
-            truncated=response.truncated,
+            truncated=response.truncated or extracted.truncated,
             fetched_bytes=response.fetched_bytes,
         )
 
@@ -235,7 +235,7 @@ def _response_to_fetch_response(
             cached=False,
             success=True,
             error=None,
-            truncated=response.truncated,
+            truncated=response.truncated or len(text) > max_chars,
             fetched_bytes=response.fetched_bytes,
         )
 
