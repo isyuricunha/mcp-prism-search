@@ -28,18 +28,34 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response.raise_for_status()
         data = response.json()
 
+    return parse_web_results(data, count)
+
+
+def parse_web_results(data: object, count: int) -> list[SearchResult]:
+    """Shared decoding for authenticated and public MCP search responses."""
+    if not isinstance(data, dict) or not isinstance(data.get("results"), dict):
+        raise ValueError("Invalid You.com search response")
+    web = data["results"].get("web", [])
+    if not isinstance(web, list):
+        raise ValueError("Invalid You.com web results")
     results: list[SearchResult] = []
-    for hit in data.get("results", {}).get("web", []):
+    for hit in web:
         if not isinstance(hit, dict):
             continue
-        url = str(hit.get("url") or "")
-        title = normalize_whitespace(str(hit.get("title") or ""))
-        snippet = normalize_whitespace(
-            str(hit.get("description") or " ".join(hit.get("snippets") or []))
-        )
-        if not url.startswith("http") or not title:
+        url = hit.get("url")
+        title = hit.get("title")
+        if not isinstance(url, str) or not isinstance(title, str):
             continue
-        results.append(SearchResult(title=title, url=url, snippet=snippet))
+        title = normalize_whitespace(title)
+        if not title or not url.startswith(("http://", "https://")):
+            continue
+        description = hit.get("description")
+        snippets = hit.get("snippets")
+        if not isinstance(description, str) or not description.strip():
+            description = (" ".join(s for s in snippets if isinstance(s, str))
+                           if isinstance(snippets, list) else "")
+        results.append(SearchResult(title=title, url=url,
+                                    snippet=normalize_whitespace(description)))
         if len(results) >= count:
             break
     return results

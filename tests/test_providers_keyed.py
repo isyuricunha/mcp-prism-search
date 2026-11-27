@@ -145,3 +145,13 @@ def test_jina_requires_key_and_parses_data(monkeypatch) -> None:
         results = asyncio.run(jina.search(_request("test"), 5, 10))
 
     assert results[0].url == "https://j.example/"
+
+def test_youcom_shared_parser_skips_invalid_rows_and_snippets():
+    data = {"results": {"web": [None, {"url": 3, "title": "Bad"},
+            {"url": "https://example.org", "title": "  Example ",
+             "snippets": [None, 3, "Valid evidence"]}]}}
+    rows = youcom.parse_web_results(data, 5)
+    assert len(rows) == 1 and rows[0].title == "Example"
+    assert rows[0].snippet == "Valid evidence"
+    with pytest.raises(ValueError, match="web results"):
+        youcom.parse_web_results({"results": {"web": {}}}, 5)
