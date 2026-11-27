@@ -430,22 +430,24 @@ function renderCache(){
   for(const name of ["search","fetch"]){
     const stats=c.namespaces?.[name];
     const tr=element("tr"),heading=element("th",name==="search"?"Search results":"Webpage content");heading.scope="row";
-    const cell=element("td");cell.append(action("Clear "+name,()=>cacheAction("clear",name),"danger"));
+    const cell=element("td"),button=action("Clear "+name,()=>cacheAction("clear",name),"danger");
+    button.disabled=cachePending;cell.append(button);
     tr.append(heading,element("td",stats?number(stats.files):"—"),element("td",stats?bytes(stats.bytes):"—"),cell);$("cache-rows").append(tr);
   }
 }
 async function cacheAction(kind,namespace="all"){
   if(cachePending)return;
   const clear=kind==="clear";
-  if(!await confirmAction(clear?"Clear "+(namespace==="all"?"all cache":namespace+" cache"):"Prune expired entries",clear?"Remove cached results in "+namespace+". This cannot be undone. New searches may make more upstream requests.":"Remove expired and invalid entries. Valid cached results are retained.",clear?"Clear cache":"Prune cache"))return;
+  if(!await confirmAction(clear?"Clear "+(namespace==="all"?"all cache":namespace+" cache"):"Prune expired entries",clear?"Remove cached results in "+namespace+". This cannot be undone. New searches may make more upstream requests.":"Remove expired entries and stale temporary files. Active cached results are retained.",clear?"Clear cache":"Prune cache"))return;
   if(cachePending)return;
   cachePending=true;busyCount++;feedback("cache-feedback","Working…");
   for(const b of $("cache").querySelectorAll("button"))b.disabled=true;
   try{
     const result=await api("cache/"+kind,"POST",clear?{namespace,confirm:true}:undefined);
     if(result.error)throw new Error(result.error);
-    await refresh(true);
-    feedback("cache-feedback","Removed "+number(result.deleted_files)+" entries ("+bytes(result.deleted_bytes)+").");
+    const message="Removed "+number(result.deleted_files)+" entries ("+bytes(result.deleted_bytes)+").";
+    try{await refresh(true);feedback("cache-feedback",message);}
+    catch{feedback("cache-feedback",message+" Refresh failed; refresh the dashboard to see current usage.",true);}
   }catch(error){feedback("cache-feedback",error.message,true);}
   finally{cachePending=false;busyCount--;for(const b of $("cache").querySelectorAll("button"))b.disabled=false;}
 }

@@ -13,7 +13,7 @@ const page=await context.newPage();
 const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
-let holdSettings=null;
+let holdSettings=null,failOverview=false;
 // Deliberate response latency exposes stale DOM/fixture assertions on fast runners.
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function responseFor(endpoint, predicate=()=>true){
@@ -39,7 +39,7 @@ await page.route("http://prism-test.invalid/**",async route=>{
    let status=200, body={ok:true};
    if(pathname==="/api/login") logged=true;
    else if(!logged){status=401;body={error:"Authentication required"};}
-   else if(pathname==="/api/overview")body=data;
+   else if(pathname==="/api/overview"){if(failOverview){failOverview=false;status=503;body={error:"Unavailable"};}else body=data;}
    else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);p.enabled=d.enabled;p.available=d.enabled;if(d.remove)p.credential=false;}
    else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;if(holdSettings)await holdSettings;}
    else if(pathname==="/api/defaults"){
@@ -162,6 +162,13 @@ try{
  await page.getByRole("dialog").getByRole("button",{name:"Clear cache",exact:true}).click();
  await page.waitForFunction(()=>document.querySelector("#cache-feedback").textContent.includes("Removed"));
  assert.equal(cleared,1);
+ failOverview=true;
+ await page.getByRole("button",{name:"Clear all cache",exact:true}).click();
+ await page.getByRole("dialog").getByRole("button",{name:"Clear cache",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector("#cache-feedback").textContent.includes("Refresh failed"));
+ assert.ok((await page.locator("#cache-feedback").textContent()).includes("Removed 2 entries"));
+ assert.equal(cleared,2);
+ await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
  await nav("Playground");
  assert.equal(await page.locator("#query").getAttribute("maxlength"),"4000");
  await page.locator("#query").fill("test query");
@@ -276,7 +283,7 @@ try{
  await page.evaluate(()=>refresh().catch(()=>{}));
  await page.locator("#login").waitFor({state:"visible"});
  assert.equal(await page.getByRole("dialog").isVisible(),false);
- assert.equal(cleared,1);
+ assert.equal(cleared,2);
  await page.locator("#password").fill("test-only-password");
  await page.getByRole("button",{name:"Sign in",exact:true}).click();
  await page.locator("#dashboard").waitFor({state:"visible"});
