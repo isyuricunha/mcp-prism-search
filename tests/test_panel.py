@@ -565,3 +565,14 @@ def test_panel_rejects_oversized_json(panel):
     assert response.status_code == 400
     assert store.options == before
     assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("media_type", ["text/plain", "application/x-www-form-urlencoded"])
+def test_panel_requires_json_content_type(panel, media_type):
+    client, store, _ = panel
+    sign_in(client)
+    before = dict(store.options)
+    response = client.put("/api/settings", content=b'{"timeout": 12}',
+                          headers={**HEADERS, "Content-Type": media_type})
+    assert response.status_code == 400
+    assert store.options == before
