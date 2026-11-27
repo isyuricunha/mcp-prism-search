@@ -414,3 +414,14 @@ def test_cache_config_invalid_env(monkeypatch, tmp_path):
     assert config.prune_on_start is True
     assert config.prune_interval_seconds == 3600
     assert config.namespace_ttls["search"] == 21600
+
+
+def test_cache_unusable_directory(tmp_path):
+    (tmp_path / "search").write_text("not a directory")
+    cache = JsonFileCache(tmp_path, "search", 60)
+    assert cache.disabled_reason is not None
+    cache.set({"query": "test"}, {"results": []})
+    assert cache.get({"query": "test"}) is None
+    assert cache.delete({"query": "test"}) is False
+    assert get_cache_stats(tmp_path).total_files == 0
+    assert (tmp_path / "search").read_text() == "not a directory"
