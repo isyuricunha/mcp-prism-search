@@ -188,7 +188,7 @@ def _response_to_fetch_response(
 ) -> FetchResponse:
     final_url = response.logical_url
     content_type = response.headers.get("content-type", "")
-    if response.status_code >= 400:
+    if not 200 <= response.status_code < 300:
         return FetchResponse(
             url=request_url,
             final_url=final_url,
@@ -201,7 +201,10 @@ def _response_to_fetch_response(
         )
 
     charset = response.charset or "utf-8"
-    text = response.content.decode(charset, errors="replace")
+    try:
+        text = response.content.decode(charset, errors="replace")
+    except (LookupError, UnicodeError):
+        text = response.content.decode("utf-8", errors="replace")
     if response.truncated:
         text = (
             f"[PARTIAL CONTENT: download stopped at the {len(response.content)} byte "

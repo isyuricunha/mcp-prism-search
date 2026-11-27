@@ -339,3 +339,18 @@ def test_existing_state_without_key_never_generates_replacement(tmp_path):
         PanelStore(state)
     assert not (state / "encryption.key").exists()
     assert database.read_bytes() == b"existing database"
+
+
+@pytest.mark.parametrize("status", [300, 304, 399])
+def test_fetch_unhandled_redirect_status_is_not_success(status):
+    raw = fetch.RawFetchedResponse(status, httpx.Headers({"content-type": "text/plain"}),
+                                   b"not a page", "https://example.org", "utf-8")
+    result = fetch._response_to_fetch_response("https://example.org", raw, 1000)
+    assert not result.success and result.error == f"HTTP {status}"
+
+
+def test_fetch_unknown_charset_falls_back_to_utf8():
+    raw = fetch.RawFetchedResponse(200, httpx.Headers({"content-type": "text/plain"}),
+                                   "Olá".encode(), "https://example.org", "invalid-charset")
+    result = fetch._response_to_fetch_response("https://example.org", raw, 1000)
+    assert result.success and result.content == "Olá"
