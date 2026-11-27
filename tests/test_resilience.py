@@ -152,3 +152,13 @@ def test_malformed_ddg_link_does_not_discard_valid_row():
         10,
     )
     assert len(rows) == 1 and rows[0].title == "Good"
+
+
+def test_ranking_skips_bad_urls_and_retains_good_results():
+    from mcp_prism_search.models import SearchResult
+    from mcp_prism_search.search import rank_results
+
+    rows = [SearchResult(title="test", url=url, snippet="test") for url in (
+        "https://[bad", "https://example.org:bad", "https://example.org",
+    )]
+    assert rank_results(rows, "test") == rows[2:]

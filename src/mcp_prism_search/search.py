@@ -154,7 +154,7 @@ def rank_results(results: list[SearchResult], query: str) -> list[SearchResult]:
         hostname = urlparse(result.url).hostname or ""
         return 2.0 * title_score + 1.0 * snippet_score + 1.5 * _trusted_domain_score(hostname)
 
-    return sorted(results, key=score, reverse=True)
+    return sorted(_dedupe_results(results), key=score, reverse=True)
 
 
 def provider_request_size(request: SearchRequest) -> int:
@@ -267,7 +267,8 @@ def _search_with_ddgs(
                 raw_results = ddgs.text(request.query, **kwargs)
             else:
                 raise
-    results = [_result_from_payload(result) for result in raw_results or []]
+    results = [_result_from_payload(result) for result in raw_results or []
+               if isinstance(result, dict)]
     valid_results = [result for result in results if result is not None]
     return _dedupe_results(valid_results)
 
