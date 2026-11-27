@@ -576,3 +576,16 @@ def test_panel_requires_json_content_type(panel, media_type):
                           headers={**HEADERS, "Content-Type": media_type})
     assert response.status_code == 400
     assert store.options == before
+
+
+def test_panel_remote_https_required(panel, tmp_path):
+    _, store, _ = panel
+    app = create_app(PASSWORD, store, tmp_path / "assets", ["panel.example.org"])
+    with TestClient(app, base_url="http://panel.example.org") as client:
+        assert client.get("/").status_code == 403
+    with TestClient(app, base_url="https://panel.example.org") as client:
+        response = client.post("/api/login", json={"password": PASSWORD},
+                               headers={**HEADERS, "Origin": "https://panel.example.org"})
+        assert response.status_code == 200
+        assert "secure" in response.headers["Set-Cookie"].lower()
+        assert client.get("/api/overview").status_code == 200
