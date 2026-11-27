@@ -189,3 +189,20 @@ def test_serper_result_window(monkeypatch):
     mock_http(monkeypatch, handler)
     rows = asyncio.run(serper.search(SearchRequest(query="needle"), 1, 5))
     assert [r.title for r in rows] == ["First"]
+
+
+def test_hackernews_story_contract(monkeypatch):
+    from mcp_prism_search.providers import hackernews
+
+    def handler(req):
+        assert req.url.params["tags"] == "story"
+        assert req.url.params["hitsPerPage"] == "20"
+        return httpx.Response(200, json={"hits": [
+            None, {"objectID": "1"},
+            {"story_title": "Title", "story_url": "https://example.org/story",
+             "story_text": " Evidence "},
+        ]})
+
+    mock_http(monkeypatch, handler)
+    rows = asyncio.run(hackernews.search(SearchRequest(query="needle"), 30, 5))
+    assert [(r.title, r.snippet) for r in rows] == [("Title", "Evidence")]
