@@ -161,3 +161,47 @@ def test_settings_and_clear_cache(panel, monkeypatch):
                        json={"namespace": "all", "confirm": False}).status_code == 400
     assert client.post("/api/cache/clear", headers=HEADERS,
                        json={"namespace": "all", "confirm": True}).status_code == 200
+
+
+def test_dashboard_reports_installed_versions(panel):
+    from importlib.metadata import version
+
+    from mcp.types import LATEST_PROTOCOL_VERSION
+
+    from mcp_prism_search import __version__
+
+    client, _, _ = panel
+    sign_in(client)
+    assert client.get("/api/overview").json()["server"] == {
+        "version": __version__,
+        "sdk_version": version("mcp"),
+        "protocol_version": LATEST_PROTOCOL_VERSION,
+        "transport": "streamable-http",
+    }
+
+
+def test_dashboard_search_modes(panel, monkeypatch):
+    from mcp_prism_search.models import SearchResponse
+
+    client, _, _ = panel
+    sign_in(client)
+    calls = []
+
+    async def fake(query, **kwargs):
+        calls.append((query, kwargs))
+        return SearchResponse(query=query, provider="keenable", results=[], cached=False,
+                              error=None)
+
+    monkeypatch.setattr("mcp_prism_search.panel.aggregated_search", fake)
+    for mode in ("auto", "all"):
+        response = client.post("/api/search", headers=HEADERS,
+                               json={"mode": mode, "query": " test ", "max_results": 3})
+        assert response.status_code == 200
+        assert calls[-1] == ("test", {"provider": mode, "max_results": 3})
+    assert client.post("/api/search", headers=HEADERS,
+                       json={"mode": "auto", "providers": ["keenable"],
+                             "query": "test"}).status_code == 400
+    assert client.post("/api/search", headers=HEADERS,
+                       json={"query": " ", "providers": ["keenable"]}).status_code == 400
+    assert client.post("/api/search", headers=HEADERS,
+                       json={"query": "test"}).status_code == 400

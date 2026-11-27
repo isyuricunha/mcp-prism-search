@@ -8,9 +8,11 @@ import time
 from collections import deque
 from contextlib import asynccontextmanager
 from hmac import compare_digest
+from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
+from mcp.types import LATEST_PROTOCOL_VERSION
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -20,7 +22,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from mcp_prism_search import cache, providers, runtime
+from mcp_prism_search import __version__, cache, providers, runtime
 from mcp_prism_search.panel_store import PanelStore
 from mcp_prism_search.search import aggregated_search, get_ddg_timeout_seconds
 
@@ -64,7 +66,8 @@ class ClearCache(BaseModel):
 class Query(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=1000)
-    providers: list[str] = Field(min_length=1, max_length=17)
+    providers: list[str] | None = Field(default=None, min_length=1, max_length=50)
+    mode: Literal["selected", "auto", "all"] = "selected"
     max_results: int = Field(default=5, ge=1, le=10)
 
 
@@ -140,8 +143,15 @@ def create_app(password: str, store: PanelStore, assets: Path,
                 "editable": bool(env and env != "SEARXNG_URL"), "env": env,
             })
         return JSONResponse({
+            "server": {
+                "version": __version__,
+                "sdk_version": version("mcp"),
+                "protocol_version": LATEST_PROTOCOL_VERSION,
+                "transport": "streamable-http",
+            },
             "providers": rows, "metrics": store.metrics(), "counters": store.counters(),
-            "cache": cache.get_cache_stats().to_dict(), "settings": current_settings(),
+            "settings": current_settings(),
+            "cache": (await asyncio.to_thread(cache.get_cache_stats)).to_dict(),
         })
 
     def current_settings():
@@ -188,19 +198,28 @@ def create_app(password: str, store: PanelStore, assets: Path,
     async def search(request):
         data = await body(request, Query)
         available = providers.available_providers("general")
-        if any(name not in available for name in data.providers):
-            return error("Choose available general providers")
+        if data.mode == "selected":
+            if not data.providers or any(name not in available for name in data.providers):
+                return error("Choose available general providers")
+        elif data.providers is not None:
+            return error("Use either automatic/all mode or an explicit provider selection")
+        if not data.query.strip():
+            return error("Enter a non-empty search query")
         if search_slots.locked():
             return error("Too many concurrent searches", 429)
         async with search_slots:
-            result = await aggregated_search(data.query, providers=data.providers,
-                                             max_results=data.max_results)
+            kwargs = {"providers": data.providers} if data.mode == "selected" else {
+                "provider": data.mode
+            }
+            result = await aggregated_search(
+                data.query.strip(), max_results=data.max_results, **kwargs
+            )
         return JSONResponse(
             result.model_dump(mode="json"), status_code=400 if result.error else 200
         )
 
     async def prune(request):
-        # Only expired entries; no full cache deletion in the minimal UI.
+        # Preserve active entries; clearing is a separate confirmed operation.
         return JSONResponse((await asyncio.to_thread(
             cache.prune_cache, expired_only=True
         )).to_dict())

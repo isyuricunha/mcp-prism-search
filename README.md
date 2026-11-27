@@ -177,9 +177,10 @@ Open **http://127.0.0.1:49318** and sign in with the dashboard password.
 The overlay sets `MCP_WEBUI_ENABLED=true`; bare Python HTTP deployments
 can set that variable directly after building the static frontend.
 
-Manage providers and API keys, test searches, inspect aggregate activity
-and cache usage, change search timeouts and cache TTLs, and generate client
-connection examples. Panel credentials and settings are shared with the
+Manage providers and API keys with official provider links, test single or
+parallel searches and automatic fallback, inspect activity and cache usage,
+change search settings, and copy client connection examples. The dashboard
+reports the installed server, SDK and protocol versions from the live backend. Panel credentials and settings are shared with the
 running HTTP MCP process. Environment values take precedence. The
 dashboard password is separate from the MCP bearer token.
 

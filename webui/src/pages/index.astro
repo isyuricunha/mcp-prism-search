@@ -14,92 +14,112 @@ const sections = [
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="description" content="Prism Search administration" />
-    <title>Prism Search · Dashboard</title>
+    <meta name="description" content="Manage Prism Search providers, searches, cache and MCP connections." />
+    <title>Prism Search · Administration</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/theme.css" />
     <link rel="stylesheet" href="/app.css" />
     <script is:inline src="/app.js" defer></script>
   </head>
   <body>
     <div id="background-layer" aria-hidden="true"></div>
+    <div id="boot" class="login-shell"><div class="card login-card" role="status"><h1>Prism Search</h1><p id="boot-message" class="muted">Connecting to your server…</p><button id="boot-retry" hidden>Retry connection</button></div></div>
     <div id="login" class="login-shell" hidden>
-      <form id="login-form" class="card login-card">
-        <div class="brand"><span class="mark" aria-hidden="true">◇</span> Prism Search</div>
-        <h1>Welcome back.</h1>
-        <p class="muted">Sign in to manage your search server.</p>
-        <label for="password">Administrator password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" aria-describedby="login-status" />
+      <form id="login-form" class="card login-card" novalidate>
+        <div class="brand"><img src="/favicon.svg" width="36" height="36" alt="" /> Prism Search</div>
+        <div class="stack"><span class="eyebrow">Private administration</span><h1>Sign in</h1><p class="muted">Manage your self-hosted search server. Use the password set in MCP_WEBUI_PASSWORD, not your MCP token.</p></div>
+        <div class="field"><label for="password">Administrator password</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" aria-describedby="login-status" /><button id="password-visibility" type="button" aria-pressed="false">Show</button></div></div>
+        <p id="login-status" class="feedback" role="alert"></p>
         <button class="primary" type="submit">Sign in</button>
-        <p id="login-status" class="status" role="alert"></p>
+        <div class="login-footer"><a href="https://github.com/isyuricunha/mcp-prism-search" target="_blank" rel="noopener noreferrer">Project documentation ↗</a><button type="button" id="login-theme">Switch to White</button></div>
       </form>
     </div>
     <div id="dashboard" class="shell" hidden>
+      <a class="skip-link" href="#main">Skip to content</a>
       <aside class="sidebar">
-        <div class="brand"><span class="mark" aria-hidden="true">◇</span><div>Prism Search<small>Administration</small></div></div>
+        <div class="brand"><img src="/favicon.svg" width="36" height="36" alt="" /><div>Prism Search<small>Search workspace</small></div></div>
         <nav aria-label="Dashboard">
           <span class="nav-label">Workspace</span>
           {sections.map(([id, name, path]) => <button type="button" data-page={id} class="nav-button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d={path}/></svg><span>{name}</span></button>)}
         </nav>
         <div class="sidebar-footer">
+          <div class="version-block"><span class="eyebrow">Installed server</span><a id="sidebar-version" href="https://github.com/isyuricunha/mcp-prism-search/releases" target="_blank" rel="noopener noreferrer">Version unavailable</a><span id="sidebar-sdk" class="muted"></span></div>
+          <a class="sidebar-link" href="https://github.com/isyuricunha/mcp-prism-search" target="_blank" rel="noopener noreferrer">Documentation ↗</a>
           <button id="theme" type="button">Switch to White</button>
           <button id="logout" type="button">Sign out</button>
         </div>
       </aside>
-      <main>
-        <header class="top"><div><span class="eyebrow">WORKSPACE / ADMIN</span><h1 id="page-title">Overview</h1></div><button id="refresh" type="button">Refresh</button></header>
-        <p id="status" class="status" role="status" aria-live="polite"></p>
-        <section id="overview" class="page">
-          <p class="muted">Search engine availability and provider request activity.</p>
-          <div id="summary" class="summary"></div>
-          <div class="card"><div class="heading"><div><h2>Provider activity</h2><p class="muted">Lifetime upstream requests while the dashboard is enabled. Metrics contain no query text; search caching is separate.</p></div></div>
-            <div class="table-wrap"><table><thead><tr><th>Provider</th><th>Requests</th><th>Success</th><th>Empty</th><th>Errors</th><th>429</th><th>Avg. latency</th></tr></thead><tbody id="metrics"></tbody></table></div>
+      <main id="main" tabindex="-1">
+        <header class="top"><div><span class="eyebrow">Workspace / Administration</span><h1 id="page-title" tabindex="-1">Overview</h1><p id="page-description" class="muted"></p></div><div class="top-actions"><span id="last-refresh" class="muted freshness">Not yet refreshed</span><button id="refresh" type="button">Refresh</button></div></header>
+        <p id="status" class="feedback global-status" role="status" aria-live="polite"></p>
+        <section id="overview" class="page" aria-labelledby="page-title">
+          <div id="summary" class="summary" aria-label="Server metrics"></div>
+          <div class="overview-grid">
+            <div class="card"><div class="heading"><div class="stack"><h2>Installed server</h2><p class="muted">Version information comes from the running MCP process.</p></div><span class="badge ready" id="server-status">Connected</span></div><dl class="facts" id="server-facts"></dl><div class="actions"><button data-go="connection" type="button" class="tonal">Connect a client</button><a href="https://modelcontextprotocol.io/specification" target="_blank" rel="noopener noreferrer">MCP specification ↗</a></div></div>
+            <div class="card"><div class="stack"><h2>Provider readiness</h2><p class="muted">Configuration status, not an external health check.</p></div><dl class="facts" id="readiness"></dl><div class="actions"><button data-go="providers" type="button">Manage providers</button><button data-go="playground" type="button">Test a search</button></div></div>
+          </div>
+          <div class="card"><div class="heading"><div class="stack"><h2>Provider activity</h2><p class="muted">Cumulative attempts recorded while the dashboard is enabled. A cached search makes no new upstream attempt.</p></div></div>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Provider activity table"><table><thead><tr><th scope="col">Provider</th><th scope="col">Attempts</th><th scope="col">Success</th><th scope="col">Empty</th><th scope="col">Errors</th><th scope="col">Rate limits</th><th scope="col">Avg. latency</th></tr></thead><tbody id="metrics"></tbody></table></div>
+            <p class="muted small">Rate limits are included in errors. Attempts are not billing units; providers may make several upstream HTTP requests per attempt.</p>
           </div>
         </section>
-        <section id="providers" class="page" hidden>
-          <p class="muted">Enable engines and replace API keys. Changes apply immediately to new aggregated searches. Environment credentials are read-only.</p>
-          <div id="provider-list" class="provider-list card"></div>
+        <section id="providers" class="page" hidden aria-labelledby="page-title">
+          <div class="card"><div class="heading"><div class="stack"><h2>Search engines</h2><p class="muted">Choose which engines the server may use. Saved changes apply to subsequent aggregated searches.</p></div><span id="provider-count" class="badge"></span></div>
+            <div class="filters"><div class="field"><label for="provider-filter">Find a provider</label><input id="provider-filter" type="search" placeholder="Name or provider ID" /></div><fieldset class="filter-options"><legend>Show</legend><div class="choices">
+              {["all","keyless","keyed","vertical","available"].map((v,i) => <label class="choice-chip"><input type="radio" name="provider-filter-kind" value={v} checked={i===0} />{["All","No key","Needs key / URL","Specialized","Available"][i]}</label>)}
+            </div></fieldset></div>
+            <p class="muted small">Available means enabled and configured. Search tests may still fail because of upstream limits. API credentials can incur charges; check provider terms.</p>
+          </div>
+          <div id="provider-list" class="provider-list card"></div><p id="provider-empty" class="muted" hidden>No matching providers. <button id="reset-filter" type="button">Clear filters</button></p>
         </section>
-        <section id="playground" class="page" hidden>
+        <section id="playground" class="page" hidden aria-labelledby="page-title">
           <form id="search-form" class="card">
-            <h2>Search playground</h2><p class="muted">Choose the engines to query. Configured authenticated engines may consume credits.</p>
-            <label for="query">Search query</label><textarea id="query" required maxlength="1000" rows="3" placeholder="What would you like to find?"></textarea>
-            <fieldset><legend>Providers</legend><div id="choices" class="choices"></div></fieldset>
-            <button type="submit" class="primary">Run search</button>
+            <div class="stack"><h2>Search the web</h2><p class="muted">Run the same general search engine selection used by MCP clients. Cached results may be reused. Search terms are sent to the chosen providers.</p></div>
+            <div class="field"><label for="query">Search query</label><textarea id="query" required maxlength="1000" rows="3" placeholder="e.g. Python asyncio TaskGroup documentation"></textarea><span id="query-count" class="muted small">0 / 1000</span></div>
+            <fieldset><legend>Search mode</legend><div class="mode-grid">
+              <label class="mode-option"><input type="radio" name="search-mode" value="selected" checked /><span><strong>Selected engines</strong><small>Search one engine or several in parallel.</small></span></label>
+              <label class="mode-option"><input type="radio" name="search-mode" value="auto" /><span><strong>Automatic fallback</strong><small>Try available engines until results are found.</small></span></label>
+              <label class="mode-option"><input type="radio" name="search-mode" value="all" /><span><strong>All engines</strong><small>Search every available general engine in parallel.</small></span></label>
+            </div></fieldset>
+            <fieldset id="search-provider-field"><legend>Choose engines</legend><div class="actions"><button id="select-keyless" type="button">Select keyless</button><button id="clear-selection" type="button">Clear selection</button><span id="selection-count" class="muted small"></span></div><div id="choices" class="choices"></div></fieldset>
+            <div id="search-cost" class="notice" hidden>One or more selected engines require an API key or private instance. Requests may consume credits.</div>
+            <div class="form-footer"><div class="field compact"><label for="max-results">Maximum results</label><input id="max-results" type="number" min="1" max="10" value="5" required /></div><button id="run-search" type="submit" class="primary">Run search</button></div>
+            <p id="search-error" class="feedback" role="alert"></p>
           </form>
-          <p id="search-attempts" class="muted" aria-live="polite"></p><div id="results"></div>
+          <div id="search-output" class="page" hidden><div class="card"><div class="heading"><h2>Search outcome</h2><span id="search-source" class="badge"></span></div><p id="search-summary" role="status" aria-live="polite"></p><ul id="search-attempts" class="attempt-list"></ul></div><div id="results" class="result-list"></div></div>
         </section>
-        <section id="cache" class="page" hidden>
-          <div class="card"><h2>Cache status</h2><p class="muted">Inspect and remove expired or corrupt cache entries. Active entries are preserved.</p><pre id="cache-stats"></pre><div class="provider-actions"><button id="prune" type="button">Prune expired entries</button><button id="clear-cache" class="danger" type="button">Clear cache</button></div></div>
+        <section id="cache" class="page" hidden aria-labelledby="page-title">
+          <div class="summary cache-summary" id="cache-summary"></div>
+          <div class="card"><div class="stack"><h2>Cache storage</h2><p class="muted">Search and webpage-fetch caches reduce repeated upstream work. Files may contain query text or fetched content.</p></div><div class="table-wrap" tabindex="0" role="region" aria-label="Cache namespaces"><table><thead><tr><th scope="col">Namespace</th><th scope="col">Entries</th><th scope="col">Disk usage</th><th scope="col">Action</th></tr></thead><tbody id="cache-rows"></tbody></table></div><p class="muted small">Storage directory: <code id="cache-dir"></code></p><div class="actions"><button id="prune" type="button">Prune expired entries</button><button id="clear-cache" class="danger" type="button">Clear all cache</button></div><p id="cache-feedback" class="feedback" role="status"></p></div>
+          <div class="card"><h2>Cache policy</h2><p class="muted">Pruning removes expired or invalid entries without deleting valid cached results. Clearing removes saved results and may temporarily increase upstream requests; it does not remove provider keys or settings.</p><div class="actions"><button type="button" data-go="settings">Adjust cache TTLs</button></div></div>
         </section>
-        <section id="settings" class="page" hidden>
-          <div class="card appearance-card">
-            <h2>Appearance</h2>
-            <label class="switch-label appearance-row"><input id="starfield-toggle" class="switch" type="checkbox" role="switch" aria-describedby="starfield-hint" />Starfield Depth</label>
-            <p id="starfield-hint" class="muted">Optional animated background.</p>
+        <section id="settings" class="page" hidden aria-labelledby="page-title">
+          <div class="card appearance-card"><div class="stack"><h2>Appearance</h2><p class="muted">Preferences apply only to this browser.</p></div><div class="appearance-options"><button id="settings-theme" type="button">Switch to White</button><label class="switch-label"><input id="starfield-toggle" class="switch" type="checkbox" role="switch" aria-describedby="starfield-hint" />Starfield Depth</label></div><p id="starfield-hint" class="muted">Optional animated background.</p></div>
+          <form id="settings-form" class="card"><div class="stack"><h2>Search settings</h2><p class="muted">These settings apply to subsequent searches. Values supplied by environment variables are locked and take priority.</p></div>
+            <div class="field"><label for="timeout">Provider timeout (seconds)</label><p id="timeout-help" class="muted small">Time budget for each provider, between 2 and 120 seconds. Automatic fallback can take longer overall.</p><input id="timeout" type="number" min="2" max="120" required aria-describedby="timeout-help timeout-lock" /><span id="timeout-lock" class="muted small"></span></div>
+            <div class="fields-grid"><div class="field"><label for="search_ttl">Search cache TTL (seconds)</label><p id="search-ttl-help" class="muted small">How long to reuse search results. Freshness-sensitive searches may use a shorter TTL.</p><input id="search_ttl" type="number" min="60" max="604800" required aria-describedby="search-ttl-help search_ttl-lock" /><span id="search_ttl-lock" class="muted small"></span></div>
+            <div class="field"><label for="fetch_ttl">Fetch cache TTL (seconds)</label><p id="fetch-ttl-help" class="muted small">How long to reuse extracted webpage content.</p><input id="fetch_ttl" type="number" min="60" max="604800" required aria-describedby="fetch-ttl-help fetch_ttl-lock" /><span id="fetch_ttl-lock" class="muted small"></span></div></div>
+            <fieldset id="preferred-field"><legend>Preferred engine</legend><p class="muted small">Preference breaks ties between engines with equal observed health. Disabled or unconfigured engines are skipped.</p><details id="preferred-picker"><summary id="preferred-label">Default order</summary><div id="preferred" class="radio-list" role="radiogroup" aria-label="Preferred engine"></div></details><span id="preferred-lock" class="muted small"></span></fieldset>
+            <div class="actions"><button class="primary" type="submit">Save settings</button><button type="button" id="reset-settings">Reset unsaved changes</button></div><p id="settings-feedback" class="feedback" role="status"></p>
+          </form>
+        </section>
+        <section id="connection" class="page" hidden aria-labelledby="page-title">
+          <div class="card"><div class="stack"><h2>Connect your MCP client</h2><p class="muted">Use the MCP service URL, not this dashboard URL. The MCP bearer token is separate from your administrator password.</p></div>
+            <div class="field"><label for="endpoint">MCP endpoint</label><input id="endpoint" type="url" required placeholder="https://search.example.com/mcp" aria-describedby="endpoint-help connection-feedback" /><p class="muted small" id="endpoint-help">Enter the address and port accessible from your client. For the default local Compose deployment: http://127.0.0.1:49317/mcp. For remote access, use a trusted HTTPS reverse proxy.</p></div>
+            <fieldset><legend>Client configuration</legend><div class="choices"><label class="choice-chip"><input name="client-type" type="radio" value="opencode" checked />OpenCode</label><label class="choice-chip"><input name="client-type" type="radio" value="generic" />HTTP details</label></div></fieldset>
+            <div class="code-panel"><div class="code-header"><span id="config-label" class="eyebrow">OpenCode JSON</span><button id="copy-config" type="button">Copy configuration</button></div><pre id="connection-json" tabindex="0"></pre></div>
+            <p class="muted small">Replace the token placeholder privately and merge the example into your existing client configuration. No real token is retrieved by this dashboard.</p><p id="connection-feedback" class="feedback" role="status"></p>
+            <div class="actions"><a href="https://opencode.ai/docs/mcp-servers/" target="_blank" rel="noopener noreferrer">OpenCode guide ↗</a><a href="https://modelcontextprotocol.io/specification" target="_blank" rel="noopener noreferrer">MCP specification ↗</a><a href="https://github.com/isyuricunha/mcp-prism-search" target="_blank" rel="noopener noreferrer">Installation guide ↗</a></div>
           </div>
-          <form id="settings-form" class="card">
-            <h2>Search settings</h2><p class="muted">Environment variables override dashboard settings. Changes apply to subsequent searches. Health still takes precedence over your preferred engine.</p>
-            <label for="timeout">Provider timeout (seconds)</label><input id="timeout" type="number" min="2" max="120" required />
-            <label for="search_ttl">Search cache TTL (seconds)</label><input id="search_ttl" type="number" min="60" max="604800" required />
-            <label for="fetch_ttl">Fetch cache TTL (seconds)</label><input id="fetch_ttl" type="number" min="60" max="604800" required />
-            <fieldset id="preferred-field"><legend>Preferred engine</legend>
-              <details id="preferred-picker"><summary id="preferred-label">Default order</summary><div id="preferred" class="radio-list" role="radiogroup" aria-label="Preferred engine"></div></details>
-            </fieldset>
-            <button class="primary" type="submit">Save settings</button>
-          </form>
+          <div class="card"><h2>Verify the connection</h2><ol class="steps"><li>Configure the MCP endpoint and bearer authorization in your client.</li><li>Connect and list the available tools. Look for <code>web_search</code>.</li><li>Run a small keyless search, for example with <code>keenable</code>, and check the result URLs.</li></ol><dl class="facts" id="connection-facts"></dl></div>
         </section>
-        <section id="connection" class="page" hidden>
-          <div class="card"><h2>MCP connection</h2><p class="muted">The dashboard password is separate from the MCP bearer token. Connect using the MCP endpoint configured on your server, not this dashboard port.</p><label for="endpoint">MCP endpoint</label><input id="endpoint" type="url" value="http://127.0.0.1:49317/mcp" /><pre id="connection-json"></pre><p class="muted">Replace the token placeholder privately. The dashboard never reads or displays your MCP bearer token.</p></div>
-        </section>
+        <footer class="main-footer"><span>Prism Search · Self-hosted administration</span><a href="https://github.com/isyuricunha/mcp-prism-search/issues" target="_blank" rel="noopener noreferrer">Report an issue ↗</a></footer>
       </main>
     </div>
     <dialog id="confirmation" aria-labelledby="confirm-title" aria-describedby="confirm-description">
-      <form method="dialog" class="confirm-form">
-        <h2 id="confirm-title"></h2><p class="muted" id="confirm-description"></p>
-        <div class="dialog-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-action" value="confirm" class="danger">Confirm</button></div>
-      </form>
+      <form method="dialog" class="confirm-form"><h2 id="confirm-title"></h2><p class="muted" id="confirm-description"></p><div class="dialog-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-action" value="confirm" class="danger">Confirm</button></div></form>
     </dialog>
-    <noscript><p class="card">Enable JavaScript to use the local administration interface.</p></noscript>
+    <noscript><style>#boot{display:none}</style><p class="card">JavaScript is required for this local administration interface.</p></noscript>
     <script>import "../effects/appearance";</script>
   </body>
 </html>

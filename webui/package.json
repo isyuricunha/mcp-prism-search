@@ -3,9 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "astro build"
+    "build": "astro build",
+    "test:browser": "node tests/dashboard.mjs"
   },
   "devDependencies": {
-    "astro": "6.4.8"
+    "astro": "6.4.8",
+    "axe-core": "4.14.1",
+    "playwright-core": "1.65.1"
   }
 }

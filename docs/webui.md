@@ -65,22 +65,35 @@ loaded and no panel database or listener is created.
 
 ## Features
 
-- Overview: configured/available providers, aggregate upstream request
-  counts, successes, empty results, errors, rate limits, average latency
-  and aggregate search cache hits.
-- Providers: enable/disable, add, replace or remove a stored API key.
-  Environment credentials are read-only and take precedence. SearXNG URL
-  configuration is intentionally environment-only.
-- Playground: run an explicit selection of available general engines
-  and inspect result URLs, snippets and attempt outcomes. Authenticated
-  providers may consume credits; no automatic paid-provider testing.
-- Cache: inspect current namespaces, prune expired/corrupt files or clear
-  after confirmation.
+- Overview: installed Prism Search version, installed Python MCP SDK version,
+  SDK-supported protocol revision and transport, plus provider readiness,
+  upstream attempts, failures, latency and search-cache hit rate. The version
+  values come from the running process, not from the static frontend.
+- Providers: filter by provider name, access type or availability; follow
+  website/documentation and credential links; enable/disable, replace or remove
+  keys; open the playground with an available provider selected. Unsaved form
+  edits survive refresh. Environment credentials are read-only and take
+  precedence. SearXNG's instance URL is intentionally environment-only.
+- Playground: search a single/selected set of available general providers,
+  use automatic fallback, or query all available general providers in parallel.
+  Adjust the result limit and inspect cached/live results and individual attempts.
+  Keyed or self-hosted selections require explicit confirmation in the UI.
+  Specialized Wikipedia and Hacker News tools remain available through MCP.
+- Cache: inspect counts, disk usage and namespaces, prune expired/corrupt
+  entries, or clear a selected namespace/all after confirmation.
 - Settings: provider timeout, search/fetch cache TTLs, preferred engine
-  (used to break health ties). Environment values override the persisted
-  settings. Legacy DuckDuckGo search retains its separate provider mode.
-- Connection: generate a remote client example with a token placeholder;
-  the dashboard never exposes the MCP token.
+  (a health tie-breaker), and browser-local appearance. Locked values identify
+  their environment source. Unsaved edits can be reset.
+- Connection: enter the endpoint reachable by your client and copy OpenCode
+  JSON or generic Streamable HTTP details with a token placeholder. Remote
+  dashboard URLs do not imply that MCP is exposed on the same host/port.
+  The dashboard never retrieves the MCP bearer token.
+
+The six sections use URL fragments so browser Back/Forward and reload preserve
+navigation. Login, empty results, errors, pending writes, and stale refreshes
+have explicit states. The Dark/White palettes use canonical YuTheme tokens,
+with contrast-safe foregrounds in White mode. No test or analytics JavaScript
+is shipped to the browser.
 
 Provider availability means configured/enabled, not a successful upstream
 health check. Use the playground to test a provider. Metrics count actual
@@ -141,7 +154,17 @@ cd webui
 npm ci
 npm run build
 node --check public/app.js
+# Use an installed Chromium, or install the matching browser for the tests:
+npx playwright-core install chromium
+npm run test:browser
+# Alternatively: PRISM_TEST_CDP=http://127.0.0.1:9222 npm run test:browser
 ```
+
+The browser suite uses an isolated Chromium context and mocked API responses; it
+checks the six sections at multiple viewport widths, Dark/White contrast and
+WCAG-tagged axe checks, navigation, form persistence and interaction behavior.
+It does not submit real searches or mutate a running server. Set
+PRISM_TEST_BROWSER to an installed Chromium executable if preferred.
 
 See [provider policy](providers.md) and [deployment](deployment.md).
 
