@@ -13,7 +13,7 @@ const page=await context.newPage();
 const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
-let holdSettings=null,holdNative=null,failOverview=false,logsHealthy=true,failLogs=false;
+let holdSettings=null,holdNative=null,holdSearch=null,failOverview=false,logsHealthy=true,failLogs=false;
 // Deliberate response latency exposes stale DOM/fixture assertions on fast runners.
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function responseFor(endpoint, predicate=()=>true){
@@ -56,6 +56,7 @@ await page.route("http://prism-test.invalid/**",async route=>{
    else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:lastNative.mode,answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""},{index:3,url:"https://user:pass@example.org",title:"Embedded credentials",excerpt:""}],truncated:false};}
    else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"},{title:"Unsafe",url:"javascript:alert(1)",snippet:"Untrusted"}],answers:lastSearch.include_answers?[{provider:"exa",mode:"answer",answer:"Enhanced answer <script>bad</script>",source_kind:"grounding",sources:[{index:2,url:"https://example.org",title:"Grounded source",excerpt:"Evidence"}]}]:[],answer_attempts:lastSearch.include_answers?["exa: ok"]:[]};}
    if(pathname==="/api/native"&&holdNative)await holdNative;
+    if(pathname==="/api/search"&&holdSearch)await holdSearch;
    if(["/api/search","/api/native"].includes(pathname))await delay(120);
    await route.fulfill({status,json:body});return;
  }
@@ -312,8 +313,16 @@ try{
  assert.equal(await page.locator("#run-search").isDisabled(),true);
  await page.locator("#query").fill("test query");
  assert.equal(await page.locator("#query-count").textContent(),"10 / 4000");
+ let releaseSearch;
+ holdSearch=new Promise(resolve=>{releaseSearch=resolve;});
  const firstSearch=responseFor("/api/search",d=>d.mode===undefined);
  await page.getByRole("button",{name:"Run search"}).click();
+ try{
+  await page.waitForFunction(()=>document.querySelector("#run-search").disabled);
+  await nav("Providers");
+  await page.locator('.provider-row[data-provider="keenable"]').getByRole("button",{name:"Test in Playground"}).click();
+  assert.equal(await page.locator('input[name=search-mode][value=default]').isChecked(),true);
+ }finally{releaseSearch();holdSearch=null;}
  await searchComplete(firstSearch);
  await page.getByRole("link",{name:"Example ↗"}).waitFor();
  assert.equal(await page.locator("#results a").count(),1);

@@ -299,7 +299,7 @@ function renderProviders() {
     const links=element("div","","actions provider-links");
     if(info[2]) links.append(link("Website / docs",info[2]));
     if(info[3]) links.append(link("Get API key",info[3]));
-    if(p.kind==="general"&&p.available) links.append(action("Test in Playground",()=>{selected.clear();selected.add(p.id);document.querySelector('input[name=search-mode][value=selected]').checked=true;$("search-overrides").open=true;renderChoices();page("playground");$("query").focus();},"tonal"));
+    if(p.kind==="general"&&p.available) links.append(action("Test in Playground",()=>{if(searchPending){page("playground");return;}selected.clear();selected.add(p.id);document.querySelector('input[name=search-mode][value=selected]').checked=true;$("search-overrides").open=true;renderChoices();page("playground");$("query").focus();},"tonal"));
     row.append(head,element("p",info[1],"muted"),links);
     if(p.usage_note)row.append(element("p",p.usage_note,"muted small"));
     const native = state.native?.find(x=>x.id===p.id);
