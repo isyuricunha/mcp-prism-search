@@ -292,7 +292,7 @@ async def _run_http_async(
         starlette_app,
         host=settings.host,
         port=settings.port,
-        log_level=os.getenv("MCP_LOG_LEVEL", "INFO").lower(),
+        log_level=_validated_log_level().lower(),
         log_config=None, access_log=False,
     )
     server = uvicorn.Server(config)

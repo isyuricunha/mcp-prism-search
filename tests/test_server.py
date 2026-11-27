@@ -249,3 +249,25 @@ def test_mcp_prune_requires_literal_boolean_flags(tmp_path, monkeypatch):
                 assert response.is_error
 
     asyncio.run(verify())
+
+
+def test_http_runtime_uses_normalized_log_level(monkeypatch):
+    import uvicorn
+
+    from mcp_prism_search import server
+
+    monkeypatch.setenv("MCP_LOG_LEVEL", " warning ")
+    monkeypatch.setenv("MCP_AUTH_TOKEN", "fixture-auth-not-production")
+    captured = []
+
+    class FakeServer:
+        def __init__(self, config):
+            captured.append(config.log_level)
+
+    async def serve(*args):
+        pass
+
+    monkeypatch.setattr(uvicorn, "Server", FakeServer)
+    monkeypatch.setattr(server, "_serve_http", serve)
+    asyncio.run(server._run_http_async())
+    assert captured == ["warning"]
