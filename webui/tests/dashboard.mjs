@@ -156,6 +156,13 @@ try{
  assert.equal(await page.locator("#logs-search").inputValue(),"0123456789abcdef0123456789abcdef");
  await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===1);
  assert.ok((await page.locator("#logs-list").textContent()).includes("HTTP 429"));
+ await page.locator("#logs-search").fill("unfinished draft");
+ const resumed=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/logs");
+ await page.locator("#logs-live").evaluate(n=>{n.checked=true;n.dispatchEvent(new Event("change"));});
+ const resumedResponse=await resumed;
+ assert.equal(new URL(resumedResponse.url()).searchParams.get("search"),"0123456789abcdef0123456789abcdef");
+ await page.locator("#logs-live").evaluate(n=>{n.checked=false;n.dispatchEvent(new Event("change"));});
+ await page.locator("#logs-search").fill("0123456789abcdef0123456789abcdef");
  await audit("logs-filtered-dark");
  await page.locator("#theme").click();await audit("logs-filtered-white");await page.locator("#theme").click();
  await nav("Providers");

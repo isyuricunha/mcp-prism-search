@@ -29,7 +29,7 @@ let nativePending = false;
 let aiSettingsDirty = false;
 let aiSettingsPending = false;
 let searchAnswerPreference = null;
-let logRows=[],logsPending=false,logsRevision=0;
+let logRows=[],logsPending=false,logsRevision=0,logsSearch="";
 
 function element(tag, value = "", className = "") {
   const node = document.createElement(tag);
@@ -113,7 +113,10 @@ async function confirmAction(title, description, label, destructive = true) {
 function showLogin() {
   authEpoch++;
   logsRevision++;logRows=[];$("logs-list").replaceChildren();$("logs-export").disabled=true;
-  $("logs-search").value="";feedback("logs-feedback");
+  $("logs-search").value="";logsSearch="";
+  $("logs-level").value="";$("logs-provider").value="";$("logs-period").value="all";
+  $("logs-health").textContent="Not loaded";$("logs-health").classList.remove("ready");
+  feedback("logs-feedback");
   if($("confirmation").open)$("confirmation").close("cancel");
   state = null; providerDrafts.clear(); providerMessages.clear(); providerPending.clear();
   settingsDirty = false; defaultsDirty = false;
@@ -866,7 +869,7 @@ async function loadLogs(){
   if(!state||activePage!=="logs"||logsPending)return;
   logsPending=true;const revision=logsRevision,epoch=authEpoch;
   $("logs-refresh").disabled=true;
-  const params=new URLSearchParams({level:$("logs-level").value,provider:$("logs-provider").value,period:$("logs-period").value,search:$("logs-search").value.trim(),limit:"200"});
+  const params=new URLSearchParams({level:$("logs-level").value,provider:$("logs-provider").value,period:$("logs-period").value,search:logsSearch,limit:"200"});
   try{
     const data=await api("logs?"+params.toString());
     if(epoch!==authEpoch||revision!==logsRevision)return;
@@ -886,7 +889,7 @@ async function loadLogs(){
     if(revision!==logsRevision&&state&&activePage==="logs")loadLogs();
   }
 }
-function changeLogs(){logsRevision++;logRows=[];$("logs-export").disabled=true;$("logs-list").replaceChildren();loadLogs();}
+function changeLogs(){logsSearch=$("logs-search").value.trim();logsRevision++;logRows=[];$("logs-export").disabled=true;$("logs-list").replaceChildren();loadLogs();}
 for(const id of ["logs-level","logs-provider","logs-period"])$(id).addEventListener("change",changeLogs);
 $("logs-search").addEventListener("change",changeLogs);
 $("logs-search").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();changeLogs();}});
@@ -897,7 +900,10 @@ $("logs-export").addEventListener("click",()=>{
   const a=document.createElement("a");a.href=url;a.download="prism-events.json";a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
-setInterval(()=>{if(!document.hidden&&$("logs-live").checked&&activePage==="logs")loadLogs();},5000);
+function pollLogs(){if(!document.hidden&&$("logs-live").checked&&activePage==="logs")loadLogs();}
+$("logs-live").addEventListener("change",pollLogs);
+document.addEventListener("visibilitychange",pollLogs);
+setInterval(pollLogs,5000);
 function connection(){
   let url;
   try{url=new URL($("endpoint").value);if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.hash||url.search)throw new Error();}
