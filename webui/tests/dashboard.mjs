@@ -133,7 +133,8 @@ try{
  failLogs=true;
  await page.locator("#logs-refresh").click();
  await page.waitForFunction(()=>document.querySelector("#logs-health").textContent==="Refresh failed");
- assert.equal(await page.locator("#logs-export").isDisabled(),true);
+ assert.equal(await page.locator("#logs-export").isDisabled(),false);
+ assert.ok((await page.locator("#logs-feedback").textContent()).includes("last successful snapshot"));
  logsHealthy=true;
  await page.locator("#logs-refresh").click();
  await page.waitForFunction(()=>document.querySelector("#logs-health").textContent==="Recording");

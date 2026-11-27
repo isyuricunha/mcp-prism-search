@@ -940,7 +940,10 @@ function changeLogs(){logsSearch=$("logs-search").value.trim();logsRevision++;lo
 for(const id of ["logs-level","logs-provider","logs-period"])$(id).addEventListener("change",changeLogs);
 $("logs-search").addEventListener("change",changeLogs);
 $("logs-search").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();changeLogs();}});
-$("logs-refresh").addEventListener("click",changeLogs);
+$("logs-refresh").addEventListener("click",()=>{
+  if($("logs-search").value.trim()!==logsSearch)changeLogs();
+  else loadLogs();
+});
 $("logs-export").addEventListener("click",()=>{
   if(!state||!logRows.length)return;
   const url=URL.createObjectURL(new Blob([JSON.stringify(logRows,null,2)],{type:"application/json"}));

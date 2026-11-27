@@ -64,3 +64,5 @@ References: [MCP logging migration](https://blog.modelcontextprotocol.io/posts/2
 Log history reports writer health separately from availability. The panel can
 filter all retained events by request ID, resumes polling when visible, and
 uses the last applied metadata filter rather than unfinished search text.
+
+HTTP panel events retain response status codes (including local rate limits). A failed manual log refresh keeps the last successful snapshot; changing filters clears the previous snapshot.
