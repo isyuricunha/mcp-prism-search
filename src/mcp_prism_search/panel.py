@@ -345,6 +345,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
         except ValueError:
             return error("Invalid log limit")
         periods = {"all": None, "hour": 3600, "day": 86400, "week": 604800}
+        if not providers.SPECS:
+            providers.build_registry()
         if (level and level not in observability.LEVELS
                 or provider and provider not in providers.SPECS
                 or period not in periods or len(search) > 100 or not 1 <= limit <= 500):

@@ -510,3 +510,11 @@ def test_native_capabilities_publish_provider_answer_limits(panel):
     caps = {p["id"]: p for p in client.get("/api/overview").json()["native"]}
     assert caps["youcom"]["answer_max_chars"] == 400
     assert caps["tinyfish"]["answer_max_chars"] == 2000
+
+
+def test_log_filters_initialize_registry_without_overview(panel, monkeypatch):
+    client, _, _ = panel
+    monkeypatch.setattr(providers, "SPECS", {})
+    sign_in(client)
+    assert client.get("/api/logs?provider=keenable").status_code == 200
+    assert client.get("/api/logs?provider=unknown").status_code == 400
