@@ -208,3 +208,32 @@ def test_bing_rss_invalid_rows_do_not_consume_result_limit(monkeypatch):
         transport=httpx.MockTransport(lambda req: httpx.Response(200, text=xml)), **kw))
     rows = asyncio.run(bing_rss.search(SearchRequest(query="test"), 1, 5))
     assert [row.title for row in rows] == ["Good"]
+
+
+def test_youcom_public_falls_back_to_valid_text_content(monkeypatch):
+    from types import SimpleNamespace
+
+    from mcp_prism_search.providers import youcom_keyless
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def call_tool(self, *args):
+            return SimpleNamespace(is_error=False, structured_content={"results": []},
+                                   content=[
+                SimpleNamespace(type="text", text='{"results": {"web": null}}'),
+                SimpleNamespace(type="text", text=json.dumps({"results": {"web": [
+                    {"title": "Good", "url": "https://example.org"}
+                ]}})),
+            ])
+
+    monkeypatch.setattr(youcom_keyless, "Client", Client)
+    rows = asyncio.run(youcom_keyless.search(SearchRequest(query="test"), 5, 5))
+    assert [row.title for row in rows] == ["Good"]

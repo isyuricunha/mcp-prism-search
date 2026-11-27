@@ -25,14 +25,16 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         result = await client.call_tool("you-search", arguments)
     if result.is_error:
         raise RuntimeError("You.com public MCP search failed")
-    data = result.structured_content
-    if data is None:
-        for item in result.content:
-            if item.type == "text":
-                try:
-                    data = json.loads(item.text)
-                except ValueError:
-                    continue
-                if isinstance(data, dict) and "results" in data:
-                    break
-    return parse_web_results(data, count)
+    if result.structured_content is not None:
+        try:
+            return parse_web_results(result.structured_content, count)
+        except ValueError:
+            pass
+    for item in result.content:
+        if item.type != "text":
+            continue
+        try:
+            return parse_web_results(json.loads(item.text), count)
+        except (ValueError, TypeError):
+            continue
+    raise ValueError("Invalid You.com public MCP search response")
