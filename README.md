@@ -7,7 +7,7 @@ aggregates web search from multiple keyless engines — Bing RSS, DuckDuckGo
 (HTML fallback), DDGS Yahoo, FreeSerp, Keenable, Mwmbl, You.com public MCP, self-hosted
 SearXNG — with automatic fallback chains, deterministic ranking, TTL caching,
 SSRF-safe webpage fetching, and keyless vertical sources (Wikipedia,
-HackerNews). Keyed providers with free tiers (Tavily, Exa, Brave, You.com,
+HackerNews). Keyed providers with free tiers (TinyFish, Tavily, Exa, Brave, You.com,
 Serper, Jina) plug in via env vars and are skipped when absent.
 
 The client or agent reasons over the returned data; the server never calls
@@ -56,6 +56,7 @@ All tools publish typed `outputSchema` and return validated
 
 | Provider | Free tier | Env var |
 |---|---|---|
+| `tinyfish` | TinySearch, 30 requests/min; free allowance (see provider policy) | `TINYFISH_API_KEY` |
 | `tavily` | Authenticated free tier | `TAVILY_API_KEY` |
 | `exa` | ~1,430 searches/month (no card) | `EXA_API_KEY` |
 | `brave` | ~1,000 searches/month (card required at signup, prepay $0) | `BRAVE_API_KEY` |

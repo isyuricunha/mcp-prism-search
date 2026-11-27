@@ -42,7 +42,7 @@ def registry(monkeypatch):
 def test_registry_pruned_and_tavily_requires_key(monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     providers.build_registry()
-    assert len(providers.SPECS) == 16
+    assert len(providers.SPECS) == 17
     assert not {"bing_html", "ddg_lite", "ddgs:bing", "ddgs:yandex", "ddgs:brave"} & (
         providers.SPECS.keys()
     )

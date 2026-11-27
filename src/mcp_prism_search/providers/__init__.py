@@ -23,6 +23,7 @@ from mcp_prism_search.providers import (  # noqa: F401
     searxng,
     serper,
     tavily,
+    tinyfish,
     wikipedia,
     youcom,
     youcom_keyless,
@@ -76,6 +77,9 @@ def build_registry() -> None:
         youcom_keyless.search)
 
     # Keyed general web (free tiers verified in docs)
+    add("tinyfish", "general", "TINYFISH_API_KEY",
+        "TinyFish TinySearch official REST API (free allowance; key required).",
+        tinyfish.search)
     add("tavily", "general", "TAVILY_API_KEY",
         "Tavily authenticated search (API key required).",
         tavily.search)

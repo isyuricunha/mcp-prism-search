@@ -36,10 +36,18 @@ Wikipedia and Hacker News are separate vertical tools.
 - [You.com](https://you.com/docs/guides/search): authenticated POST v1 search.
 - [You.com public MCP](https://you.com/docs/agents/mcp-server): keyless
   search with 100 queries/day; plain snippets, no paid extraction.
+- [TinyFish TinySearch](https://docs.tinyfish.ai/tinysearch/reference): official
+  GET search API with domain and recency filters. Set `TINYFISH_API_KEY` in
+  the server environment (also forwarded by Compose). Pages 0–10 are fetched
+  only as needed; each page counts as a request. SafeSearch is not exposed by
+  the current API. The [pricing page](https://www.tinyfish.ai/pricing) lists
+  30 requests/min and 500/hour; the API reference lists 12,000/day and
+  possible Wallet spending beyond the allowance when enabled. Keep Wallet
+  spending disabled if you need free-only operation. No automatic retries.
 - [Wikimedia](https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy):
   identifiable User-Agent with a project URL.
 
-Tavily, Exa, Brave, You.com, Serper, Jina and SearXNG are enabled only when
+TinyFish, Tavily, Exa, Brave, You.com, Serper, Jina and SearXNG are enabled only when
 their corresponding environment variable is configured. Configured API
 providers can consume credits in auto or all mode; use explicit selection
 when controlling spend. No quota evasion or proxy rotation is performed.

@@ -80,7 +80,7 @@ def record(name: str, results: list[SearchResult] | None, error: str | None) -> 
 # Providers not listed here go last, alphabetically.
 PREFERRED_ORDER = [
     "keenable", "freeserp", "bing_rss", "ddgs:yahoo", "mwmbl", "youcom_keyless",
-    "searxng", "tavily", "exa", "brave", "youcom", "serper", "jina",
+    "searxng", "tinyfish", "tavily", "exa", "brave", "youcom", "serper", "jina",
     "ddg_html",
 ]
 

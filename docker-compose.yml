@@ -49,6 +49,9 @@ services:
       # DDG_CACHE_TTL_SECONDS: "21600"
       # FETCH_CACHE_TTL_SECONDS: "7200"
 
+      # Optional: TinyFish TinySearch API key from the host environment.
+      TINYFISH_API_KEY: ${TINYFISH_API_KEY:-}
+
       # Optional: network timeouts in seconds.
       # DDG_TIMEOUT_SECONDS: "15"
       # FETCH_TIMEOUT_SECONDS: "15"

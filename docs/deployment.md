@@ -92,6 +92,7 @@ the repository README.
 | `MCP_ALLOWED_ORIGINS` | `http://localhost:5173` | Origin allowlist; `*` disables rebinding checks |
 | `MCP_LOG_LEVEL` | `INFO` | DEBUG, INFO, WARNING, ERROR, CRITICAL |
 | `MCP_CACHE_DIR` | `/data/cache` (image) | Cache root directory |
+| `TINYFISH_API_KEY` | unset | Optional TinySearch API key; forwarded from host environment by Compose |
 | `SEARCH_PROVIDER` | `duckduckgo_html` | `duckduckgo_html`, `ddgs`, or `auto` |
 | `DDGS_BACKEND` | `duckduckgo` | ddgs backend selection (`auto` allowed) |
 | `DDG_TIMEOUT_SECONDS` | `15` | Search timeout |

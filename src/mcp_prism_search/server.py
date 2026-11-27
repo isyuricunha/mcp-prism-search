@@ -286,7 +286,8 @@ async def web_search(
             description=(
                 "Search one provider by name, auto for fallback, or all for parallel search. "
                 "General providers: keenable, freeserp, bing_rss, ddgs:yahoo, mwmbl, "
-                 "ddg_html, youcom_keyless, searxng, tavily, exa, brave, youcom, serper, jina. "
+                  "ddg_html, youcom_keyless, searxng, tinyfish, tavily, exa, brave, "
+                "youcom, serper, jina. "
                 "Some require configuration. Use providers to select several."
             ),
         ),
