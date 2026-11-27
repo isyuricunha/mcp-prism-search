@@ -235,3 +235,13 @@ def test_operation_cancelled_resets_context(logs):
     assert [row["outcome"] for row in rows] == ["cancelled", "started"]
     assert rows[0]["request_id"] == rows[1]["request_id"]
     assert obs.request_id.get() is None
+
+
+def test_history_skips_oversized_line(logs, monkeypatch):
+    monkeypatch.setattr(obs, "MAX_BYTES", 1024 * 1024)
+    obs._history.maxBytes = obs.MAX_BYTES
+    obs.emit("provider", "ok", provider="keenable", result_count=1)
+    with (logs / "events.jsonl").open("a") as handle:
+        handle.write("x" * 140000 + "\n")
+    obs.emit("provider", "ok", provider="keenable", result_count=2)
+    assert [row["result_count"] for row in obs.history()["events"]] == [2, 1]
