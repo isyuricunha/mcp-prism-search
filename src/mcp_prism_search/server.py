@@ -56,13 +56,13 @@ class KnownPlaceholderTokenError(RuntimeError):
 
 
 def _tool_annotations(
-    *, read_only: bool = False, destructive: bool = False
+    *, read_only: bool = False, destructive: bool = False, open_world: bool = True
 ) -> ToolAnnotations:
     return ToolAnnotations(
         read_only_hint=read_only,
         destructive_hint=destructive,
         idempotent_hint=destructive,
-        open_world_hint=True,
+        open_world_hint=open_world,
     )
 
 
@@ -656,7 +656,7 @@ async def ddg_deep_search(
     return response
 
 
-@mcp.tool(annotations=_tool_annotations(read_only=True))
+@mcp.tool(annotations=_tool_annotations(read_only=True, open_world=False))
 @observability.operation("cache_stats")
 async def cache_stats() -> dict[str, Any]:
     """Return cache file counts and byte totals for each cache namespace."""
@@ -664,7 +664,7 @@ async def cache_stats() -> dict[str, Any]:
     return (await asyncio.to_thread(cache_ops.get_cache_stats)).to_dict()
 
 
-@mcp.tool(annotations=_tool_annotations(destructive=True))
+@mcp.tool(annotations=_tool_annotations(destructive=True, open_world=False))
 @observability.operation("cache_prune")
 async def cache_prune(
     expired_only: Annotated[
@@ -683,7 +683,7 @@ async def cache_prune(
     )).to_dict()
 
 
-@mcp.tool(annotations=_tool_annotations(destructive=True))
+@mcp.tool(annotations=_tool_annotations(destructive=True, open_world=False))
 @observability.operation("cache_clear")
 async def cache_clear(
     namespace: Annotated[

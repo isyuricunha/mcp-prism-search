@@ -172,3 +172,18 @@ def test_duplicate_authorization_headers_are_rejected():
     assert _authorization_header({"headers": [
         (b"authorization", b"Bearer first"), (b"Authorization", b"Bearer second"),
     ]}) is None
+
+
+def test_cache_tools_declare_closed_world_annotations():
+    async def verify():
+        tools = await mcp.list_tools()
+        if isinstance(tools, tuple):
+            tools = tools[0]
+        by_name = {tool.name: tool.annotations for tool in tools}
+        for name in ("cache_stats", "cache_prune", "cache_clear"):
+            assert by_name[name].open_world_hint is False
+        assert by_name["cache_stats"].read_only_hint is True
+        assert by_name["cache_clear"].destructive_hint is True
+        assert by_name["web_search"].open_world_hint is True
+
+    asyncio.run(verify())
