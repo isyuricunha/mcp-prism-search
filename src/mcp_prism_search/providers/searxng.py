@@ -19,9 +19,7 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         "format": "json",
         "safesearch": SAFE_SEARCH[request.safe_search],
     }
-    time_filter_code = (
-        request.time_filter if request.time_filter in {"day", "month", "year"} else None
-    )
+    time_filter_code = request.time_filter
     if time_filter_code:
         params["time_range"] = time_filter_code
 

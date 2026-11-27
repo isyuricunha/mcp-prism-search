@@ -341,3 +341,16 @@ def test_wikipedia_api_error_is_not_a_successful_empty_response(monkeypatch):
         })), **kw))
     with pytest.raises(ValueError, match="Invalid Wikipedia"):
         asyncio.run(wikipedia.search(SearchRequest(query="test"), 5, 5))
+
+
+def test_searxng_week_filter_is_forwarded(monkeypatch):
+    monkeypatch.setenv("SEARXNG_URL", "https://search.example")
+    original = httpx.AsyncClient
+
+    def response(req):
+        assert req.url.params["time_range"] == "week"
+        return httpx.Response(200, json={"results": []})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(response), **kw))
+    assert asyncio.run(searxng.search(SearchRequest(query="test", time_filter="week"), 5, 5)) == []
