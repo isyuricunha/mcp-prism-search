@@ -476,3 +476,16 @@ def test_tinyfish_mcp_contract_and_cost_gate(tinyfish_config, monkeypatch, mode)
         assert len(calls) == 2
 
     asyncio.run(verify())
+
+
+def test_tinyfish_explicit_only_contract_is_enforced_before_network(tinyfish_config, monkeypatch):
+    def unexpected(req):
+        pytest.fail("TinyFish automatic synthesis must never contact the network")
+
+    mock_http(monkeypatch, unexpected)
+    with pytest.raises(native.NativeError, match="explicit standalone"):
+        asyncio.run(native.synthesize(
+            "question", "tinyfish", "answer", allow_cost=True, require_search_policy=True,
+        ))
+    cap = next(c for c in native.capabilities() if c["id"] == "tinyfish")
+    assert cap["docs"] == "https://docs.tinyfish.ai/tinyanswer"

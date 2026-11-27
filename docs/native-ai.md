@@ -128,7 +128,7 @@ do not assume a free quota. TinyAnswer accepts 1–2,000 characters.
 TinyResearch Deep costs $2 and Max $3 per completed run (5–20 and 5–45
 minutes typical). Both are explicit-only; automatic AI search never
 starts these operations. Use allow_cost=true only after reviewing pricing.
-See [TinyAnswer](https://docs.tinyfish.ai/api-reference/answer-a-question)
+See [TinyAnswer](https://docs.tinyfish.ai/tinyanswer)
 and [TinyResearch](https://docs.tinyfish.ai/tinyresearch/reference).
 
 TinyResearch holds the request open, consumes the documented final_result

@@ -33,7 +33,7 @@ CAPABILITIES = {
             "Research can take up to 45 minutes. Keep this request open; "
             "do not retry a disconnected request without checking the provider run."
         ),
-        "docs": "https://docs.tinyfish.ai/api-reference/answer-a-question",
+        "docs": "https://docs.tinyfish.ai/tinyanswer",
         "pricing_url": "https://www.tinyfish.ai/pricing",
     },
     "tavily": {
@@ -368,6 +368,8 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
     credential = runtime.setting(spec.needs)
     if not credential:
         raise NativeError("Provider must be configured.")
+    if require_search_policy and CAPABILITIES[provider].get("automatic_search") is False:
+        raise NativeError("Provider synthesis requires an explicit standalone request.")
     if effort not in {"lite", "standard", "deep", "max", "exhaustive"} or (
         mode == "research" and effort not in CAPABILITIES[provider].get("efforts", {})
     ):
