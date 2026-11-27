@@ -410,3 +410,14 @@ def test_mcp_cache_prune_dry_run(monkeypatch, tmp_path):
             assert not stale.exists()
 
     asyncio.run(verify())
+
+
+def test_mcp_fetch_failure():
+    from mcp import Client
+
+    async def verify():
+        async with Client(mcp) as client:
+            result = await client.call_tool("web_fetch", {"url": "http://127.0.0.1"})
+            assert result.is_error
+
+    asyncio.run(verify())
