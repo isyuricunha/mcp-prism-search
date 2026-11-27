@@ -447,6 +447,9 @@ def clear_cache(
     )
 
 
+MAX_CACHE_ENTRY_BYTES = 8 * 1024 * 1024
+
+
 class JsonFileCache:
     """TTL-based JSON cache backed by one file per key."""
 
@@ -490,8 +493,11 @@ class JsonFileCache:
         try:
             if self.cache_dir.is_symlink() or path.is_symlink() or not path.is_file():
                 return None
-            with path.open("r", encoding="utf-8") as cache_file:
-                envelope = json.load(cache_file)
+            with path.open("rb") as cache_file:
+                raw = cache_file.read(MAX_CACHE_ENTRY_BYTES + 1)
+            if len(raw) > MAX_CACHE_ENTRY_BYTES:
+                return None
+            envelope = json.loads(raw)
         except (ValueError, OSError, TypeError, RecursionError):
             return None
         if not isinstance(envelope, dict):
@@ -531,6 +537,8 @@ class JsonFileCache:
                 temp_file.flush()
             # fsync is intentionally skipped: the cache is ephemeral, and
             # os.replace keeps every write atomic without the disk sync cost.
+            if Path(temp_path).stat().st_size > MAX_CACHE_ENTRY_BYTES:
+                return
             os.replace(temp_path, path)
         except (OSError, ValueError, TypeError, RecursionError):
             LOGGER.warning("Cache write failed in namespace %s", self.namespace)

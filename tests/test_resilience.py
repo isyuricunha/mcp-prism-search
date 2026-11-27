@@ -438,3 +438,15 @@ def test_fetch_fails_closed_on_invalid_resolver_output(monkeypatch, addresses):
         security.validate_resolved_addresses("https://example.org")
     with pytest.raises(security.UnsafeUrlError):
         asyncio.run(security.resolve_safe_address("https://example.org"))
+
+
+def test_cache_entry_size_bound_on_read_and_write(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache, "MAX_CACHE_ENTRY_BYTES", 256)
+    store = cache.JsonFileCache(tmp_path, "search", 60)
+    store.set({"q": 1}, {"text": "small"})
+    original = store.get({"q": 1})
+    store.set({"q": 1}, {"text": "x" * 500})
+    assert store.get({"q": 1}) == original
+    store.path_for({"q": 1}).write_text("x" * 500)
+    assert store.get({"q": 1}) is None
+    assert not list(store.cache_dir.glob("*.tmp"))
