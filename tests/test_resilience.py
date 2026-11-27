@@ -415,3 +415,17 @@ def test_panel_store_rejects_nonregular_state_paths(tmp_path, name):
 def test_fetch_rejects_scoped_mapped_and_transition_ips(address):
     assert security.is_unsafe_ip(address)
     assert not security.is_unsafe_ip("2001:4860:4860::8888")
+
+
+def test_fetch_dns_uses_same_idna_hostname_as_tls(monkeypatch):
+    names = []
+
+    def resolve(host, port):
+        names.append((host, port))
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(security, "_resolve_hostname", resolve)
+    url = "https://faß.example/"
+    security.validate_resolved_addresses(url)
+    assert asyncio.run(security.resolve_safe_address(url)) == ("93.184.216.34", 443)
+    assert names == [("xn--fa-hia.example", 443)] * 2

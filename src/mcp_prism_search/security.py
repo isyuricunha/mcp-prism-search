@@ -7,6 +7,8 @@ import socket
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 from urllib.parse import urlparse
 
+import httpx
+
 BLOCKED_HOSTNAMES = {"localhost", "metadata", "metadata.google.internal"}
 BLOCKED_HOSTNAME_SUFFIXES = (".local", ".localhost", ".internal", ".lan", ".intranet")
 BLOCKED_NETWORKS: tuple[IPv4Network | IPv6Network, ...] = (
@@ -89,7 +91,12 @@ def validate_url_shape(url: str) -> None:
     if not hostname:
         raise UnsafeUrlError("URL must include a hostname")
 
-    hostname = _normalize_hostname(hostname)
+    try:
+        hostname = _normalize_hostname(httpx.URL(url).raw_host.decode("ascii"))
+    except (httpx.InvalidURL, UnicodeError):
+        raise UnsafeUrlError("Malformed URL hostname") from None
+    if not hostname or "%" in hostname or "\\" in hostname:
+        raise UnsafeUrlError("Malformed URL hostname")
     if is_blocked_hostname(hostname):
         raise UnsafeUrlError(f"Blocked internal hostname: {hostname}")
     if is_unsafe_ip(hostname):
@@ -120,9 +127,7 @@ def _resolve_hostname(hostname: str, port: int) -> list[str]:
 def validate_resolved_addresses(url: str) -> None:
     validate_url_shape(url)
     parsed = urlparse(url)
-    hostname = parsed.hostname
-    if hostname is None:
-        raise UnsafeUrlError("URL must include a hostname")
+    hostname = httpx.URL(url).raw_host.decode("ascii")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
     for resolved_ip in _resolve_hostname(hostname, port):
@@ -144,9 +149,7 @@ async def resolve_safe_address(url: str) -> tuple[str, int]:
     """
     validate_url_shape(url)
     parsed = urlparse(url)
-    hostname = parsed.hostname
-    if hostname is None:
-        raise UnsafeUrlError("URL must include a hostname")
+    hostname = httpx.URL(url).raw_host.decode("ascii")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     addresses = await asyncio.to_thread(_resolve_hostname, hostname, port)
     if any(is_unsafe_ip(address) for address in addresses):
