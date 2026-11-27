@@ -10,3 +10,11 @@ __pycache__/
 build/
 dist/
 data/
+
+webui/node_modules/
+webui/.astro/
+webui/dist/
+
+.env
+.env.*
+!.env.example

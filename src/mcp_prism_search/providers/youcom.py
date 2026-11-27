@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 import httpx
 
+from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
 
@@ -13,7 +12,7 @@ SEARCH_URL = "https://ydc-index.io/v1/search"
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
-    api_key = os.getenv("YDC_API_KEY")
+    api_key = runtime.setting("YDC_API_KEY")
     if not api_key:
         raise RuntimeError("YDC_API_KEY is not set")
 

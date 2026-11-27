@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 
 ProviderFn = Callable[
@@ -93,6 +94,9 @@ def build_chain(requested: str, available: dict[str, ProviderSpec]) -> list[str]
         return [requested]
 
     preference_rank = {name: index for index, name in enumerate(PREFERRED_ORDER)}
+    preferred = runtime.setting("MCP_PREFERRED_PROVIDER")
+    if preferred in available:
+        preference_rank[preferred] = -1
     ordered = sorted(
         available,
         key=lambda name: (

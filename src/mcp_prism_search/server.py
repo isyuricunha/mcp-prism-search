@@ -270,7 +270,31 @@ async def _run_http_async(
         log_level=os.getenv("MCP_LOG_LEVEL", "INFO").lower(),
     )
     server = uvicorn.Server(config)
-    await server.serve()
+    if not _get_env_bool("MCP_WEBUI_ENABLED", False):
+        await server.serve()
+        return
+
+    from contextlib import nullcontext
+
+    from mcp_prism_search.panel import configured_app
+
+    panel_port = int(os.getenv("MCP_WEBUI_PORT", "49318"))
+    panel_host = os.getenv("MCP_WEBUI_HOST", "127.0.0.1")
+    if panel_port == settings.port or not 1 <= panel_port <= 65535:
+        raise RuntimeError("Invalid MCP_WEBUI_PORT")
+    admin = uvicorn.Server(uvicorn.Config(
+        configured_app(), host=panel_host, port=panel_port, access_log=False,
+    ))
+    # Only the primary server owns signal handlers.
+    admin.capture_signals = nullcontext
+    task = asyncio.create_task(admin.serve())
+    primary = asyncio.create_task(server.serve())
+    try:
+        await asyncio.wait({task, primary}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        admin.should_exit = True
+        server.should_exit = True
+        await asyncio.gather(task, primary)
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))
@@ -581,6 +605,8 @@ def main() -> None:
             f"Invalid MCP_TRANSPORT={transport!r}; accepted values are 'stdio' and 'http'"
         )
 
+    if _get_env_bool("MCP_WEBUI_ENABLED", False):
+        raise RuntimeError("Web dashboard requires MCP_TRANSPORT=http")
     mcp.run(transport="stdio")
 
 

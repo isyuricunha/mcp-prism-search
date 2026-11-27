@@ -76,8 +76,8 @@ reverse proxy, or Cloudflare Tunnel deployments:
 - publish the port on the interface you actually need
 - keep the container behind TLS termination where possible
 
-Full worked examples (LAN, HTTPS reverse proxy, Cloudflare Tunnel) live in
-the repository README.
+Worked examples follow below. The optional admin UI uses a separate
+loopback port; see [Web Dashboard](webui.md).
 
 ## Environment variables (reference)
 
@@ -198,10 +198,9 @@ Generate one with `openssl rand -hex 32` before starting the stack. The bind
 mount used for `/data` must be writable by the container uid 10001:
 `sudo chown -R 10001:10001 ~/docker/docker-data/mcp-prism-search`.
 
-The server defaults `MCP_ALLOWED_HOSTS=*` and `MCP_ALLOWED_ORIGINS=*` so the
-same container can run behind a LAN IP, hostname, domain, reverse proxy, or
-HTTPS endpoint. The compose file documents these optional variables as commented
-examples. The MCP SDK (2.x) Host/Origin allowlist does not support bare wildcards,
+The server defaults to explicit localhost Host/Origin checks. The Compose
+file supplies localhost values including port 49317. Override these
+allowlists deliberately for a trusted remote deployment. The MCP SDK (2.x) Host/Origin allowlist does not support bare wildcards,
 so wildcard mode disables the SDK rebinding checks and relies on the bearer
 token. Prefer exact comma-separated values and keep the default loopback-only
 port mapping. To enable strict Host/Origin checks,
@@ -342,8 +341,8 @@ Tunnel protects the network path, but the MCP server should still require its
 own bearer token.
 
 Do not expose HTTP mode to an untrusted network without HTTPS and a strong
-`MCP_AUTH_TOKEN`. If `MCP_AUTH_TOKEN` is unset in HTTP mode, the server logs a
-warning and accepts unauthenticated HTTP requests.
+`MCP_AUTH_TOKEN`. Missing authentication causes startup to fail unless
+MCP_ALLOW_UNAUTHENTICATED_HTTP is explicitly enabled.
 
 For MCP stdio clients, direct `docker run -i` is usually simpler than compose because the client owns stdin/stdout.
 

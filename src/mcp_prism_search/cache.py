@@ -15,6 +15,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from mcp_prism_search import runtime
+
 DEFAULT_CACHE_DIR = "/data/cache"
 DEFAULT_SEARCH_TTL_SECONDS = 21_600
 DEFAULT_FETCH_TTL_SECONDS = 7_200
@@ -116,8 +118,9 @@ class _ValidCacheFile:
     created_at: float
 
 
+
 def get_env_int(name: str, default: int) -> int:
-    value = os.getenv(name)
+    value = runtime.setting(name)
     if value is None:
         return default
     try:

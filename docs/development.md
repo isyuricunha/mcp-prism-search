@@ -46,6 +46,7 @@ MCP_TRANSPORT=http MCP_AUTH_TOKEN=$(openssl rand -hex 32) MCP_PORT=8000 \
 | `tests/test_cache.py` | read/write, expiry, corrupt files, prune (expired/size/dry-run), stats, clear |
 | `tests/test_server.py` | HTTP settings (fail-closed defaults, wildcard opt-out), transport security, bearer middleware, tool schemas |
 | `tests/test_aggregator.py` | Registry, API contracts, selection, cache, timeouts and filtering |
+| `tests/test_panel.py` | Admin authentication, CSRF, encryption, settings, metrics and provider integration |
 | `tests/test_protocol.py` | MCP client discovery, tool listing and structured responses in modern and legacy protocol modes |
 | `tests/test_security.py` | URL shape validation and IP/hostname blocklists |
 | `tests/test_domains.py` | domain normalization and allow/block/preferred controls |

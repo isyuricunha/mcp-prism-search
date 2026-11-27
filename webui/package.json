@@ -1,0 +1,11 @@
+{
+  "name": "prism-search-webui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build"
+  },
+  "devDependencies": {
+    "astro": "6.4.8"
+  }
+}

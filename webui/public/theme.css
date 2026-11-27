@@ -1,0 +1,191 @@
+/* YuTheme canonical tokens, source commit 49bf3d2; Dark uses the true-black palette. */
+:root,
+[data-theme='yu-dark'] {
+  color-scheme: dark;
+
+  /* surface ladder: canvas black, everything near-black, structure from
+     0.5px borders + a 1px top highlight (shadows do not show on #000) */
+  --yu-bg-canvas: #000000;
+  --yu-bg-sidebar: #000000;
+  --yu-bg-desktop: #121211;
+  --yu-bg-desktop-soft: #1a1a18;
+  --yu-bg-window: #0b0b0a;
+  --yu-bg-surface: #0b0b0a;
+  --yu-bg-panel: #0b0b0a;
+  --yu-bg-modal: #0f0f0e;
+  --yu-bg-editor: #10100f; /* lifted above the window */
+  --yu-bg-terminal: #10100f;
+  --yu-bg-titlebar: #121211; /* lighter than the window: reads as a bar */
+  --yu-bg-input: #121211;
+  --yu-bg-composer: #121211;
+  --yu-bg-surface-hover: #141413;
+  --yu-bg-surface-raised: #151514;
+  --yu-bg-popover: #151514;
+  --yu-bg-tooltip: #151514;
+  --yu-bg-chip: #1a1a18;
+  --yu-bg-input-hover: #1a1a18;
+  --yu-bg-surface-active: #1f1f1d;
+  --yu-bg-selected-soft: rgba(214, 168, 79, 0.1);
+
+  --border-faint: rgba(232, 228, 216, 0.08);
+  --border-subtle: rgba(232, 228, 216, 0.13);
+  --border-default: rgba(232, 228, 216, 0.2);
+  --border-strong: rgba(232, 228, 216, 0.32);
+  --border-width: 0.5px;
+
+  --text-strong: #fffdf7;
+  --text-primary: #f4f1e8;
+  --text-secondary: #b8b2a4;
+  --text-tertiary: #9a9488;
+  --text-dim: #666157;
+  --text-disabled: #54504a;
+  --text-inverse: #15130f;
+
+  /* semantic accents (canonical, unchanged since v1) */
+  --accent-gold: #d6a84f;
+  --accent-gold-hover: #e0b760;
+  --accent-cyan: #64d2ff;
+  --accent-cyan-hover: #7cd9ff;
+  --accent-green: #31d158;
+  --accent-purple: #bf5af2;
+  --accent-blue: #4daafc;
+  --accent-red: #ff6961;
+  --accent-amber: #f0b35a;
+
+  /* roles: components use these, never raw accents */
+  --action-primary: var(--accent-gold);
+  --action-primary-hover: var(--accent-gold-hover);
+  --on-action: var(--text-inverse);
+  --link: var(--accent-cyan);
+  --success: var(--accent-green);
+  --warning: var(--accent-amber);
+  --danger: var(--accent-red);
+  --agent: var(--accent-purple);
+  /* background tint validated against the approved mockup (14%, not 18%) */
+  --agent-soft: rgba(191, 90, 242, 0.14);
+  /* solid text colour for agent-tinted chips */
+  --agent-text: #d9a8f5;
+
+  /* charts: fixed, validated single-series gold (not the action colour) */
+  --yu-chart: #b8862b;
+  --yu-chart-hover: #d6a84f;
+
+  /* syntax (canonical accents softened for long reading) */
+  --yu-syn-keyword: #d9a8f5;
+  --yu-syn-string: #8fd6a0;
+  --yu-syn-number: #e8c07a;
+  --yu-syn-title: #7fdcff;
+  --yu-syn-type: #f0b35a;
+  --yu-syn-comment: #8a8571;
+  --yu-syn-attr: #e8c07a;
+  --yu-syn-meta: #9a9488;
+  --yu-syn-deletion: #ff8a84;
+  --yu-syn-addition: #8fd6a0;
+
+  /* shape */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-window: 14px;
+  --radius-panel: 20px;
+  --radius-pill: 999px;
+
+  /* depth */
+  --yu-highlight: inset 0 1px 0 rgba(255, 253, 247, 0.05);
+  --shadow-floating: 0 0 0 0.5px var(--border-default), 0 18px 48px rgb(0 0 0 / 0.6);
+  --shadow-tooltip: 0 0 0 0.5px var(--border-default), 0 8px 24px rgb(0 0 0 / 0.5);
+  --overlay: rgba(0, 0, 0, 0.6);
+  --yu-glow-alpha: 0.08;
+
+  /* effects inputs */
+  --yu-shimmer-base: #9a9488;
+  --yu-shimmer-peak: #fffdf7;
+  --yu-gold-base: #d6a84f;
+  --yu-gold-peak: #f7e0a8;
+  --yu-agent-base: #b58ad0;
+  --yu-agent-peak: #f1dcff;
+  --yu-sheen-rest: rgba(222, 220, 209, 0.14);
+  --yu-skel-a: #121211;
+  --yu-skel-b: #1f1f1d;
+
+  /* type + motion */
+  --font-sans: 'Geist', 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --yu-ease: cubic-bezier(0.2, 0, 0, 1);
+  --yu-ease-shimmer: cubic-bezier(0.4, 0, 0.2, 1);
+  --yu-fast: 160ms;
+  --yu-scrollbar: #2a2926;
+  --yu-scrollbar-hover: #3a3935;
+}
+
+[data-theme='yu-daylight'] {
+  color-scheme: light;
+  --yu-bg-canvas: #faf9f5;
+  --yu-bg-sidebar: #f5f3ee;
+  --yu-bg-window: #ffffff;
+  --yu-bg-surface: #ffffff;
+  --yu-bg-panel: #ffffff;
+  --yu-bg-modal: #ffffff;
+  --yu-bg-editor: #f5f3ee;
+  --yu-bg-terminal: #f5f3ee;
+  --yu-bg-titlebar: #f2f0ea;
+  --yu-bg-input: #f2f0ea;
+  --yu-bg-composer: #f2f0ea;
+  --yu-bg-surface-hover: #f2f0ea;
+  --yu-bg-surface-raised: #ffffff;
+  --yu-bg-popover: #ffffff;
+  --yu-bg-tooltip: #ffffff;
+  --yu-bg-chip: #ece9e1;
+  --yu-bg-input-hover: #ece9e1;
+  --yu-bg-surface-active: #e2ded4;
+  /* pinned: keep what this variant inherited from the AMOLED root before
+     the warm default landed (dark desktop tokens; glow calibrated for black) */
+  --yu-bg-desktop: #121211;
+  --yu-bg-desktop-soft: #1a1a18;
+  --yu-glow-alpha: 0.08;
+  --border-faint: rgba(31, 30, 27, 0.07);
+  --border-subtle: rgba(31, 30, 27, 0.12);
+  --border-default: rgba(31, 30, 27, 0.2);
+  --border-strong: rgba(31, 30, 27, 0.3);
+  --text-strong: #0f0e0c;
+  --text-primary: #1f1e1b;
+  --text-secondary: #5e5a50;
+  --text-tertiary: #7d786c;
+  --text-dim: #9a9488;
+  --text-disabled: #b8b2a4;
+  --text-inverse: #fffdf7;
+  --accent-gold: #b8862b;
+  --accent-gold-hover: #a47520;
+  --accent-cyan: #0a7fbf;
+  --accent-green: #1f9d48;
+  --accent-purple: #9b3fd1;
+  --agent-text: #7d2fb0;
+  --agent-soft: rgba(155, 63, 209, 0.14);
+  --accent-red: #d9433b;
+  --accent-amber: #b3741a;
+  --yu-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --shadow-floating: 0 18px 48px -16px rgba(31, 30, 27, 0.25);
+  --overlay: rgba(31, 30, 27, 0.3);
+  --yu-shimmer-base: #7d786c;
+  --yu-shimmer-peak: #1f1e1b;
+  --yu-gold-base: #9a6d1e;
+  --yu-gold-peak: #5c3f0c;
+  --yu-agent-base: #8a2fc0;
+  --yu-agent-peak: #4d1473;
+  --yu-sheen-rest: rgba(31, 30, 27, 0.14);
+  --yu-skel-a: #efece5;
+  --yu-skel-b: #e2ded4;
+  --yu-syn-keyword: #8a2fc0;
+  --yu-syn-string: #1d7a3c;
+  --yu-syn-number: #9a6512;
+  --yu-syn-title: #0a6fa8;
+  --yu-syn-type: #a2600f;
+  --yu-syn-comment: #8a8578;
+  --yu-syn-attr: #9a6512;
+  --yu-syn-meta: #7d786c;
+  --yu-syn-deletion: #c9362e;
+  --yu-syn-addition: #1d7a3c;
+  --yu-scrollbar: #d6d2c8;
+  --yu-scrollbar-hover: #bfbab0;
+}

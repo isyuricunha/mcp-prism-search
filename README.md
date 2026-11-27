@@ -20,7 +20,8 @@ extracted text. No model provider or LLM subscription is required.
 
 [Quick start](#quick-start) · [Search modes](#search-modes) ·
 [Providers](#providers) · [Tools](#tools) ·
-[Agent setup prompt](#agent-setup-prompt) · [Documentation](#documentation)
+[Web dashboard](#optional-web-dashboard) · [Agent setup prompt](#agent-setup-prompt) ·
+[Documentation](#documentation)
 
 ## Why Prism Search?
 
@@ -115,15 +116,8 @@ Generate the token file only once. If it already exists, reuse it.
 The image runs as UID/GID 10001; adjust ownership only on the intended
 data directory (use the appropriate UID mapping for rootless Docker).
 
-The checked-in Compose file publishes the service on loopback port
-49317. In `docker-compose.yml`, under the service's `environment`,
-set the exact local host values so the SDK accepts the endpoint's Host
-header, including its port:
-
-```yaml
-MCP_ALLOWED_HOSTS: "localhost,127.0.0.1,localhost:49317,127.0.0.1:49317"
-```
-
+The checked-in Compose file publishes the service on loopback port 49317
+and supplies matching Host allowlist entries, including the port.
 Keep the default Origin restrictions unless your client needs an additional
 specific Origin. Then start and check liveness:
 
@@ -162,6 +156,35 @@ Replace the placeholder privately with your saved token or use your client's
 secret reference mechanism. Do not commit credentials. Keep HTTP bound to
 loopback by default; for remote access, use TLS and explicit Host/Origin
 allowlists. See [deployment and operations](docs/deployment.md).
+
+## Optional web dashboard
+
+A lightweight Astro dashboard using YuTheme (Dark/Eclipse by default,
+White optional). It is disabled by default and is never required by an MCP
+client. The production container serves static assets with Python; Node.js
+is used only during the image build.
+
+Enable it with the optional Compose overlay. Add a private
+`MCP_WEBUI_PASSWORD` (at least 12 characters) to your existing protected
+server environment file, alongside the existing MCP token. Then run:
+
+```bash
+docker compose --env-file "$HOME/.config/mcp-prism-search/server.env" \
+  -f docker-compose.yml -f docker-compose.webui.yml up -d --build
+```
+
+Open **http://127.0.0.1:49318** and sign in with the dashboard password.
+The overlay sets `MCP_WEBUI_ENABLED=true`; bare Python HTTP deployments
+can set that variable directly after building the static frontend.
+
+Manage providers and API keys, test searches, inspect aggregate activity
+and cache usage, change search timeouts and cache TTLs, and generate client
+connection examples. Panel credentials and settings are shared with the
+running HTTP MCP process. Environment values take precedence. The
+dashboard password is separate from the MCP bearer token.
+
+Read [the dashboard guide](docs/webui.md) for configuration, local builds,
+backup, remote access and security details.
 
 ## Search modes
 
@@ -407,6 +430,7 @@ content accuracy or anonymity.
 | Guide | Contents |
 |---|---|
 | [Provider policy](docs/providers.md) | Modes, engine contracts, quotas, migration |
+| [Web dashboard](docs/webui.md) | Optional administration interface, security and configuration |
 | [Deployment and operations](docs/deployment.md) | Docker, configuration, HTTP, cache, troubleshooting |
 | [Architecture](docs/architecture.md) | Modules, request flow, security model |
 | [Development](docs/development.md) | Tests, dependencies, contribution and release process |

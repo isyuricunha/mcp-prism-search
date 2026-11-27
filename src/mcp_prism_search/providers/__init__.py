@@ -6,8 +6,7 @@ health. Providers whose required env var is missing are skipped.
 
 from __future__ import annotations
 
-import os
-
+from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.providers import (  # noqa: F401
     bing_rss,
@@ -119,7 +118,7 @@ def available_providers(kind: str | None = None) -> dict[str, ProviderSpec]:
         build_registry()
     result = {}
     for name, spec in SPECS.items():
-        if spec.needs and not os.getenv(spec.needs):
+        if not runtime.enabled(name) or (spec.needs and not runtime.setting(spec.needs)):
             continue
         if kind and spec.kind != kind:
             continue

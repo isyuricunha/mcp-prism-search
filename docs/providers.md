@@ -48,9 +48,12 @@ Wikipedia and Hacker News are separate vertical tools.
   identifiable User-Agent with a project URL.
 
 TinyFish, Tavily, Exa, Brave, You.com, Serper, Jina and SearXNG are enabled only when
-their corresponding environment variable is configured. Configured API
+their corresponding environment variable is configured (or, for API keys,
+when stored in the optional [dashboard](webui.md)). Configured API
 providers can consume credits in auto or all mode; use explicit selection
-when controlling spend. No quota evasion or proxy rotation is performed.
+when controlling spend. No quota evasion or proxy rotation is performed. When enabled, the dashboard
+can disable engines and set a preferred provider as a tie-breaker; environment
+settings take precedence.
 
 ## Migration notes
 

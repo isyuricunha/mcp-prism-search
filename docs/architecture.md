@@ -239,3 +239,12 @@ It also rejects IP addresses in private, loopback, link-local, reserved, multica
 DNS is resolved before fetching. If any resolved address is unsafe, the request is rejected. Redirects are followed manually, and every redirect target is validated before the next request.
 
 Unsupported schemes such as `file://`, `ftp://`, `ssh://`, `gopher://`, and `data:` are never fetched.
+
+
+## Optional dashboard
+
+The independent admin ASGI listener uses the same process and search registry,
+but a separate password/session authentication boundary. Static Astro assets
+are served directly from disk. SQLite stores encrypted keys, provider flags,
+settings and bounded aggregate metrics. Headless mode does not import the panel
+or initialize state. See [dashboard design and operations](webui.md).

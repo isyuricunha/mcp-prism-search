@@ -35,11 +35,9 @@ services:
       CACHE_MAX_AGE_SECONDS: "604800"
       CACHE_MAX_SIZE_MB: "512"
 
-      # Optional: host/origin allowlists for FastMCP DNS rebinding protection.
-      # The server defaults to "*" for flexible LAN, tunnel, and reverse-proxy use.
-      # Use comma-separated values for stricter deployments.
-      # MCP_ALLOWED_HOSTS: "*"
-      # MCP_ALLOWED_ORIGINS: "*"
+      # Explicit MCP Host/Origin allowlists. Override for a trusted reverse proxy.
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1,localhost:49317,127.0.0.1:49317}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-http://localhost:5173}
 
       # Optional: cache directory inside the container. The mounted /data volume
       # persists this path; the image default is /data/cache.

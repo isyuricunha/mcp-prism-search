@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 import httpx
 
+from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
 from mcp_prism_search.text import normalize_whitespace
 
@@ -15,7 +14,7 @@ MAX_PAGE = 10
 
 
 async def search(request: SearchRequest, count: int, timeout: int) -> list[SearchResult]:
-    api_key = os.getenv("TINYFISH_API_KEY")
+    api_key = runtime.setting("TINYFISH_API_KEY")
     if not api_key:
         raise RuntimeError("TINYFISH_API_KEY is not set")
 

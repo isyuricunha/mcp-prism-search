@@ -462,7 +462,12 @@ async def ddg_search(
 
 async def _search_one(name: str, request: SearchRequest, count: int, timeout: int):
     """Return results and an accurate, credential-free attempt status."""
+    from time import monotonic
+
+    from mcp_prism_search import runtime
     from mcp_prism_search.providers import record, run_provider
+
+    start = monotonic()
 
     try:
         async with asyncio.timeout(timeout):
@@ -483,6 +488,7 @@ async def _search_one(name: str, request: SearchRequest, count: int, timeout: in
             preferred_domains=[],
         )
         record(name, valid, None)
+        runtime.record_metric(name, 'ok' if valid else 'empty', monotonic() - start)
         return filtered, f"{name}: ok ({len(filtered)})" if filtered else f"{name}: empty"
     except TimeoutError:
         status = "timeout"
@@ -491,6 +497,7 @@ async def _search_one(name: str, request: SearchRequest, count: int, timeout: in
     except Exception as exc:  # noqa: BLE001 - isolate upstream failures.
         status = type(exc).__name__
     record(name, None, status)
+    runtime.record_metric(name, status, monotonic() - start)
     return [], f"{name}: error ({status})"
 
 
@@ -516,6 +523,7 @@ async def aggregated_search(
     cache: JsonFileCache | None = None,
 ) -> SearchResponse:
     """Search one provider, a health-ordered fallback chain or a parallel selection."""
+    from mcp_prism_search import runtime
     from mcp_prism_search.providers import resolve_chain
 
     request = SearchRequest(
@@ -563,10 +571,13 @@ async def aggregated_search(
     cached = cache.get(payload, ttl_seconds=search_ttl_for_query(query))
     if cached is not None:
         try:
-            return SearchResponse.model_validate(cached).model_copy(update={"cached": True})
+            result = SearchResponse.model_validate(cached).model_copy(update={"cached": True})
+            runtime.record_cache(True)
+            return result
         except ValueError:
             cache.delete(payload)
 
+    runtime.record_cache(False)
     timeout = get_ddg_timeout_seconds()
     count = max(request.max_results, provider_request_size(request))
     actual = None

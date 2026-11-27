@@ -1,0 +1,11 @@
+# Optional overlay: docker compose -f docker-compose.yml -f docker-compose.webui.yml up -d
+services:
+  ddg-research:
+    ports:
+      - "127.0.0.1:49318:49318"
+    environment:
+      MCP_WEBUI_ENABLED: "true"
+      MCP_WEBUI_PASSWORD: ${MCP_WEBUI_PASSWORD:?Set a private dashboard password}
+      MCP_WEBUI_HOST: "0.0.0.0"
+      MCP_WEBUI_PORT: "49318"
+      MCP_WEBUI_ALLOWED_HOSTS: ${MCP_WEBUI_ALLOWED_HOSTS:-localhost,127.0.0.1}
