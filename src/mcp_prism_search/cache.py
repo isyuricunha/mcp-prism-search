@@ -294,7 +294,7 @@ def prune_cache(
                 delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             continue
 
-        if cache_file.size > MAX_CACHE_ENTRY_BYTES:
+        if not expired_only and cache_file.size > MAX_CACHE_ENTRY_BYTES:
             delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             continue
         created_at = _read_cache_created_at(cache_file)
