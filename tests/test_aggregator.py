@@ -202,6 +202,7 @@ def test_bing_rss_invalid_rows_do_not_consume_result_limit(monkeypatch):
       <item><title>Bad</title><link>httpx://evil.example</link></item>
       <item><title>Bad port</title><link>https://example.org:wrong</link></item>
       <item><title></title><link>https://example.org/empty</link></item>
+      <item><title>Backslash</title><link>https://example.org/&#92;bad</link></item>
       <item><title>Good</title><link>https://example.org/good</link></item>
       </channel></rss>"""
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
