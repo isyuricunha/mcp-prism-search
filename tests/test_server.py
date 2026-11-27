@@ -347,3 +347,14 @@ def test_server_http_without_dashboard(monkeypatch):
 
     asyncio.run(server._serve_http(FakeServer(), _configure_http_settings()))
     assert calls == ["serve"]
+
+
+def test_startup_prune_failure_nonfatal(monkeypatch, caplog):
+    from mcp_prism_search import server
+
+    def fail():
+        raise OSError("fixture disk failure")
+
+    monkeypatch.setattr(server.cache_ops, "prune_cache_on_startup", fail)
+    server._prune_cache_on_startup()
+    assert "Startup cache pruning failed" in caplog.text
