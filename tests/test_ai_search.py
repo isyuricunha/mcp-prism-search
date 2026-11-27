@@ -682,3 +682,21 @@ def test_tinyfish_created_run_cancellation(tinyfish_config, monkeypatch):
         ))
     assert len(calls) == 2
     assert calls[1] == "/v1/research-run/fixture-run/cancel"
+
+
+def test_tinyfish_unsafe_run_id(tinyfish_config, monkeypatch):
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        return httpx.Response(200, text=sse(
+            {"event": "created", "research_run_id": "../other"},
+            {"event": "error"},
+        ))
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError):
+        asyncio.run(native.synthesize(
+            "question", "tinyfish", "research", allow_cost=True, effort="deep",
+        ))
+    assert len(calls) == 1
