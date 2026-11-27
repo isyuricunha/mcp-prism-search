@@ -13,6 +13,22 @@ const page=await context.newPage();
 const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
+// Deliberate response latency exposes stale DOM/fixture assertions on fast runners.
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function responseFor(endpoint, predicate=()=>true){
+ return page.waitForResponse(response=>response.url().endsWith(endpoint)&&
+   response.request().method()==="POST"&&predicate(response.request().postDataJSON()));
+}
+async function searchComplete(response){
+ await response;
+ await page.waitForFunction(()=>!document.querySelector("#run-search").disabled &&
+   !document.querySelector("#search-output").hidden);
+}
+async function nativeComplete(response){
+ await response;
+ await page.waitForFunction(()=>!document.querySelector("#native-run").hasAttribute("aria-busy") &&
+   !document.querySelector("#native-result").hidden);
+}
 const provider=(id,extra={})=>({id,kind:"general",description:"A search engine for web research.",enabled:true,available:true,credential:false,editable:false,managed:false,env:null,...extra});
 let data={defaults:JSON.parse(await fs.readFile(new URL("./defaults-fixture.json",import.meta.url),"utf8")),native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7-test",sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
 await page.route("http://prism-test.invalid/**",async route=>{
@@ -31,8 +47,9 @@ await page.route("http://prism-test.invalid/**",async route=>{
    }
    else if(pathname==="/api/cache/clear"){cleared++;body={deleted_files:2,deleted_bytes:2048};}
    else if(pathname==="/api/logout")logged=false;
-   else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:"answer",answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""}],truncated:false};}
+   else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:lastNative.mode,answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""}],truncated:false};}
    else if(pathname==="/api/search"){lastSearch=route.request().postDataJSON();body={cached:false,provider_attempts:["keenable: ok"],results:[{title:"Example",url:"https://example.com",snippet:"Test result"}],answers:lastSearch.include_answers?[{provider:"exa",mode:"answer",answer:"Enhanced answer <script>bad</script>",source_kind:"grounding",sources:[{index:2,url:"https://example.org",title:"Grounded source",excerpt:"Evidence"}]}]:[],answer_attempts:lastSearch.include_answers?["exa: ok"]:[]};}
+   if(["/api/search","/api/native"].includes(pathname))await delay(120);
    await route.fulfill({status,json:body});return;
  }
  const name=pathname==="/"?"index.html":pathname.slice(1);
@@ -126,7 +143,9 @@ try{
  await page.waitForFunction(()=>document.querySelector("#cache-feedback").textContent.includes("Removed"));
  assert.equal(cleared,1);
  await nav("Playground");await page.locator("#query").fill("test query");
+ const firstSearch=responseFor("/api/search",d=>d.mode===undefined);
  await page.getByRole("button",{name:"Run search"}).click();
+ await searchComplete(firstSearch);
  await page.getByRole("link",{name:"Example ↗"}).waitFor();
  assert.equal(lastSearch.mode,undefined);assert.equal(lastSearch.providers,undefined);assert.equal(lastSearch.max_results,undefined);
  assert.ok((await page.locator("#search-default-summary").textContent()).includes("Keyless fallback"));
@@ -136,8 +155,9 @@ try{
  await page.locator('input[name=search-mode][value=auto]').check();
  await page.locator("#max-results").fill("3");
  await page.locator("#search-recency").selectOption("any");
+ const autoSearch=responseFor("/api/search",d=>d.mode==="auto");
  await page.getByRole("button",{name:"Run search"}).click();
- await page.waitForFunction(()=>!document.querySelector("#run-search").disabled);
+ await searchComplete(autoSearch);
  assert.equal(lastSearch.mode,"auto");assert.equal(lastSearch.providers,undefined);assert.equal(lastSearch.max_results,3);assert.equal(lastSearch.time_filter,"any");
  // Authorize once, then search without another cost dialog for the authorized engine.
  assert.equal(await page.locator("#search-answers").isDisabled(),true);
@@ -159,7 +179,9 @@ try{
  await page.locator("#clear-selection").click();
  await page.locator('#choices input[value=exa]').check();
  assert.equal(await page.locator("#search-answers").isChecked(),true);
+ const enhancedSearch=responseFor("/api/search",d=>d.include_answers===true);
  await page.locator("#run-search").click();
+ await searchComplete(enhancedSearch);
  await page.locator("#search-ai-results").waitFor({state:"visible"});
  assert.equal(lastSearch.include_answers,true);
  assert.deepEqual(lastSearch.providers,["exa"]);
@@ -171,9 +193,9 @@ try{
  await page.locator("#theme").click();
  await page.locator("#search-answers").uncheck();
  await page.locator("#run-search").click();
- const optOutResponse=page.waitForResponse(response=>response.url().endsWith("/api/search")&&response.request().postDataJSON().include_answers===false);
+ const optOutResponse=responseFor("/api/search",d=>d.include_answers===false);
  await page.getByRole("dialog").getByRole("button",{name:"Run search",exact:true}).click();
- await optOutResponse;
+ await searchComplete(optOutResponse);
  await page.waitForFunction(()=>!document.querySelector("#run-search").disabled && document.querySelector("#search-ai-results").hidden);
  assert.equal(lastSearch.include_answers,false);
  assert.equal(await page.locator("#search-ai-results").isVisible(),false);
@@ -184,8 +206,9 @@ try{
  await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
  assert.equal(lastNative,null);
  await page.locator("#native-run").click();
+ const answerResponse=responseFor("/api/native",d=>d.mode==="answer");
  await page.getByRole("dialog").getByRole("button",{name:"Continue",exact:true}).click();
- await page.locator("#native-result").waitFor({state:"visible"});
+ await nativeComplete(answerResponse);
  assert.equal(lastNative.allow_cost,true);
  assert.equal(lastNative.provider,"exa");
  assert.equal(await page.locator("#native-answer").textContent(),"Generated answer <script>bad</script>");
@@ -199,10 +222,12 @@ try{
  assert.equal(await page.locator("#native-run").isDisabled(),false);
  await page.locator("#native-effort").selectOption("deep");
  await page.locator("#native-run").click();
+ const researchResponse=responseFor("/api/native",d=>d.mode==="research");
  await page.getByRole("dialog").getByRole("button",{name:"Continue",exact:true}).click();
- await page.locator("#native-result").waitFor({state:"visible"});
+ await nativeComplete(researchResponse);
  assert.equal(lastNative.mode,"research");
  assert.equal(lastNative.effort,"deep");
+ assert.ok((await page.locator("#native-heading").textContent()).endsWith(" · Research"));
  await page.locator("#native-panel > summary").click();
  await nav("Connection");await page.locator("#endpoint").fill("https://example.com/mcp");
  assert.equal(JSON.parse(await page.locator("#connection-json").textContent()).mcp["prism-search"].url,"https://example.com/mcp");
