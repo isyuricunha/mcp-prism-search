@@ -324,7 +324,7 @@ def test_webui_requires_http(monkeypatch, transport, enabled, expected):
         server._run()
 
 
-@pytest.mark.parametrize("port", ["8000", "0", "65536"])
+@pytest.mark.parametrize("port", ["8000", "0", "65536", "invalid"])
 def test_invalid_dashboard_port(monkeypatch, port):
     from mcp_prism_search import server
 

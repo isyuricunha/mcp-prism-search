@@ -315,7 +315,10 @@ async def _serve_http(server, settings: HttpSettings) -> None:
 
     from mcp_prism_search.panel import configured_app
 
-    panel_port = int(os.getenv("MCP_WEBUI_PORT", "49318"))
+    try:
+        panel_port = int(os.getenv("MCP_WEBUI_PORT", "49318"))
+    except ValueError:
+        raise RuntimeError("Invalid MCP_WEBUI_PORT; expected an integer port number") from None
     panel_host = os.getenv("MCP_WEBUI_HOST", "127.0.0.1")
     if panel_port == settings.port or not 1 <= panel_port <= 65535:
         raise RuntimeError("Invalid MCP_WEBUI_PORT")
