@@ -195,3 +195,14 @@ def test_history_rejects_untrusted_timestamps(logs, timestamp):
     with (logs / "events.jsonl").open("a") as handle:
         handle.write(json.dumps(dict(row, timestamp=timestamp)) + "\n")
     assert obs.history()["events"] == [row]
+
+
+def test_history_time_cutoff(logs):
+    from datetime import UTC, datetime
+
+    obs.emit("provider", "ok", provider="exa:answer")
+    row = obs.history()["events"][0]
+    with (logs / "events.jsonl").open("a") as handle:
+        handle.write(json.dumps(dict(row, timestamp="2000-01-01T00:00:00+00:00")) + "\n")
+    cutoff = datetime(2020, 1, 1, tzinfo=UTC).timestamp()
+    assert obs.history(provider="exa", since=cutoff)["events"] == [row]
