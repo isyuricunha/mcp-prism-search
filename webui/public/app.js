@@ -47,6 +47,8 @@ function action(label, callback, className = "") {
 function safeHttpUrl(value) {
   if(typeof value!=="string"||value.includes(String.fromCharCode(92))||/[\s\x00-\x1f\x7f]/u.test(value))return null;
   if(!/^https?:\/\/[^/?#]/i.test(value)||Array.from(value).length>8192)return null;
+  const authority=value.match(/^https?:\/\/([^/?#]+)/i)?.[1];
+  if(!authority||/[@%]/.test(authority))return null;
   try{
     const url=new URL(value);
     return ["http:","https:"].includes(url.protocol)&&!url.username&&!url.password&&url.port!=="0"?url:null;

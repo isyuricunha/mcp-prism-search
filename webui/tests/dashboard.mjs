@@ -491,7 +491,11 @@ try{
   await page.locator("#endpoint").fill(invalid);
   assert.equal(await page.locator("#copy-config").isDisabled(),true);
  }
- await page.locator("#endpoint").fill("https://example.com/mcp");
+  for(const invalid of ["https://@example.com/mcp","https://%65xample.com/mcp","https://example.com%2fother/mcp"]){
+   await page.locator("#endpoint").fill(invalid);
+   assert.equal(await page.locator("#copy-config").isDisabled(),true);
+  }
+  await page.locator("#endpoint").fill("https://example.com/mcp");
  assert.equal(JSON.parse(await page.locator("#connection-json").textContent()).mcp["prism-search"].url,"https://example.com/mcp");
  await page.locator("#endpoint").fill("https://user:secret@example.com/mcp");
  assert.equal(await page.locator("#copy-config").isDisabled(),true);
