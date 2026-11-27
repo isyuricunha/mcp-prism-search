@@ -1,7 +1,11 @@
 ---
 const sections = [
-  ["overview", "Overview"], ["providers", "Providers"], ["playground", "Playground"],
-  ["cache", "Cache"], ["settings", "Settings"], ["connection", "Connection"]
+  ["overview", "Overview", "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"],
+  ["providers", "Providers", "M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18 M3 12h18 M12 3c4 4 4 14 0 18 M12 3c-4 4-4 14 0 18"],
+  ["playground", "Playground", "M10.5 3a7.5 7.5 0 1 0 0 15 7.5 7.5 0 1 0 0-15 M16 16l5 5"],
+  ["cache", "Cache", "M4 6c0-2 16-2 16 0v12c0 2-16 2-16 0z M4 6c0 2 16 2 16 0 M4 12c0 2 16 2 16 0"],
+  ["settings", "Settings", "M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6"],
+  ["connection", "Connection", "M10 7l3-3a4 4 0 0 1 6 6l-3 3 M14 17l-3 3a4 4 0 0 1-6-6l3-3 M9 15l6-6"]
 ];
 ---
 <!doctype html>
@@ -23,7 +27,7 @@ const sections = [
         <h1>Welcome back.</h1>
         <p class="muted">Sign in to manage your search server.</p>
         <label for="password">Administrator password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" />
+        <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024" aria-describedby="login-status" />
         <button class="primary" type="submit">Sign in</button>
         <p id="login-status" class="status" role="alert"></p>
       </form>
@@ -32,7 +36,8 @@ const sections = [
       <aside class="sidebar">
         <div class="brand"><span class="mark" aria-hidden="true">◇</span><div>Prism Search<small>Administration</small></div></div>
         <nav aria-label="Dashboard">
-          {sections.map(([id, name]) => <button type="button" data-page={id} class="nav-button">{name}</button>)}
+          <span class="nav-label">Workspace</span>
+          {sections.map(([id, name, path]) => <button type="button" data-page={id} class="nav-button"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d={path}/></svg><span>{name}</span></button>)}
         </nav>
         <div class="sidebar-footer">
           <button id="theme" type="button">Switch to White</button>
@@ -51,7 +56,7 @@ const sections = [
         </section>
         <section id="providers" class="page" hidden>
           <p class="muted">Enable engines and replace API keys. Changes apply immediately to new aggregated searches. Environment credentials are read-only.</p>
-          <div id="provider-list" class="provider-list"></div>
+          <div id="provider-list" class="provider-list card"></div>
         </section>
         <section id="playground" class="page" hidden>
           <form id="search-form" class="card">
@@ -63,7 +68,7 @@ const sections = [
           <p id="search-attempts" class="muted" aria-live="polite"></p><div id="results"></div>
         </section>
         <section id="cache" class="page" hidden>
-          <div class="card"><h2>Cache status</h2><p class="muted">Inspect and remove expired or corrupt cache entries. Active entries are preserved.</p><pre id="cache-stats"></pre><div class="provider-actions"><button id="prune" type="button">Prune expired entries</button><button id="clear-cache" type="button">Clear cache</button></div></div>
+          <div class="card"><h2>Cache status</h2><p class="muted">Inspect and remove expired or corrupt cache entries. Active entries are preserved.</p><pre id="cache-stats"></pre><div class="provider-actions"><button id="prune" type="button">Prune expired entries</button><button id="clear-cache" class="danger" type="button">Clear cache</button></div></div>
         </section>
         <section id="settings" class="page" hidden>
           <form id="settings-form" class="card">
@@ -71,7 +76,9 @@ const sections = [
             <label for="timeout">Provider timeout (seconds)</label><input id="timeout" type="number" min="2" max="120" required />
             <label for="search_ttl">Search cache TTL (seconds)</label><input id="search_ttl" type="number" min="60" max="604800" required />
             <label for="fetch_ttl">Fetch cache TTL (seconds)</label><input id="fetch_ttl" type="number" min="60" max="604800" required />
-            <label for="preferred">Preferred engine</label><select id="preferred"></select>
+            <fieldset id="preferred-field"><legend>Preferred engine</legend>
+              <details id="preferred-picker"><summary id="preferred-label">Default order</summary><div id="preferred" class="radio-list" role="radiogroup" aria-label="Preferred engine"></div></details>
+            </fieldset>
             <button class="primary" type="submit">Save settings</button>
           </form>
         </section>
@@ -80,6 +87,12 @@ const sections = [
         </section>
       </main>
     </div>
+    <dialog id="confirmation" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+      <form method="dialog" class="confirm-form">
+        <h2 id="confirm-title"></h2><p class="muted" id="confirm-description"></p>
+        <div class="dialog-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-action" value="confirm" class="danger">Confirm</button></div>
+      </form>
+    </dialog>
     <noscript><p class="card">Enable JavaScript to use the local administration interface.</p></noscript>
   </body>
 </html>

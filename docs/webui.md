@@ -1,7 +1,7 @@
 # Optional Web Dashboard
 
 The dashboard is a static Astro application with canonical YuTheme tokens
-from revision `49bf3d2`. Dark uses the true-black Eclipse palette; White is
+from revision `49bf3d2`. Dark uses the canonical charcoal/teal palette; White is
 optional. No React, CDN, external fonts, Node.js production server, Redis,
 or external database is required.
 

@@ -16,6 +16,18 @@ async function api(path, method = "GET", data) {
   if (!response.ok) throw new Error(body.error || "Request failed");
   return body;
 }
+function confirmAction(title, description, action) {
+  const dialog = $("confirmation");
+  if (dialog.open) return Promise.resolve(false);
+  $("confirm-title").textContent = title;
+  $("confirm-description").textContent = description;
+  $("confirm-action").textContent = action;
+  dialog.returnValue = "cancel";
+  return new Promise(resolve => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+    dialog.showModal();
+  });
+}
 function element(tag, value = "", className = "") {
   const node = document.createElement(tag);
   node.textContent = value;
@@ -48,7 +60,7 @@ function page(id) {
   if (!button) return;
   document.querySelectorAll(".page").forEach(node => { node.hidden = node.id !== id; });
   document.querySelectorAll("[data-page]").forEach(node => node.setAttribute("aria-current", node === button ? "page" : "false"));
-  $("page-title").textContent = button.textContent;
+  $("page-title").textContent = button.querySelector("span").textContent;
   status();
 }
 document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => page(button.dataset.page)));
@@ -79,28 +91,45 @@ function render() {
   for (const key of ["timeout", "search_ttl", "fetch_ttl"]) {
     $(key).value = settings[key]; $(key).disabled = settings.locked.includes(key);
   }
-  $("preferred").replaceChildren(new Option("Default order", ""));
-  for (const p of providers.filter(p => p.kind === "general")) $("preferred").append(new Option(p.id, p.id));
-  $("preferred").value = settings.preferred || "";
-  $("preferred").disabled = settings.locked.includes("preferred");
+  const preferred = $("preferred");
+  preferred.replaceChildren();
+  for (const id of ["", ...providers.filter(p => p.kind === "general").map(p => p.id)]) {
+    const label = element("label", "", "radio-option");
+    const radio = document.createElement("input");
+    radio.type = "radio"; radio.name = "preferred-engine"; radio.value = id;
+    radio.checked = id === (settings.preferred || "");
+    label.append(radio, element("span", id || "Default order"));
+    preferred.append(label);
+    radio.addEventListener("change", () => {
+      $("preferred-label").textContent = id || "Default order";
+      $("preferred-picker").open = false;
+      $("preferred-label").focus();
+    });
+  }
+  $("preferred-label").textContent = settings.preferred || "Default order";
+  $("preferred-field").disabled = settings.locked.includes("preferred");
+  $("preferred-picker").open = false;
   const list = $("provider-list"), choices = $("choices");
   list.replaceChildren(); choices.replaceChildren();
   for (const p of providers) {
-    const article = element("article", "", "card");
+    const article = element("article", "", "provider-row");
     const head = element("div", "", "provider-head");
     head.append(element("h3", p.id), element("span", p.available ? "Available" : p.enabled ? "Setup required" : "Disabled", "badge" + (p.available ? " ready" : "")));
     article.append(head, element("p", p.description, "muted"));
     const form = element("form", "", "provider-actions");
-    const label = element("label", "Enabled"), toggle = document.createElement("input");
-    toggle.type = "checkbox"; toggle.checked = p.enabled; label.prepend(toggle); form.append(label);
+    const label = element("label", "Enabled", "switch-label"), toggle = document.createElement("input");
+    toggle.type = "checkbox"; toggle.setAttribute("role", "switch"); toggle.className = "switch";
+    toggle.checked = p.enabled; label.prepend(toggle); form.append(label);
     let input = null;
     if (p.editable && !p.managed) {
       input = document.createElement("input"); input.type = "password"; input.autocomplete = "new-password"; input.maxLength = 4096;
       input.placeholder = p.credential ? "Replace stored key" : "Enter API key";
-      input.setAttribute("aria-label", p.id + " API key"); form.append(input);
+      const keyLabel = element("label", p.id + " API key", "key-field");
+      input.setAttribute("aria-label", p.id + " API key"); keyLabel.append(input); form.append(keyLabel);
     }
-    const save = element("button", "Save", "primary"); save.type = "submit"; form.append(save);
+    const save = element("button", "Save", "tonal"); save.type = "submit"; form.append(save);
     async function update(remove = false) {
+      if (save.disabled) return;
       save.disabled = true;
       try {
         const data = { enabled: toggle.checked };
@@ -113,14 +142,16 @@ function render() {
     }
     form.addEventListener("submit", event => { event.preventDefault(); update(); });
     if (p.editable && p.credential && !p.managed) {
-      const remove = element("button", "Remove key"); remove.type = "button";
-      remove.addEventListener("click", () => { if (confirm("Remove this stored API key?")) update(true); });
+      const remove = element("button", "Remove key", "danger"); remove.type = "button";
+      remove.addEventListener("click", async () => {
+        if (await confirmAction("Remove API key", "The stored key for " + p.id + " will be deleted.", "Remove key")) update(true);
+      });
       form.append(remove);
     }
     if (p.managed || (p.env && !p.editable)) article.append(element("p", "Configured via " + p.env + " (environment only).", "muted"));
     article.append(form); list.append(article);
     if (p.available && p.kind === "general") {
-      const label = element("label", p.id), check = document.createElement("input");
+      const label = element("label", p.id, "choice-chip"), check = document.createElement("input");
       check.type = "checkbox"; check.value = p.id; check.checked = ["keenable", "freeserp"].includes(p.id); label.prepend(check); choices.append(label);
     }
   }
@@ -156,12 +187,12 @@ $("search-form").addEventListener("submit", async event => {
   } catch (error) { status(error.message, true); } finally { button.disabled = false; }
 });
 $("prune").addEventListener("click", async () => {
-  if (!confirm("Prune expired and corrupt cache entries?")) return;
+  if (!await confirmAction("Prune cache", "Expired and corrupt cache entries will be removed.", "Prune cache")) return;
   try { await api("cache/prune", "POST"); await refresh(); status("Cache pruned."); }
   catch (error) { status(error.message, true); }
 });
 $("clear-cache").addEventListener("click", async () => {
-  if (!confirm("Clear all search and fetch cache entries?")) return;
+  if (!await confirmAction("Clear cache", "All search and fetch cache entries will be removed. Future searches may take longer.", "Clear cache")) return;
   try { await api("cache/clear", "POST", { namespace: "all", confirm: true }); await refresh(); status("Cache cleared."); }
   catch (error) { status(error.message, true); }
 });
@@ -171,7 +202,7 @@ $("settings-form").addEventListener("submit", async event => {
   for (const key of ["timeout", "search_ttl", "fetch_ttl"]) {
     if (!$(key).disabled) data[key] = Number($(key).value);
   }
-  if (!$("preferred").disabled) data.preferred = $("preferred").value || null;
+  if (!$("preferred-field").disabled) data.preferred = $("preferred").querySelector("input:checked")?.value || null;
   try { await api("settings", "PUT", data); await refresh(); status("Settings saved."); }
   catch (error) { status(error.message, true); }
 });

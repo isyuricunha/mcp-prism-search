@@ -159,7 +159,7 @@ allowlists. See [deployment and operations](docs/deployment.md).
 
 ## Optional web dashboard
 
-A lightweight Astro dashboard using YuTheme (Dark/Eclipse by default,
+A lightweight Astro dashboard using YuTheme (Dark (charcoal/teal) by default,
 White optional). It is disabled by default and is never required by an MCP
 client. The production container serves static assets with Python; Node.js
 is used only during the image build.
