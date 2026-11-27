@@ -288,3 +288,23 @@ def test_invalid_log_level(monkeypatch):
     monkeypatch.setenv("MCP_LOG_LEVEL", " unsupported ")
     with pytest.raises(RuntimeError, match="accepted values"):
         _validated_log_level()
+
+
+def test_health_and_lifespan_auth():
+    calls = []
+
+    async def app(scope, receive, send):
+        calls.append((scope["type"], scope.get("path")))
+
+    async def unused(*args):
+        pytest.fail("unexpected authentication response")
+
+    async def verify():
+        middleware = BearerTokenAuthMiddleware(app, "fixture-token")
+        await middleware({"type": "http", "path": "/health"}, unused, unused)
+        await middleware({"type": "lifespan"}, unused, unused)
+        with pytest.raises(RuntimeError, match="refuses"):
+            await middleware({"type": "websocket"}, unused, unused)
+
+    asyncio.run(verify())
+    assert calls == [("http", "/health"), ("lifespan", None)]
