@@ -114,6 +114,17 @@ try{
  await page.keyboard.press("Escape");
  await page.getByRole("dialog").waitFor({state:"hidden"});
  assert.equal(updates,1);
+ // An environment lock arriving during a draft must win over the stale toggle.
+ await row.getByRole("switch").check();
+ await row.locator("input[type=password]").fill("draft-key");
+ const tiny=data.providers.find(p=>p.id==="tinyfish");
+ tiny.enabled_locked=true;
+ await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
+ assert.equal(await row.getByRole("switch").isChecked(),false);
+ assert.equal(await row.getByRole("switch").isDisabled(),true);
+ assert.equal(await row.locator("input[type=password]").inputValue(),"draft-key");
+ await row.locator("input[type=password]").fill("");
+ tiny.enabled_locked=false;
  await nav("Settings");await page.locator("#timeout").fill("23");
  await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
  assert.equal(await page.locator("#timeout").inputValue(),"23");

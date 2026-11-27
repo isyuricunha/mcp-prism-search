@@ -223,6 +223,7 @@ function draftFor(p) {
     providerDrafts.set(p.id,{enabled:p.enabled,baseline:p.enabled,credential:""});
   }
   const draft = providerDrafts.get(p.id);
+  if(p.enabled_locked){draft.enabled=p.enabled;draft.baseline=p.enabled;}
   if (!p.editable || p.managed) draft.credential = "";
   return draft;
 }
