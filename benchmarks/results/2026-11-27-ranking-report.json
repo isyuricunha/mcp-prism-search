@@ -1,0 +1,183 @@
+{
+  "development": {
+    "fallback/keenable_first": {
+      "mrr10": 0.773333,
+      "target_ndcg10": 0.80996,
+      "hit1": 0.68,
+      "hit5": 0.88,
+      "hit10": 0.92
+    },
+    "fallback/youcom_first": {
+      "mrr10": 0.863492,
+      "target_ndcg10": 0.895849,
+      "hit1": 0.8,
+      "hit5": 0.92,
+      "hit10": 1
+    },
+    "freeserp/current": {
+      "mrr10": 0.18,
+      "target_ndcg10": 0.205237,
+      "hit1": 0.12,
+      "hit5": 0.28,
+      "hit10": 0.28
+    },
+    "freeserp/original": {
+      "mrr10": 0.179667,
+      "target_ndcg10": 0.202341,
+      "hit1": 0.16,
+      "hit5": 0.2,
+      "hit10": 0.28
+    },
+    "fusion/current": {
+      "mrr10": 0.395873,
+      "target_ndcg10": 0.501606,
+      "hit1": 0.2,
+      "hit5": 0.6,
+      "hit10": 0.84
+    },
+    "fusion/round_robin": {
+      "mrr10": 0.773333,
+      "target_ndcg10": 0.810474,
+      "hit1": 0.68,
+      "hit5": 0.92,
+      "hit10": 0.92
+    },
+    "fusion/rrf60": {
+      "mrr10": 0.736,
+      "target_ndcg10": 0.781423,
+      "hit1": 0.64,
+      "hit5": 0.92,
+      "hit10": 0.92
+    },
+    "keenable/current": {
+      "mrr10": 0.518333,
+      "target_ndcg10": 0.612432,
+      "hit1": 0.36,
+      "hit5": 0.72,
+      "hit10": 0.92
+    },
+    "keenable/original": {
+      "mrr10": 0.773333,
+      "target_ndcg10": 0.80996,
+      "hit1": 0.68,
+      "hit5": 0.88,
+      "hit10": 0.92
+    },
+    "youcom_keyless/current": {
+      "mrr10": 0.463492,
+      "target_ndcg10": 0.524345,
+      "hit1": 0.36,
+      "hit5": 0.56,
+      "hit10": 0.72
+    },
+    "youcom_keyless/original": {
+      "mrr10": 0.603492,
+      "target_ndcg10": 0.630612,
+      "hit1": 0.56,
+      "hit5": 0.64,
+      "hit10": 0.72
+    }
+  },
+  "holdout": {
+    "fallback/keenable_first": {
+      "mrr10": 0.626095,
+      "target_ndcg10": 0.697544,
+      "hit1": 0.48,
+      "hit5": 0.84,
+      "hit10": 0.92
+    },
+    "fallback/youcom_first": {
+      "mrr10": 0.733048,
+      "target_ndcg10": 0.777835,
+      "hit1": 0.64,
+      "hit5": 0.84,
+      "hit10": 0.92
+    },
+    "freeserp/current": {
+      "mrr10": 0.425714,
+      "target_ndcg10": 0.449045,
+      "hit1": 0.36,
+      "hit5": 0.48,
+      "hit10": 0.52
+    },
+    "freeserp/original": {
+      "mrr10": 0.408,
+      "target_ndcg10": 0.436423,
+      "hit1": 0.32,
+      "hit5": 0.52,
+      "hit10": 0.52
+    },
+    "fusion/current": {
+      "mrr10": 0.531333,
+      "target_ndcg10": 0.587898,
+      "hit1": 0.4,
+      "hit5": 0.72,
+      "hit10": 0.76
+    },
+    "fusion/round_robin": {
+      "mrr10": 0.63,
+      "target_ndcg10": 0.683413,
+      "hit1": 0.48,
+      "hit5": 0.84,
+      "hit10": 0.84
+    },
+    "fusion/rrf60": {
+      "mrr10": 0.7,
+      "target_ndcg10": 0.735712,
+      "hit1": 0.6,
+      "hit5": 0.84,
+      "hit10": 0.84
+    },
+    "keenable/current": {
+      "mrr10": 0.576111,
+      "target_ndcg10": 0.659857,
+      "hit1": 0.4,
+      "hit5": 0.8,
+      "hit10": 0.92
+    },
+    "keenable/original": {
+      "mrr10": 0.626095,
+      "target_ndcg10": 0.697544,
+      "hit1": 0.48,
+      "hit5": 0.84,
+      "hit10": 0.92
+    },
+    "youcom_keyless/current": {
+      "mrr10": 0.484,
+      "target_ndcg10": 0.530739,
+      "hit1": 0.4,
+      "hit5": 0.6,
+      "hit10": 0.68
+    },
+    "youcom_keyless/original": {
+      "mrr10": 0.604,
+      "target_ndcg10": 0.622037,
+      "hit1": 0.56,
+      "hit5": 0.64,
+      "hit10": 0.68
+    }
+  },
+  "availability": {
+    "keenable": {
+      "n": 50,
+      "ok": 50,
+      "p50_ms": 544.57,
+      "p95_ms": 913.26,
+      "p99_ms": 1105.32
+    },
+    "freeserp": {
+      "n": 50,
+      "ok": 50,
+      "p50_ms": 1072.4,
+      "p95_ms": 3491.75,
+      "p99_ms": 4501.04
+    },
+    "youcom_keyless": {
+      "n": 50,
+      "ok": 36,
+      "p50_ms": 1085.68,
+      "p95_ms": 1307.46,
+      "p99_ms": 1436.68
+    }
+  }
+}

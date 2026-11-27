@@ -21,7 +21,7 @@ extracted text. No model provider or LLM subscription is required.
 [Quick start](#quick-start) · [Search modes](#search-modes) ·
 [Providers](#providers) · [Tools](#tools) · [Server defaults](docs/defaults.md) ·
 [Web dashboard](#optional-web-dashboard) · [Agent setup prompt](#agent-setup-prompt) ·
-[Documentation](#documentation)
+[Benchmarks](#benchmarks) · [Documentation](#documentation)
 
 ## Why Prism Search?
 
@@ -50,6 +50,44 @@ flowchart LR
     S <--> T["TTL cache"]
     F <--> T
 ```
+
+## Benchmarks
+
+Quality and performance are measured independently. The reproducible
+[benchmark suite](benchmarks/README.md) includes a fixed 50-query corpus
+(English and Portuguese), captured-response replay, rank comparisons and
+network-isolated MCP load tests.
+
+**2026-11-27 — relevance evaluation (150 live keyless provider requests):**
+
+| Ranking | MRR@10 (50 queries) | Target found in top 10 |
+|---|---:|---:|
+| Previous multi-provider lexical ranking | 0.464 | 80% |
+| Reciprocal Rank Fusion (RRF, k=60) | **0.718** | **88%** |
+
+On the designated 25-query validation split, RRF improved MRR from 0.531
+to 0.700 (+31.7%). Single-provider searches now preserve upstream order;
+RRF combines independent provider rankings. Explicit domain filters and
+preferred domains remain authoritative.
+
+**MCP load test** (synthetic 20 ms single-provider fixture,
+2 CPU cores, 512 MiB limit, no network):
+
+| Metric | Previous ranking | New ranking |
+|---|---:|---:|
+| Successful requests | 960 / 960 | 960 / 960 |
+| Peak cgroup memory | 69.21 MiB | 69.40 MiB |
+| Max cold throughput | 171.27 req/s | 224.27 req/s |
+| Max warm throughput | 278.59 req/s | 339.41 req/s |
+| Cache hits on repeated requests | 480 / 480 | 480 / 480 |
+
+One run per build: the observed throughput improvement is not a controlled
+multi-run estimate. This single-provider fixture does not measure RRF cost.
+
+These are dated measurements, not performance guarantees. The relevance
+corpus measures known-source retrieval, not exhaustive semantic relevance.
+See [methodology and results](benchmarks/README.md) for per-provider scores,
+limitations, raw aggregate JSON and reproduction instructions.
 
 ## Quick start
 

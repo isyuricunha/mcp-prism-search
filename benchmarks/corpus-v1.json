@@ -1,0 +1,452 @@
+[
+  {
+    "id": "python-task",
+    "query": "Python asyncio TaskGroup documentation",
+    "host": "docs.python.org",
+    "path_contains": "/library/asyncio-task",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "docker-order",
+    "query": "Docker Compose startup order depends_on",
+    "host": "docs.docker.com",
+    "path_contains": "/compose/how-tos/startup-order",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "postgres-index",
+    "query": "PostgreSQL 17 CREATE INDEX documentation",
+    "host": "postgresql.org",
+    "path_contains": "/docs/17/sql-createindex",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "git-rebase",
+    "query": "Git rebase official manual",
+    "host": "git-scm.com",
+    "path_contains": "/docs/git-rebase",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "mdn-abort",
+    "query": "JavaScript AbortController MDN",
+    "host": "developer.mozilla.org",
+    "path_contains": "/AbortController",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "systemd",
+    "query": "systemd.service manual",
+    "host": "freedesktop.org",
+    "path_contains": "/systemd.service",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "ibge-sbc",
+    "query": "IBGE São Bernardo do Campo panorama",
+    "host": "ibge.gov.br",
+    "path_contains": "sao-bernardo-do-campo",
+    "language": "pt",
+    "category": "public",
+    "split": "development"
+  },
+  {
+    "id": "cpf",
+    "query": "Receita Federal comprovante inscrição CPF",
+    "host": "gov.br",
+    "path_contains": "cpf",
+    "language": "pt",
+    "category": "public",
+    "split": "holdout"
+  },
+  {
+    "id": "rust-book",
+    "query": "Rust ownership chapter the book",
+    "host": "doc.rust-lang.org",
+    "path_contains": "/book/ch04",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "go-context",
+    "query": "Go context package reference",
+    "host": "pkg.go.dev",
+    "path_contains": "/context",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "kube-probes",
+    "query": "Kubernetes liveness readiness startup probes",
+    "host": "kubernetes.io",
+    "path_contains": "/configure-liveness-readiness-startup-probes",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "sqlite-wal",
+    "query": "SQLite write ahead logging documentation",
+    "host": "sqlite.org",
+    "path_contains": "/wal.html",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "redis-expire",
+    "query": "Redis EXPIRE command documentation",
+    "host": "redis.io",
+    "path_contains": "/commands/expire",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "nginx-proxy",
+    "query": "nginx HTTP proxy module proxy_pass",
+    "host": "nginx.org",
+    "path_contains": "ngx_http_proxy_module",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "linux-cgroup",
+    "query": "Linux kernel cgroup v2 documentation",
+    "host": "kernel.org",
+    "path_contains": "cgroup-v2",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "rfc-http",
+    "query": "RFC 9110 HTTP semantics",
+    "host": "rfc-editor.org",
+    "path_contains": "rfc9110",
+    "language": "en",
+    "category": "standards",
+    "split": "holdout"
+  },
+  {
+    "id": "rfc-json",
+    "query": "RFC 8259 JSON data interchange format",
+    "host": "rfc-editor.org",
+    "path_contains": "rfc8259",
+    "language": "en",
+    "category": "standards",
+    "split": "development"
+  },
+  {
+    "id": "w3c-wcag",
+    "query": "WCAG 2.2 W3C recommendation",
+    "host": "w3.org",
+    "path_contains": "WCAG22",
+    "language": "en",
+    "category": "standards",
+    "split": "holdout"
+  },
+  {
+    "id": "mcp-transport",
+    "query": "Model Context Protocol specification transports",
+    "host": "modelcontextprotocol.io",
+    "path_contains": "transports",
+    "language": "en",
+    "category": "standards",
+    "split": "development"
+  },
+  {
+    "id": "otel-traces",
+    "query": "OpenTelemetry trace specification",
+    "host": "opentelemetry.io",
+    "path_contains": "/specification/trace",
+    "language": "en",
+    "category": "standards",
+    "split": "holdout"
+  },
+  {
+    "id": "nasa-mars",
+    "query": "NASA Mars facts planet",
+    "host": "science.nasa.gov",
+    "path_contains": "/mars",
+    "language": "en",
+    "category": "science",
+    "split": "development"
+  },
+  {
+    "id": "nasa-jupiter",
+    "query": "NASA Jupiter facts",
+    "host": "science.nasa.gov",
+    "path_contains": "/jupiter",
+    "language": "en",
+    "category": "science",
+    "split": "holdout"
+  },
+  {
+    "id": "cern-higgs",
+    "query": "CERN Higgs boson explanation",
+    "host": "home.cern",
+    "path_contains": "higgs-boson",
+    "language": "en",
+    "category": "science",
+    "split": "development"
+  },
+  {
+    "id": "nist-time",
+    "query": "NIST atomic clocks time frequency",
+    "host": "nist.gov",
+    "path_contains": "time",
+    "language": "en",
+    "category": "science",
+    "split": "holdout"
+  },
+  {
+    "id": "who-malaria",
+    "query": "WHO malaria fact sheet",
+    "host": "who.int",
+    "path_contains": "/fact-sheets/detail/malaria",
+    "language": "en",
+    "category": "science",
+    "split": "development"
+  },
+  {
+    "id": "unicef-water",
+    "query": "UNICEF water sanitation hygiene WASH",
+    "host": "unicef.org",
+    "path_contains": "water-sanitation-and-hygiene",
+    "language": "en",
+    "category": "public",
+    "split": "holdout"
+  },
+  {
+    "id": "worldbank-gdp",
+    "query": "World Bank GDP current US dollars indicator",
+    "host": "data.worldbank.org",
+    "path_contains": "NY.GDP.MKTP.CD",
+    "language": "en",
+    "category": "public",
+    "split": "development"
+  },
+  {
+    "id": "un-sdg",
+    "query": "United Nations sustainable development goals",
+    "host": "sdgs.un.org",
+    "path_contains": "/goals",
+    "language": "en",
+    "category": "public",
+    "split": "holdout"
+  },
+  {
+    "id": "ibge-pop",
+    "query": "IBGE população Brasil projeção população",
+    "host": "ibge.gov.br",
+    "path_contains": "populacao",
+    "language": "pt",
+    "category": "public",
+    "split": "development"
+  },
+  {
+    "id": "bcb-pix",
+    "query": "Banco Central Pix como funciona",
+    "host": "bcb.gov.br",
+    "path_contains": "pix",
+    "language": "pt",
+    "category": "public",
+    "split": "holdout"
+  },
+  {
+    "id": "bcb-selic",
+    "query": "Banco Central taxa Selic",
+    "host": "bcb.gov.br",
+    "path_contains": "selic",
+    "language": "pt",
+    "category": "public",
+    "split": "development"
+  },
+  {
+    "id": "sus",
+    "query": "Ministério da Saúde Sistema Único de Saúde SUS",
+    "host": "gov.br",
+    "path_contains": "sus",
+    "language": "pt",
+    "category": "public",
+    "split": "holdout"
+  },
+  {
+    "id": "inpe-queimadas",
+    "query": "INPE programa queimadas portal",
+    "host": "inpe.br",
+    "path_contains": "queimadas",
+    "language": "pt",
+    "category": "science",
+    "split": "development"
+  },
+  {
+    "id": "embrapa-solo",
+    "query": "Embrapa conservação do solo",
+    "host": "embrapa.br",
+    "path_contains": "solo",
+    "language": "pt",
+    "category": "science",
+    "split": "holdout"
+  },
+  {
+    "id": "fiocruz-dengue",
+    "query": "Fiocruz dengue prevenção",
+    "host": "fiocruz.br",
+    "path_contains": "dengue",
+    "language": "pt",
+    "category": "science",
+    "split": "development"
+  },
+  {
+    "id": "python-pt",
+    "query": "Python documentação português tutorial estruturas de dados",
+    "host": "docs.python.org",
+    "path_contains": "/pt-br/",
+    "language": "pt",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "mdn-pt",
+    "query": "MDN português JavaScript Array map",
+    "host": "developer.mozilla.org",
+    "path_contains": "/pt-BR/",
+    "language": "pt",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "ubuntu-release",
+    "query": "Ubuntu release cycle LTS",
+    "host": "ubuntu.com",
+    "path_contains": "/about/release-cycle",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "debian-stable",
+    "query": "Debian stable releases",
+    "host": "debian.org",
+    "path_contains": "/releases/stable",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "fedora-docs",
+    "query": "Fedora upgrade system documentation",
+    "host": "docs.fedoraproject.org",
+    "path_contains": "upgrade",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "ansible-inventory",
+    "query": "Ansible building inventory documentation",
+    "host": "docs.ansible.com",
+    "path_contains": "intro_inventory",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "prometheus-metrics",
+    "query": "Prometheus metric types documentation",
+    "host": "prometheus.io",
+    "path_contains": "metric_types",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "grafana-dashboards",
+    "query": "Grafana dashboards documentation",
+    "host": "grafana.com",
+    "path_contains": "/dashboards",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "pandas-merge",
+    "query": "pandas DataFrame merge documentation",
+    "host": "pandas.pydata.org",
+    "path_contains": "merge",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "numpy-broadcast",
+    "query": "NumPy broadcasting user guide",
+    "host": "numpy.org",
+    "path_contains": "broadcasting",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "scipy-optimize",
+    "query": "SciPy optimize minimize reference",
+    "host": "docs.scipy.org",
+    "path_contains": "optimize.minimize",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "pytorch-dataloader",
+    "query": "PyTorch DataLoader documentation",
+    "host": "docs.pytorch.org",
+    "path_contains": "/data.html",
+    "language": "en",
+    "category": "engineering",
+    "split": "development"
+  },
+  {
+    "id": "godot-scenes",
+    "query": "Godot documentation nodes and scenes",
+    "host": "docs.godotengine.org",
+    "path_contains": "nodes_and_scenes",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  },
+  {
+    "id": "creativecommons",
+    "query": "Creative Commons Attribution 4.0 license",
+    "host": "creativecommons.org",
+    "path_contains": "/licenses/by/4.0",
+    "language": "en",
+    "category": "standards",
+    "split": "development"
+  },
+  {
+    "id": "wikipedia-api",
+    "query": "MediaWiki Action API search documentation",
+    "host": "mediawiki.org",
+    "path_contains": "API:Search",
+    "language": "en",
+    "category": "engineering",
+    "split": "holdout"
+  }
+]

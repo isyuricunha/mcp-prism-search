@@ -12,7 +12,10 @@
   concurrently. Unknown, unavailable or conflicting selections are errors.
 
 All modes enforce domain controls, validate HTTP(S) URLs, deduplicate and
-rank before truncating. Upstream support for recency and SafeSearch varies;
+truncate. Single-provider and fallback search preserve the upstream order.
+Parallel search combines ranks with unweighted Reciprocal Rank Fusion
+(k=60), one vote per normalized URL per provider. Explicit preferred domains
+remain a final stable partition. See the [benchmark suite](../benchmarks/README.md). Upstream support for recency and SafeSearch varies;
 those filters are not guaranteed by engines without native support.
 Each provider gets the configured DDG_TIMEOUT_SECONDS budget; parallel
 calls are bounded by that budget, except unavoidable synchronous worker

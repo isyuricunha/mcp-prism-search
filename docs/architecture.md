@@ -93,7 +93,11 @@ data and returns it verbatim to the client.
 ## Aggregated search
 
 See [provider policy](providers.md) for modes, provider selection, timeout,
-cache and filtering semantics. Legacy DuckDuckGo behavior below is unchanged.
+cache and filtering semantics. Aggregated search preserves provider ordering
+for individual and fallback calls; parallel calls use reciprocal rank fusion
+(k=60). Duplicate descriptions may be improved without moving the document.
+The cache key version changes when ranking behavior changes. Legacy DuckDuckGo
+behavior below is unchanged.
 
 ## Cache design
 

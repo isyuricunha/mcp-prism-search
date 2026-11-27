@@ -8,6 +8,7 @@ import inspect
 import logging
 import os
 import re
+from collections import defaultdict
 from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -523,7 +524,7 @@ async def _search_one(
         if raw is None:
             async with asyncio.timeout(timeout):
                 raw = await run_provider(name, request, count, timeout)
-        valid = rank_results(raw, request.query)
+        valid = provider_order_results(raw, request.query)
         filtered = apply_domain_controls(
             valid,
             get_url=lambda item: item.url,
@@ -567,6 +568,39 @@ def _final_results(results: list[SearchResult], request: SearchRequest) -> list[
         "snippet": row.snippet[:MAX_RESULT_SNIPPET].rstrip(),
     }) for row in results if isinstance(row, SearchResult)]
     return apply_search_domain_controls(rank_results(bounded, request.query), request)
+
+
+def provider_order_results(results: list[SearchResult], query: str) -> list[SearchResult]:
+    """Preserve upstream positions; select better text only within duplicate URLs."""
+    groups: dict[str, list[SearchResult]] = {}
+    for row in results:
+        if isinstance(row, SearchResult) and row.title.strip() and valid_result_url(row.url):
+            groups.setdefault(normalize_url_for_dedupe(row.url), []).append(row)
+    return [rank_results(group, query)[0] if len(group) > 1 else group[0]
+            for group in groups.values()]
+
+
+def reciprocal_rank_fusion(batches: list[list[SearchResult]]) -> list[SearchResult]:
+    """Unweighted RRF (SIGIR 2009, k=60); at most one vote per provider per URL."""
+    scores: dict[str, float] = defaultdict(float)
+    documents: dict[str, SearchResult] = {}
+    for batch in batches:
+        for rank, row in enumerate(_dedupe_results(batch), 1):
+            key = normalize_url_for_dedupe(row.url)
+            scores[key] += 1 / (60 + rank)
+            documents.setdefault(key, row)
+    # Stable ties follow first occurrence in the requested provider order.
+    return [documents[key] for key in sorted(scores, key=lambda key: -scores[key])]
+
+
+def _ordered_final_results(
+    results: list[SearchResult], request: SearchRequest,
+) -> list[SearchResult]:
+    bounded = [row.model_copy(update={
+        "title": row.title[:MAX_RESULT_TITLE].rstrip(),
+        "snippet": row.snippet[:MAX_RESULT_SNIPPET].rstrip(),
+    }) for row in results if isinstance(row, SearchResult)]
+    return apply_search_domain_controls(_dedupe_results(bounded), request)
 
 
 async def aggregated_search(
@@ -661,7 +695,7 @@ async def aggregated_search(
 
     parallel = provider == "all" or providers is not None
     payload = request.to_cache_payload(
-        _aggregator_version=3, _mode=mode, _kind=kind,
+        _aggregator_version=4, _mode=mode, _kind=kind,
         _providers=sorted(chain) if mode in {"auto", "keyless"} else chain,
     )
     # A cached retrieval-only winner must not suppress the requested AI preference.
@@ -674,7 +708,7 @@ async def aggregated_search(
             if (result.query.strip() == request.query and result.results
                     and not result.error and not result.answers and not result.answer_attempts
                     and result.provider in {*chain, mode}
-                    and _final_results(result.results, request) == result.results):
+                    and _ordered_final_results(result.results, request) == result.results):
                 runtime.record_cache(True)
                 return result
             cache.delete(payload)
@@ -692,9 +726,7 @@ async def aggregated_search(
             *(run_one(name, count, timeout) for name in chain)
         )
         attempts.extend(status for _, status in batches)
-        # Interleave before stable ranking so tied scores preserve source diversity.
-        for index in range(max((len(rows) for rows, _ in batches), default=0)):
-            merged.extend(rows[index] for rows, _ in batches if index < len(rows))
+        merged = reciprocal_rank_fusion([rows for rows, _ in batches])
     else:
         for name in chain:
             rows, status = await run_one(name, count, timeout)
@@ -704,7 +736,7 @@ async def aggregated_search(
                 actual = name
                 break
 
-    results = _final_results(merged, request)
+    results = _ordered_final_results(merged, request)
     answer_status = {n: answer_status[n] for n in chain if n in answer_status}
     result = response(
         results, None if results else "; ".join(attempts) or "No search results", actual

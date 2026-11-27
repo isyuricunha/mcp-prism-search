@@ -1,0 +1,62 @@
+{
+  "development": {
+    "keenable": {
+      "mrr10": 0.773333,
+      "target_ndcg10": 0.80996,
+      "hit1": 0.68,
+      "hit5": 0.88,
+      "hit10": 0.92
+    },
+    "freeserp": {
+      "mrr10": 0.179667,
+      "target_ndcg10": 0.202341,
+      "hit1": 0.16,
+      "hit5": 0.2,
+      "hit10": 0.28
+    },
+    "youcom_keyless": {
+      "mrr10": 0.603492,
+      "target_ndcg10": 0.630612,
+      "hit1": 0.56,
+      "hit5": 0.64,
+      "hit10": 0.72
+    },
+    "fusion": {
+      "mrr10": 0.736,
+      "target_ndcg10": 0.781423,
+      "hit1": 0.64,
+      "hit5": 0.92,
+      "hit10": 0.92
+    }
+  },
+  "holdout": {
+    "keenable": {
+      "mrr10": 0.626095,
+      "target_ndcg10": 0.697544,
+      "hit1": 0.48,
+      "hit5": 0.84,
+      "hit10": 0.92
+    },
+    "freeserp": {
+      "mrr10": 0.408,
+      "target_ndcg10": 0.436423,
+      "hit1": 0.32,
+      "hit5": 0.52,
+      "hit10": 0.52
+    },
+    "youcom_keyless": {
+      "mrr10": 0.604,
+      "target_ndcg10": 0.622037,
+      "hit1": 0.56,
+      "hit5": 0.64,
+      "hit10": 0.68
+    },
+    "fusion": {
+      "mrr10": 0.7,
+      "target_ndcg10": 0.735712,
+      "hit1": 0.6,
+      "hit5": 0.84,
+      "hit10": 0.84
+    }
+  }
+}

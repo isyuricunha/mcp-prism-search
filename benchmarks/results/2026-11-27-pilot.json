@@ -1,0 +1,155 @@
+{
+  "image": "mcp-prism-search:audit100-nov27-verified",
+  "summary": {
+    "keenable": {
+      "n": 8,
+      "ok": 8,
+      "p50_ms": 738.84,
+      "p95_ms": 1116.87,
+      "p99_ms": 1116.87,
+      "target_hit": 7,
+      "target_mrr": 0.45,
+      "mean_results": 5
+    },
+    "freeserp": {
+      "n": 8,
+      "ok": 8,
+      "p50_ms": 1801.98,
+      "p95_ms": 3067.15,
+      "p99_ms": 3067.15,
+      "target_hit": 1,
+      "target_mrr": 0.125,
+      "mean_results": 5
+    },
+    "bing_rss": {
+      "n": 8,
+      "ok": 4,
+      "p50_ms": 1131.32,
+      "p95_ms": 1603.89,
+      "p99_ms": 1603.89,
+      "target_hit": 0,
+      "target_mrr": 0,
+      "mean_results": 2.5
+    },
+    "ddgs:yahoo": {
+      "n": 8,
+      "ok": 5,
+      "p50_ms": 1322.18,
+      "p95_ms": 1549.14,
+      "p99_ms": 1549.14,
+      "target_hit": 4,
+      "target_mrr": 0.375,
+      "mean_results": 3.12
+    },
+    "mwmbl": {
+      "n": 8,
+      "ok": 8,
+      "p50_ms": 1093.02,
+      "p95_ms": 1476.13,
+      "p99_ms": 1476.13,
+      "target_hit": 2,
+      "target_mrr": 0.25,
+      "mean_results": 4.25
+    },
+    "ddg_html": {
+      "n": 8,
+      "ok": 0,
+      "p50_ms": 1169.85,
+      "p95_ms": 1196.26,
+      "p99_ms": 1196.26,
+      "target_hit": 0,
+      "target_mrr": 0,
+      "mean_results": 0
+    },
+    "youcom_keyless": {
+      "n": 8,
+      "ok": 8,
+      "p50_ms": 1571.52,
+      "p95_ms": 1933.35,
+      "p99_ms": 1933.35,
+      "target_hit": 6,
+      "target_mrr": 0.594,
+      "mean_results": 5
+    },
+    "keyless": {
+      "n": 8,
+      "ok": 8,
+      "p50_ms": 720.47,
+      "p95_ms": 841.89,
+      "p99_ms": 841.89,
+      "target_hit": 7,
+      "target_mrr": 0.45,
+      "mean_results": 5
+    },
+    "selected": {
+      "n": 8,
+      "ok": 8,
+      "p50_ms": 1489.49,
+      "p95_ms": 1730.94,
+      "p99_ms": 1730.94,
+      "target_hit": 7,
+      "target_mrr": 0.487,
+      "mean_results": 5
+    }
+  },
+  "warm": [
+    {
+      "case": "py",
+      "ms": 8.23,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "docker",
+      "ms": 10.74,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "postgres",
+      "ms": 7.31,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "git",
+      "ms": 9.49,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "mdn",
+      "ms": 7.79,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "linux",
+      "ms": 9.07,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "br",
+      "ms": 8.21,
+      "cached": true,
+      "ok": true
+    },
+    {
+      "case": "pt",
+      "ms": 7.76,
+      "cached": true,
+      "ok": true
+    }
+  ],
+  "direct_youcom": {
+    "n": 8,
+    "ok": 8,
+    "p50_ms": 1053.34,
+    "p95_ms": 1542.21,
+    "p99_ms": 1542.21,
+    "target_hit": 6,
+    "target_mrr": 0.75,
+    "mean_results": 5
+  }
+}

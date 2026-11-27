@@ -394,3 +394,38 @@ def test_searxng_uses_same_configuration_source_as_registry(monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
         transport=httpx.MockTransport(response), **kw))
     assert asyncio.run(searxng.search(SearchRequest(query="test"), 5, 5)) == []
+
+
+
+def test_single_provider_order_survives_cache_and_domain_controls(registry, tmp_path):
+    register, calls = registry
+    first = result("https://a.test/ref", "Reference")
+    tempting = result("https://b.gov/needle", "needle")
+    register("keenable", [first, tempting])
+    cache = JsonFileCache(tmp_path, "search", 3600)
+    kwargs = dict(provider="keenable", cache=cache)
+    fresh = asyncio.run(search.aggregated_search("needle", **kwargs))
+    cached = asyncio.run(search.aggregated_search("needle", **kwargs))
+    assert fresh.results == cached.results == [first, tempting]
+    assert cached.cached and len(calls) == 1
+    preferred = asyncio.run(search.aggregated_search(
+        "needle", preferred_domains=["b.gov"], **kwargs))
+    assert preferred.results == [tempting, first]
+
+
+def test_rrf_consensus_and_stable_ties(registry, tmp_path):
+    register, calls = registry
+    a, b, c = [result(f"https://{name}.test/") for name in "abc"]
+    register("keenable", [a, c, c])
+    register("freeserp", [b, c])
+    cache = JsonFileCache(tmp_path, "search", 3600)
+    kwargs = dict(providers=["keenable", "freeserp"], cache=cache)
+    first = asyncio.run(search.aggregated_search("needle", **kwargs))
+    second = asyncio.run(search.aggregated_search("needle", **kwargs))
+    assert first.results == second.results == [c, a, b]
+    assert second.cached and len(calls) == 2
+
+
+def test_rrf_duplicate_within_provider_is_not_extra_vote():
+    a, b = [result(f"https://{name}.test/") for name in "ab"]
+    assert search.reciprocal_rank_fusion([[a, a, a, b], [b]]) == [b, a]
