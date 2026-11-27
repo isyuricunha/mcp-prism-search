@@ -506,9 +506,13 @@ async def _search_one(
                     answer_status[name] = "ok" if answer else "no answer returned"
                 except native.NativeError as exc:
                     answer_status[name] = str(exc)
-                # If combined retrieval failed or was empty, preserve ordinary search.
+                    # A failed combined call may already have consumed credits.
+                    # Never issue a second request to the same paid provider.
+                    record(name, None, "combined request failed")
+                    runtime.record_metric(name, "error", monotonic() - start)
+                    return [], f"{name}: error (combined request failed)"
                 if not raw:
-                    raw = None
+                    raw = []
         if raw is None:
             async with asyncio.timeout(timeout):
                 raw = await run_provider(name, request, count, timeout)

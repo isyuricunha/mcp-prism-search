@@ -97,8 +97,10 @@ def test_combined_degrades_without_losing_retrieval(configure, monkeypatch, brok
 
     mock_http(monkeypatch, handler)
     result = asyncio.run(search.aggregated_search("question", provider="tavily"))
-    assert not result.error and result.results and not result.answers
-    assert len(calls) == (2 if broken else 1)
+    assert bool(result.error) is broken
+    assert bool(result.results) is not broken
+    assert not result.answers
+    assert len(calls) == 1
     assert "HTTP 429" in result.answer_attempts[0] if broken else (
         "no answer" in result.answer_attempts[0]
     )
@@ -542,3 +544,17 @@ def test_native_json_depth_failure_is_sanitized(configure, monkeypatch):
         200, content=b"[" * 2000 + b"]" * 2000))
     with pytest.raises(native.NativeError, match="invalid or unavailable"):
         asyncio.run(native.synthesize("question", "exa", "answer", allow_cost=True))
+
+
+def test_combined_timeout_never_retries_same_paid_provider(configure, monkeypatch):
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        raise httpx.ReadTimeout("response lost after upstream execution")
+
+    mock_http(monkeypatch, handler)
+    result = asyncio.run(search.aggregated_search("question", provider="tavily"))
+    assert result.error and not result.results
+    assert result.answer_attempts == ["tavily: timeout"]
+    assert len(calls) == 1
