@@ -2,6 +2,7 @@
 import asyncio
 
 import httpx
+import pytest
 
 from mcp_prism_search.models import SearchRequest
 
@@ -43,3 +44,17 @@ def test_registered_ddgs_contract(monkeypatch):
         SearchRequest(query="needle", safe_search="strict", time_filter="week"), 2, 7))
     assert [(r.title, r.snippet) for r in rows] == [("A", "Evidence"), ("B", "Second")]
     assert calls == ["closed"]
+
+
+def test_ddgs_unregistered_backend(monkeypatch):
+    import ddgs
+
+    from mcp_prism_search.providers import ddgs_lib
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("Unsupported engine must not construct a client")
+
+    monkeypatch.setattr(ddgs, "DDGS", unexpected)
+    with pytest.raises(ValueError, match="Unsupported DDGS backend"):
+        asyncio.run(ddgs_lib.make_search("not-a-real-backend")(
+            SearchRequest(query="test"), 5, 7))
