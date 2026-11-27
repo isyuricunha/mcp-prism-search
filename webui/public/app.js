@@ -88,19 +88,20 @@ async function api(path, method = "GET", data) {
   return body;
 }
 async function confirmAction(title, description, label, destructive = true) {
-  const dialog = $("confirmation");
+  const dialog = $("confirmation"),epoch=authEpoch;
   if (dialog.open) return false;
   $("confirm-title").textContent = title; $("confirm-description").textContent = description;
   $("confirm-action").textContent = label;
   $("confirm-action").className = destructive ? "danger" : "primary";
   dialog.returnValue = "cancel";
   return new Promise(resolve => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+    dialog.addEventListener("close", () => resolve(epoch===authEpoch&&dialog.returnValue === "confirm"), { once: true });
     dialog.showModal();
   });
 }
 function showLogin() {
   authEpoch++;
+  if($("confirmation").open)$("confirmation").close("cancel");
   state = null; providerDrafts.clear(); providerMessages.clear(); providerPending.clear();
   settingsDirty = false; defaultsDirty = false;
   $("default-fields").replaceChildren(); resetSearchOptions(false);

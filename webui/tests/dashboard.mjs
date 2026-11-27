@@ -269,6 +269,17 @@ try{
  await page.goForward();await page.waitForFunction(()=>document.querySelector("#page-title").textContent==="Connection");
  await nav("Overview");if(process.env.PRISM_TEST_OUTPUT) await page.screenshot({path:path.join(process.env.PRISM_TEST_OUTPUT,"overview.png"),fullPage:true});
  await page.setViewportSize({width:375,height:812});await nav("Providers");if(process.env.PRISM_TEST_OUTPUT) await page.screenshot({path:path.join(process.env.PRISM_TEST_OUTPUT,"providers.png"),fullPage:true});
+ await nav("Cache");
+ await page.getByRole("button",{name:"Clear all cache",exact:true}).click();
+ await page.getByRole("dialog").waitFor({state:"visible"});
+ logged=false;
+ await page.evaluate(()=>refresh().catch(()=>{}));
+ await page.locator("#login").waitFor({state:"visible"});
+ assert.equal(await page.getByRole("dialog").isVisible(),false);
+ assert.equal(cleared,1);
+ await page.locator("#password").fill("test-only-password");
+ await page.getByRole("button",{name:"Sign in",exact:true}).click();
+ await page.locator("#dashboard").waitFor({state:"visible"});
  await page.locator("#logout").click();await page.locator("#login").waitFor({state:"visible"});
  await page.locator("#login-theme").click();await audit("login-white");
  assert.deepEqual(errors,[]);
