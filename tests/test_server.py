@@ -322,3 +322,14 @@ def test_webui_requires_http(monkeypatch, transport, enabled, expected):
     monkeypatch.setattr(server, "_prune_cache_on_startup", lambda: None)
     with pytest.raises(RuntimeError, match=expected):
         server._run()
+
+
+@pytest.mark.parametrize("port", ["8000", "0", "65536"])
+def test_invalid_dashboard_port(monkeypatch, port):
+    from mcp_prism_search import server
+
+    monkeypatch.setenv("MCP_PORT", "8000")
+    monkeypatch.setenv("MCP_WEBUI_ENABLED", "true")
+    monkeypatch.setenv("MCP_WEBUI_PORT", port)
+    with pytest.raises(RuntimeError, match="Invalid MCP_WEBUI_PORT"):
+        asyncio.run(server._serve_http(None, _configure_http_settings()))
