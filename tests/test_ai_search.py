@@ -715,3 +715,14 @@ def test_compact_answer_preserves_indices():
     assert [source.index for source in compact.sources] == list(range(5, 17))
     assert all(len(source.excerpt) == 500 for source in compact.sources)
     assert len(response.sources) == 15 and len(response.answer) == 6500
+
+
+@pytest.mark.parametrize("query,provider,mode", [
+    ("   ", "exa", "answer"), ("x" * 4001, "exa", "research"),
+    ("question", "jina", "answer"), ("question", "unknown", "answer"),
+    ("question", "exa", "invalid"),
+])
+def test_native_invalid_input_never_calls(configure, monkeypatch, query, provider, mode):
+    mock_http(monkeypatch, lambda req: pytest.fail("unexpected network request"))
+    with pytest.raises(native.NativeError):
+        asyncio.run(native.synthesize(query, provider, mode, allow_cost=True))
