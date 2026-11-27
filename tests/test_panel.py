@@ -459,3 +459,27 @@ def test_tinyfish_native_panel_explicit_only(panel, monkeypatch):
     assert client.put("/api/defaults", headers=HEADERS, json={"values": {
         "research_provider": "tinyfish", "research_effort": "deep",
     }}).status_code == 200
+
+
+def test_panel_accepts_full_unicode_query_in_escaped_json(panel, monkeypatch):
+    import json
+
+    from mcp_prism_search.models import SearchResponse
+
+    client, _, _ = panel
+    sign_in(client)
+
+    async def retrieve(query, **kwargs):
+        return SearchResponse(query=query, provider="keyless", results=[], cached=False, error=None)
+
+    monkeypatch.setattr("mcp_prism_search.panel.aggregated_search", retrieve)
+    query = chr(0x1F600) * 4000
+    encoded = json.dumps({"query": query, "mode": "keyless"}, ensure_ascii=True)
+    assert len(encoded) > 16384
+    response = client.post("/api/search", headers={
+        **HEADERS, "Content-Type": "Application/JSON; charset=utf-8",
+    }, content=encoded)
+    assert response.status_code == 200 and response.json()["query"] == query
+    assert client.post("/api/search", headers={
+        **HEADERS, "Content-Type": "application/json",
+    }, content=" " * 65537).status_code == 400

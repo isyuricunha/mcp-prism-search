@@ -33,7 +33,7 @@ from mcp_prism_search.version_info import build_info
 
 COOKIE = "prism_admin"
 SESSION_TTL = 8 * 3600
-MAX_BODY = 16384
+MAX_BODY = 65536
 SETTINGS_ENV = {
     "timeout": "DDG_TIMEOUT_SECONDS",
     "search_ttl": "DDG_CACHE_TTL_SECONDS",
@@ -102,7 +102,9 @@ def error(message: str, status: int = 400):
 
 
 async def body(request: Request, model):
-    if request.headers.get("content-type", "").split(";")[0] != "application/json":
+    if request.headers.get("content-type", "").split(";")[0].strip().lower() != (
+        "application/json"
+    ):
         raise ValueError("JSON required")
     data = bytearray()
     async for chunk in request.stream():
