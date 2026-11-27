@@ -383,3 +383,30 @@ def test_vertical_mcp_contract(monkeypatch, failed):
             assert result.is_error is failed
 
     asyncio.run(verify())
+
+
+def test_mcp_cache_prune_dry_run(monkeypatch, tmp_path):
+    import os
+    import time
+
+    from mcp import Client
+
+    monkeypatch.setenv("MCP_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("DDG_CACHE_TTL_SECONDS", "1")
+    namespace = tmp_path / "search"
+    namespace.mkdir()
+    stale = namespace / "entry.json"
+    stale.write_text("{}")
+    old = time.time() - 10
+    os.utime(stale, (old, old))
+
+    async def verify():
+        async with Client(mcp) as client:
+            result = await client.call_tool("cache_prune", {"expired_only": True, "dry_run": True})
+            assert not result.is_error
+            assert stale.exists()
+            result = await client.call_tool("cache_prune", {"expired_only": True, "dry_run": False})
+            assert not result.is_error
+            assert not stale.exists()
+
+    asyncio.run(verify())
