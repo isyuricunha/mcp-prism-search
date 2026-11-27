@@ -240,6 +240,8 @@ async def _chat_stream(client, url, headers, payload, provider):
         response.raise_for_status()
         async for data in _sse_data(response):
             value = data.strip()
+            if not value:
+                continue
             if value == "[DONE]":
                 finished = True
                 break
@@ -313,6 +315,8 @@ async def _tiny_research(client, headers, query: str, effort: Effort) -> NativeR
             if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", candidate):
                 run_id = candidate
             async for data in _sse_data(response):
+                if not data.strip():
+                    continue
                 event = json.loads(data)
                 if not isinstance(event, dict):
                     raise ValueError("Invalid research event")

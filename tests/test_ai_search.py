@@ -558,3 +558,11 @@ def test_combined_timeout_never_retries_same_paid_provider(configure, monkeypatc
     assert result.error and not result.results
     assert result.answer_attempts == ["tavily: timeout"]
     assert len(calls) == 1
+
+
+def test_native_sse_ignores_empty_data_events(configure, monkeypatch):
+    stream = "data:\n\n" + sse({"choices": [{"delta": {"content": "Answer"}}]})
+    mock_http(monkeypatch, lambda req: httpx.Response(
+        200, text=stream, headers={"content-type": "text/event-stream"}))
+    result = asyncio.run(native.synthesize("question", "brave", "answer", allow_cost=True))
+    assert result.answer == "Answer"
