@@ -624,7 +624,11 @@ $("settings-form").addEventListener("submit",async event=>{
   settingsPending=true;busyCount++;setPending(button,true,"Saving…");
   const editable=[...$("settings-form").querySelectorAll("input,button,fieldset")].filter(n=>n!==button&&!n.disabled);
   for(const n of editable)n.disabled=true;
-  try{await api("settings","PUT",data);settingsDirty=false;await refresh(true);feedback("settings-feedback","Settings saved. Changes apply to new searches.");}
+  try{
+    state.settings=await api("settings","PUT",data);settingsDirty=false;
+    try{await refresh(true);feedback("settings-feedback","Settings saved. Changes apply to new searches.");}
+    catch{if(state)feedback("settings-feedback","Settings saved. Dashboard refresh failed; refresh to see current server information.",true);}
+  }
   catch(error){feedback("settings-feedback",error.message,true);}
   finally{settingsPending=false;busyCount--;for(const n of editable)n.disabled=false;setPending(button,false);if(state&&!settingsDirty)renderSettings(true);}
 });
@@ -726,8 +730,8 @@ $("defaults-form").addEventListener("submit",async event=>{
       $("native-provider").value="";$("native-effort").value="";
     }
     renderDefaultSettings(true);renderChoices();renderNativeOptions();
-    try{await refresh(true);}catch{}
-    feedback("defaults-feedback","Defaults saved. Subsequent MCP calls inherit these values.");
+    try{await refresh(true);feedback("defaults-feedback","Defaults saved. Subsequent MCP calls inherit these values.");}
+    catch{if(state)feedback("defaults-feedback","Defaults saved. Dashboard refresh failed; refresh to see current server information.",true);}
   }catch(error){feedback("defaults-feedback",error.message,true);}
   finally{
     defaultsPending=false;busyCount--;
@@ -772,7 +776,11 @@ $("ai-settings-form").addEventListener("submit",async event=>{
   if(aiSettingsPending)return;
   aiSettingsPending=true;busyCount++;
   const button=$("save-ai-settings");setPending(button,true,"Saving…");global.disabled=true;field.disabled=true;
-  try{await api("settings","PUT",data);aiSettingsDirty=false;await refresh(true);feedback("ai-settings-feedback","AI search settings saved.");}
+  try{
+    state.settings=await api("settings","PUT",data);aiSettingsDirty=false;syncSearchMode();
+    try{await refresh(true);feedback("ai-settings-feedback","AI search settings saved.");}
+    catch{if(state)feedback("ai-settings-feedback","AI search settings saved. Dashboard refresh failed; refresh to see current server information.",true);}
+  }
   catch(error){feedback("ai-settings-feedback",error.message,true);}
   finally{aiSettingsPending=false;busyCount--;setPending(button,false);renderAiSettings();}
 });

@@ -237,7 +237,16 @@ try{
   assert.equal(await page.locator("#reset-settings").isDisabled(),true);
  }finally{releaseSettings();holdSettings=null;}
  await page.waitForFunction(()=>document.querySelector("#settings-feedback").textContent.includes("Settings saved"));
- assert.equal(data.settings.preferred,"freeserp");assert.equal(data.settings.timeout,23);
+ const savedTimeout=data.settings.timeout;
+ const updatedTimeout=savedTimeout===16?17:16;
+ failOverview=true;
+ await page.locator("#timeout").fill(String(updatedTimeout));
+ await page.locator('#settings-form button[type="submit"]').click();
+ await page.waitForFunction(()=>document.querySelector("#settings-feedback").textContent.includes("Dashboard refresh failed"));
+ assert.equal(await page.locator("#timeout").inputValue(),String(updatedTimeout));
+ assert.equal(data.settings.timeout,updatedTimeout);
+ await page.evaluate(()=>refresh());
+ assert.equal(data.settings.preferred,"freeserp");assert.equal(data.settings.timeout,updatedTimeout);
  // Server-driven defaults are not duplicated by the browser.
  assert.equal(await page.locator("#default-search_max_results").inputValue(),"10");
  await page.locator("#default-search_max_results").fill("7");
