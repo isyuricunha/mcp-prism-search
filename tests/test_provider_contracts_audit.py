@@ -206,3 +206,18 @@ def test_hackernews_story_contract(monkeypatch):
     mock_http(monkeypatch, handler)
     rows = asyncio.run(hackernews.search(SearchRequest(query="needle"), 30, 5))
     assert [(r.title, r.snippet) for r in rows] == [("Title", "Evidence")]
+
+
+@pytest.mark.parametrize("payload,valid", [
+    ([], True), ({"results": []}, True), ({"data": []}, True),
+    ({"error": "failure"}, False), ({"results": {}}, False), ("invalid", False),
+])
+def test_keenable_response_envelope(monkeypatch, payload, valid):
+    from mcp_prism_search.providers import keenable
+
+    mock_http(monkeypatch, lambda req: httpx.Response(200, json=payload))
+    if valid:
+        assert asyncio.run(keenable.search(SearchRequest(query="test"), 5, 5)) == []
+    else:
+        with pytest.raises(ValueError, match="Invalid Keenable"):
+            asyncio.run(keenable.search(SearchRequest(query="test"), 5, 5))
