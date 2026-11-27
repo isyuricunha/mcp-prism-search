@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import json
 import re
 from contextlib import asynccontextmanager
@@ -178,6 +179,44 @@ async def synthesis_slot(*, wait: bool = False):
         yield
 
 
+SSE_MAX_EVENT_CHARS = 1_000_000
+
+
+async def _sse_data(response):
+    """Bound line and event buffering, and honor SSE data-field framing."""
+    decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    pending = ""
+    fields = []
+    size = 0
+    trailing_cr = False
+    async for chunk in response.aiter_bytes(chunk_size=4096):
+        text = decoder.decode(chunk)
+        if trailing_cr and text.startswith("\n"):
+            text = text[1:]
+        trailing_cr = text.endswith("\r")
+        lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        lines[0] = pending + lines[0]
+        pending = lines.pop()
+        if len(pending) > SSE_MAX_EVENT_CHARS:
+            raise ValueError("SSE line exceeds limit")
+        for line in lines:
+            if len(line) > SSE_MAX_EVENT_CHARS:
+                raise ValueError("SSE line exceeds limit")
+            if not line:
+                if fields:
+                    yield "\n".join(fields)
+                fields, size = [], 0
+                continue
+            field, _, value = line.partition(":")
+            if field == "data":
+                value = value.removeprefix(" ")
+                size += len(value) + 1
+                if size > SSE_MAX_EVENT_CHARS:
+                    raise ValueError("SSE event exceeds limit")
+                fields.append(value)
+    decoder.decode(b"", final=True)
+
+
 async def _chat_stream(client, url, headers, payload, provider):
     """Read documented SSE final text and citations, ignoring reasoning and usage tags."""
     chunks = []
@@ -187,10 +226,8 @@ async def _chat_stream(client, url, headers, payload, provider):
     finished = False
     async with client.stream("POST", url, headers=headers, json=payload) as response:
         response.raise_for_status()
-        async for line in response.aiter_lines():
-            if not line.startswith("data:"):
-                continue
-            value = line[5:].strip()
+        async for data in _sse_data(response):
+            value = data.strip()
             if value == "[DONE]":
                 finished = True
                 break
@@ -262,12 +299,8 @@ async def _tiny_research(client, headers, query: str, effort: Effort) -> NativeR
             candidate = response.headers.get("X-Research-Run-Id", "")
             if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", candidate):
                 run_id = candidate
-            async for line in response.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                if len(line) > 1000000:
-                    raise ValueError("Research event exceeds limit")
-                event = json.loads(line[5:].strip())
+            async for data in _sse_data(response):
+                event = json.loads(data)
                 if not isinstance(event, dict):
                     raise ValueError("Invalid research event")
                 kind = event.get("event")

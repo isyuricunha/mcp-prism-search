@@ -489,3 +489,19 @@ def test_tinyfish_explicit_only_contract_is_enforced_before_network(tinyfish_con
         ))
     cap = next(c for c in native.capabilities() if c["id"] == "tinyfish")
     assert cap["docs"] == "https://docs.tinyfish.ai/tinyanswer"
+
+
+def test_sse_reader_accepts_multiline_events_and_bounds_buffers(monkeypatch):
+    async def collect(content):
+        response = httpx.Response(200, content=content)
+        return [item async for item in native._sse_data(response)]
+
+    assert asyncio.run(collect(b': comment\r\ndata: {\r\ndata: "ok": true}\r\n\r\n')) == [
+        '{\n"ok": true}'
+    ]
+    assert asyncio.run(collect(b"data: incomplete")) == []
+    monkeypatch.setattr(native, "SSE_MAX_EVENT_CHARS", 32)
+    for content in (b"data: " + b"x" * 33, b"data: " + b"x" * 20 +
+                    b"\ndata: " + b"x" * 20 + b"\n\n"):
+        with pytest.raises(ValueError, match="exceeds limit"):
+            asyncio.run(collect(content))
