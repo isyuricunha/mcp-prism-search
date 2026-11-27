@@ -58,3 +58,20 @@ def test_fetch_rejects_ambiguous_backslash_in_url_path():
 
     with pytest.raises(UnsafeUrlError, match="backslashes"):
         validate_url_shape("https://example.com/path" + chr(92) + "segment")
+
+
+def test_dns_resolution_order(monkeypatch):
+    import socket
+
+    from mcp_prism_search.security import _resolve_hostname
+
+    def resolve(hostname, port, *, type):
+        assert (hostname, port, type) == ("example.com", 443, socket.SOCK_STREAM)
+        return [
+            (socket.AF_INET6, 0, 0, "", ("2606:4700::1111", 443, 0, 0)),
+            (socket.AF_INET, 0, 0, "", ("1.1.1.1", 443)),
+            (socket.AF_INET, 0, 0, "", ("1.1.1.1", 443)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
+    assert _resolve_hostname("example.com", 443) == ["1.1.1.1", "2606:4700::1111"]
