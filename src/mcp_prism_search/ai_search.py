@@ -34,7 +34,7 @@ def eligible(chain: list[str], request: SearchRequest, include_answers: bool | N
         return set()
     # Do not silently weaken caller filters in an AI-generated answer.
     if (request.allowed_domains or request.blocked_domains or request.preferred_domains
-            or request.time_filter
+            or request.time_filter or request.search_window is not None
             or request.safe_search != "off" or len(request.query) > 400):
         return set()
     return set(chain) & selected & providers.available_providers("general").keys()

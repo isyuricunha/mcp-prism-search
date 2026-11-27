@@ -77,7 +77,7 @@ def test_policy_optout_and_normal_cache(configure, monkeypatch):
     for kwargs in [
         {"allowed_domains": ["example.org"]}, {"blocked_domains": ["example.org"]},
         {"preferred_domains": ["example.org"]}, {"time_filter": "week"},
-        {"safe_search": "strict"},
+        {"safe_search": "strict"}, {"search_window": 20},
     ]:
         assert not ai_search.eligible(["tavily"], SearchRequest(query="test", **kwargs), None)
     monkeypatch.setenv("MCP_AI_SEARCH_PROVIDERS", "exa")
