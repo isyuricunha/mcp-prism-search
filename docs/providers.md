@@ -2,8 +2,10 @@
 
 ## Modes
 
-- `web_search(provider="auto")`: choose the first provider with usable results,
-  ordered by process-local success rate, then preferred order. No automatic retries.
+- `web_search(query=...)`: inherit [server defaults](defaults.md).
+- `web_search(provider="auto")`: choose the first provider with usable results;
+  authorized AI engines are prioritized when eligible. No synthesis retries.
+- `web_search(provider="keyless")`: automatic fallback restricted to keyless engines.
 - `web_search(provider="all")`: query every configured general provider concurrently.
 - `web_search(provider="keenable")`: query exactly that provider.
 - `web_search(providers=["keenable", "freeserp"])`: query exactly the selected set
@@ -51,9 +53,10 @@ TinyFish, Tavily, Exa, Brave, You.com, Serper, Jina and SearXNG are enabled only
 their corresponding environment variable is configured (or, for API keys,
 when stored in the optional [dashboard](webui.md)). Configured API
 providers can consume credits in auto or all mode; use explicit selection
-when controlling spend. No quota evasion or proxy rotation is performed. When enabled, the dashboard
-can disable engines and set a preferred provider as a tie-breaker; environment
-settings take precedence.
+when controlling spend. No quota evasion or proxy rotation is performed. The dashboard manages persisted provider flags and preferences; the MCP
+loads them even without WebUI. MCP_DISABLED_PROVIDERS forces registry IDs
+off. Environment settings take precedence. Public provider metadata comes
+from the server registry.
 
 ## Migration notes
 

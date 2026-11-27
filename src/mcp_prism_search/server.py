@@ -15,13 +15,14 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from mcp_prism_search import __version__
+from mcp_prism_search import __version__, runtime
 from mcp_prism_search import cache as cache_ops
 from mcp_prism_search.cache import (
     _get_env_bool,
     get_cache_prune_config,
     prune_cache,
 )
+from mcp_prism_search.defaults import Recency, effective_defaults
 from mcp_prism_search.fetch import ddg_deep_search as perform_deep_search
 from mcp_prism_search.fetch import web_fetch as perform_web_fetch
 from mcp_prism_search.models import (
@@ -31,7 +32,6 @@ from mcp_prism_search.models import (
     FetchResponse,
     SafeSearch,
     SearchResponse,
-    TimeFilter,
 )
 from mcp_prism_search.native import (
     AnswerProvider,
@@ -41,6 +41,7 @@ from mcp_prism_search.native import (
     ResearchProvider,
     synthesize,
 )
+from mcp_prism_search.providers import general_provider_ids
 from mcp_prism_search.search import aggregated_search as perform_aggregated_search
 from mcp_prism_search.search import ddg_search as perform_ddg_search
 
@@ -85,8 +86,11 @@ mcp = MCPServer(
     version=__version__,
     instructions=(
         "Multi-provider web search and safe webpage fetching tools. "
-        "Ordinary search is retrieval only. Optional web_answer and web_research delegate "
-        "synthesis to explicitly selected providers with cost consent."
+        "Use web_search with just a query to inherit server defaults, or explicitly override "
+        "provider and other options. Authorized provider AI may accompany search; "
+        "include_answers=false opts out. Use web_fetch to verify sources. "
+        "Standalone web_answer and web_research require explicit cost consent. "
+        "Legacy ddg tools remain available for DuckDuckGo-specific workflows."
     ),
     log_level=_validated_log_level(),
 )
@@ -313,29 +317,30 @@ async def web_search(
         Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"]),
     ],
     provider: Annotated[
-        str,
+        str | None,
         Field(
-            default="auto",
             description=(
-                "Search one provider by name, auto for fallback, or all for parallel search. "
-                "General providers: keenable, freeserp, bing_rss, ddgs:yahoo, mwmbl, "
-                  "ddg_html, youcom_keyless, searxng, tinyfish, tavily, exa, brave, "
-                "youcom, serper, jina. "
+                "Omit to inherit default; auto for fallback, keyless for keyless fallback, "
+                "all for parallel search, or one provider ID. "
+                "General providers: " + ", ".join(general_provider_ids()) + ". "
                 "Some require configuration. Use providers to select several."
             ),
         ),
-    ] = "auto",
+    ] = None,
     max_results: Annotated[
-        int,
-        Field(default=10, ge=1, le=30, description=ARGUMENT_DESCRIPTIONS["max_results"]),
-    ] = 10,
+        int | None,
+        Field(
+            ge=1, le=30,
+            description=ARGUMENT_DESCRIPTIONS["max_results"] + " Omit to inherit.",
+        ),
+    ] = None,
     safe_search: Annotated[
-        SafeSearch,
-        Field(default="off", description=ARGUMENT_DESCRIPTIONS["safe_search"]),
-    ] = "off",
+        SafeSearch | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["safe_search"] + " Omit to inherit."),
+    ] = None,
     time_filter: Annotated[
-        TimeFilter | None,
-        Field(default=None, description=ARGUMENT_DESCRIPTIONS["time_filter"]),
+        Recency | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["time_filter"] + " Use any to override freshness."),
     ] = None,
     search_window: Annotated[
         int | None,
@@ -364,6 +369,8 @@ async def web_search(
 ) -> SearchResponse:
     """Search one or multiple web providers. Optionally include their generated answers.
 
+    Omitted options inherit server defaults. Explicit empty domain lists clear defaults.
+    Auto mode prioritizes authorized AI providers when synthesis is eligible.
     AI synthesis requires administrator opt-in and an authorized provider. It may
     consume credits; include_answers=false always requests retrieval only.
     Domain controls, freshness, SafeSearch or queries over 400 characters disable synthesis.
@@ -392,14 +399,15 @@ async def web_search(
 @mcp.tool(annotations=_tool_annotations())
 async def web_answer(
     query: Annotated[str, Field(min_length=1, max_length=4000)],
-    provider: AnswerProvider,
+    provider: AnswerProvider | None = None,
     allow_cost: Annotated[
         bool, Field(strict=True, description="Set true only with user consent to spend credits."),
     ] = False,
 ) -> NativeResponse:
     """Get a provider-generated answer and sources, not independent verification.
 
-    Requires a configured Tavily, Exa, You.com or Brave key and explicit allow_cost=true.
+    Omit provider to use the configured answer default. Requires a configured key
+    and explicit allow_cost=true.
     Use web_search instead for ordinary retrieval or keyless searches. No fallback.
     """
     try:
@@ -411,15 +419,16 @@ async def web_answer(
 @mcp.tool(annotations=_tool_annotations())
 async def web_research(
     query: Annotated[str, Field(min_length=1, max_length=4000)],
-    provider: ResearchProvider,
+    provider: ResearchProvider | None = None,
     allow_cost: Annotated[
         bool, Field(strict=True, description="Set true only with user consent to spend credits."),
     ] = False,
-    effort: Effort = "lite",
+    effort: Effort | None = None,
 ) -> NativeResponse:
     """Delegate multi-step research to a configured provider; returns synthesis and sources.
 
-    Requires a configured key and explicit cost consent. Exa, Tavily and Jina support
+    Omit provider and effort to use configured defaults. Requires explicit cost consent.
+    Exa, Tavily and Jina support
     lite/deep; You.com supports lite/standard/deep; Brave requires deep.
     Review provider pricing before increasing effort.
     No automatic retries or provider fallback.
@@ -437,19 +446,21 @@ async def vertical_search(
         Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"]),
     ],
     source: Annotated[
-        str,
+        str | None,
         Field(
-            default="wikipedia",
             description=(
                 "Vertical search source: wikipedia (encyclopedic) or "
                 "hackernews (tech stories)."
             ),
         ),
-    ] = "wikipedia",
+    ] = None,
     max_results: Annotated[
-        int,
-        Field(default=5, ge=1, le=20, description=ARGUMENT_DESCRIPTIONS["max_results"]),
-    ] = 5,
+        int | None,
+        Field(
+            ge=1, le=20,
+            description=ARGUMENT_DESCRIPTIONS["max_results"] + " Omit to inherit.",
+        ),
+    ] = None,
 ) -> SearchResponse:
     """Search one keyless vertical source (wikipedia, hackernews)."""
 
@@ -468,20 +479,23 @@ async def vertical_search(
 async def ddg_search(
     query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
     max_results: Annotated[
-        int,
-        Field(ge=1, le=30, description=ARGUMENT_DESCRIPTIONS["max_results"]),
-    ] = 10,
+        int | None,
+        Field(
+            ge=1, le=30,
+            description=ARGUMENT_DESCRIPTIONS["max_results"] + " Omit to inherit.",
+        ),
+    ] = None,
     search_window: Annotated[
         int | None,
         Field(ge=1, le=100, description=ARGUMENT_DESCRIPTIONS["search_window"]),
     ] = None,
     safe_search: Annotated[
-        SafeSearch,
-        Field(description=ARGUMENT_DESCRIPTIONS["safe_search"]),
-    ] = "off",
+        SafeSearch | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["safe_search"] + " Omit to inherit."),
+    ] = None,
     time_filter: Annotated[
-        TimeFilter | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["time_filter"]),
+        Recency | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["time_filter"] + " Use any to override freshness."),
     ] = None,
     blocked_domains: Annotated[
         list[str] | None,
@@ -496,7 +510,7 @@ async def ddg_search(
         Field(description=ARGUMENT_DESCRIPTIONS["preferred_domains"]),
     ] = None,
 ) -> SearchResponse:
-    """Search DuckDuckGo using the configured provider mode."""
+    """Legacy DuckDuckGo search. Prefer web_search unless DuckDuckGo-specific behavior is needed."""
 
     response = await perform_ddg_search(
         query=query,
@@ -517,9 +531,12 @@ async def ddg_search(
 async def web_fetch(
     url: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["url"])],
     max_chars: Annotated[
-        int,
-        Field(ge=1000, le=50000, description=ARGUMENT_DESCRIPTIONS["max_chars"]),
-    ] = 12000,
+        int | None,
+        Field(
+            ge=1000, le=50000,
+            description=ARGUMENT_DESCRIPTIONS["max_chars"] + " Omit to inherit.",
+        ),
+    ] = None,
 ) -> FetchResponse:
     """Fetch one HTTP(S) page safely and return extracted text."""
 
@@ -533,28 +550,37 @@ async def web_fetch(
 async def ddg_deep_search(
     query: Annotated[str, Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])],
     max_results: Annotated[
-        int,
-        Field(ge=1, le=30, description=ARGUMENT_DESCRIPTIONS["max_results"]),
-    ] = 10,
+        int | None,
+        Field(
+            ge=1, le=30,
+            description=ARGUMENT_DESCRIPTIONS["max_results"] + " Omit to inherit.",
+        ),
+    ] = None,
     search_window: Annotated[
         int | None,
         Field(ge=1, le=100, description=ARGUMENT_DESCRIPTIONS["search_window"]),
     ] = None,
     max_pages: Annotated[
-        int,
-        Field(ge=1, le=10, description=ARGUMENT_DESCRIPTIONS["max_pages"]),
-    ] = 5,
+        int | None,
+        Field(
+            ge=1, le=10,
+            description=ARGUMENT_DESCRIPTIONS["max_pages"] + " Omit to inherit.",
+        ),
+    ] = None,
     max_chars_per_page: Annotated[
-        int,
-        Field(ge=1000, le=50000, description=ARGUMENT_DESCRIPTIONS["max_chars_per_page"]),
-    ] = 12000,
+        int | None,
+        Field(
+            ge=1000, le=50000,
+            description=ARGUMENT_DESCRIPTIONS["max_chars_per_page"] + " Omit to inherit.",
+        ),
+    ] = None,
     safe_search: Annotated[
-        SafeSearch,
-        Field(description=ARGUMENT_DESCRIPTIONS["safe_search"]),
-    ] = "off",
+        SafeSearch | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["safe_search"] + " Omit to inherit."),
+    ] = None,
     time_filter: Annotated[
-        TimeFilter | None,
-        Field(description=ARGUMENT_DESCRIPTIONS["time_filter"]),
+        Recency | None,
+        Field(description=ARGUMENT_DESCRIPTIONS["time_filter"] + " Use any to override freshness."),
     ] = None,
     blocked_domains: Annotated[
         list[str] | None,
@@ -570,11 +596,14 @@ async def ddg_deep_search(
     ] = None,
     max_concurrency: Annotated[
         int | None,
-        Field(ge=1, le=12, description=ARGUMENT_DESCRIPTIONS["max_concurrency"]),
+        Field(
+            ge=1, le=12,
+            description=ARGUMENT_DESCRIPTIONS["max_concurrency"] + " Omit to inherit.",
+        ),
     ] = None,
     ctx: Context | None = None,
 ) -> DeepSearchResponse:
-    """Search once, fetch top pages in parallel, and return raw page text."""
+    """Legacy DuckDuckGo search plus parallel webpage extraction. No AI synthesis."""
 
     async def _report_progress(progress: float, total: float | None) -> None:
         if ctx is not None:
@@ -603,7 +632,7 @@ async def ddg_deep_search(
 async def cache_stats() -> dict[str, Any]:
     """Return cache file counts and byte totals for each cache namespace."""
 
-    return cache_ops.get_cache_stats().to_dict()
+    return (await asyncio.to_thread(cache_ops.get_cache_stats)).to_dict()
 
 
 @mcp.tool(annotations=_tool_annotations(destructive=True))
@@ -619,7 +648,9 @@ async def cache_prune(
 ) -> dict[str, Any]:
     """Prune expired, corrupt, temporary, and oversized cache files."""
 
-    return cache_ops.prune_cache(expired_only=expired_only, dry_run=dry_run).to_dict()
+    return (await asyncio.to_thread(
+        cache_ops.prune_cache, expired_only=expired_only, dry_run=dry_run
+    )).to_dict()
 
 
 @mcp.tool(annotations=_tool_annotations(destructive=True))
@@ -635,7 +666,9 @@ async def cache_clear(
 ) -> dict[str, Any]:
     """Clear one cache namespace, or all namespaces, when confirm is true."""
 
-    return cache_ops.clear_cache(namespace=namespace, confirm=confirm).to_dict()
+    return (await asyncio.to_thread(
+        cache_ops.clear_cache, namespace=namespace, confirm=confirm
+    )).to_dict()
 
 
 def _prune_cache_on_startup() -> None:
@@ -653,6 +686,16 @@ def _prune_cache_on_startup() -> None:
 
 
 def main() -> None:
+    previous = runtime.state()
+    try:
+        runtime.install(runtime.configured_store())
+        effective_defaults()  # Fail clearly on invalid environment settings before serving.
+        _run()
+    finally:
+        runtime.install(previous)
+
+
+def _run() -> None:
     _prune_cache_on_startup()
     transport = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
     if transport in {"http", "streamable-http"}:

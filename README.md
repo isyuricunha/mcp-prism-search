@@ -19,7 +19,7 @@ results include titles, URLs and snippets; webpage fetching returns
 extracted text. No model provider or LLM subscription is required.
 
 [Quick start](#quick-start) · [Search modes](#search-modes) ·
-[Providers](#providers) · [Tools](#tools) ·
+[Providers](#providers) · [Tools](#tools) · [Server defaults](docs/defaults.md) ·
 [Web dashboard](#optional-web-dashboard) · [Agent setup prompt](#agent-setup-prompt) ·
 [Documentation](#documentation)
 
@@ -27,8 +27,8 @@ extracted text. No model provider or LLM subscription is required.
 
 - **Keyless first:** search immediately using public endpoints, independent
   indexes and specialized sources.
-- **One interface, four modes:** automatic fallback, single-provider search,
-  full parallel search and explicit multi-provider selection.
+- **One interface, five modes:** automatic fallback, keyless-only fallback,
+  single-provider search, full parallel search and explicit multi-provider selection.
 - **Optional APIs:** enable authenticated search providers or a self-hosted
   SearXNG instance only when needed.
 - **Predictable results:** deterministic ranking, URL deduplication, domain
@@ -157,6 +157,16 @@ secret reference mechanism. Do not commit credentials. Keep HTTP bound to
 loopback by default; for remote access, use TLS and explicit Host/Origin
 allowlists. See [deployment and operations](docs/deployment.md).
 
+## Configure once, search simply
+
+The smallest MCP call is `web_search({"query":"your question"})`.
+All clients inherit server defaults unless they explicitly override them.
+Set `MCP_DEFAULT_SEARCH_MODE=keyless` for keyless fallback, or enable
+provider-generated answers using `MCP_AI_SEARCH_ENABLED=true` and
+`MCP_AI_SEARCH_PROVIDERS=tavily,exa` after configuring those API keys and
+accepting potential charges. See [server defaults](docs/defaults.md) for
+the full reference. Existing persisted settings also work without WebUI.
+
 ## Optional web dashboard
 
 A lightweight Astro dashboard using YuTheme (Dark (charcoal/teal) by default,
@@ -179,7 +189,7 @@ can set that variable directly after building the static frontend.
 
 Manage providers and API keys with official provider links, test single or
 parallel searches and automatic fallback, inspect activity and cache usage,
-change search settings, and copy client connection examples. The dashboard
+configure inherited server defaults, and copy client connection examples. The dashboard
 reports the installed server, SDK and protocol versions from the live backend. Panel credentials and settings are shared with the
 running HTTP MCP process. Environment values take precedence. The
 dashboard password is separate from the MCP bearer token.
@@ -194,7 +204,9 @@ arbitrary endpoint.
 
 | Mode | Arguments | Best for |
 |---|---|---|
-| Auto | `"provider": "auto"` (default) | First usable results via health-ordered fallback |
+| Inherit | Omit provider and providers | Use server defaults (built-in: auto) |
+| Auto | `"provider": "auto"` | First usable results; authorized AI engines prioritized when eligible |
+| Keyless | `"provider": "keyless"` | Automatic fallback across keyless general engines only |
 | Single | `"provider": "keenable"` | One exact engine; no fallback |
 | Selected | `"providers": ["keenable", "freeserp"]` | Parallel search across a specific set |
 | All | `"provider": "all"` | Parallel search across all enabled general engines |
@@ -280,7 +292,7 @@ or unavailable provider names return errors rather than silently falling back.
 | `safe_search` | off, moderate or strict, where supported upstream |
 
 Results contain `query`, `provider`, `results` (title, URL, snippet),
-`cached`, `error` and `provider_attempts`. Auto reports the successful
+`cached`, `error`, `provider_attempts`, and optional `answers` / `answer_attempts`. Auto reports the successful
 provider; combined searches report `selected` or `all`. Individual
 provider failures can coexist with successful combined results. Total
 failure surfaces as an MCP tool error. Recency and SafeSearch support varies
@@ -393,11 +405,11 @@ or third-party accounts. Do not expose services publicly.
 
 4. Run exactly three web_search calls through MCP, with these arguments:
    A — single engine:
-   {"query":"Python asyncio TaskGroup documentation","provider":"keenable","max_results":5}
+   {"query":"Python asyncio TaskGroup documentation","provider":"keenable","max_results":5,"include_answers":false,"safe_search":"off","time_filter":"any","allowed_domains":[],"blocked_domains":[],"preferred_domains":[]}
    B — independent engine:
-   {"query":"Docker Compose startup order","provider":"freeserp","max_results":5}
+   {"query":"Docker Compose startup order","provider":"freeserp","max_results":5,"include_answers":false,"safe_search":"off","time_filter":"any","allowed_domains":[],"blocked_domains":[],"preferred_domains":[]}
    C — parallel, selected keyless engines:
-   {"query":"Model Context Protocol specification","providers":["keenable","freeserp","bing_rss","youcom_keyless"],"max_results":5}
+   {"query":"Model Context Protocol specification","providers":["keenable","freeserp","youcom_keyless"],"max_results":5,"include_answers":false,"safe_search":"off","time_filter":"any","allowed_domains":[],"blocked_domains":[],"preferred_domains":[]}
 
    Check structuredContent, isError, returned URLs, relevance, result
    counts, provider_attempts and elapsed time. Do not claim success for
@@ -432,6 +444,7 @@ content accuracy or anonymity.
 
 | Guide | Contents |
 |---|---|
+| [Server defaults](docs/defaults.md) | Inherited settings, headless operation, environment precedence |
 | [Provider policy](docs/providers.md) | Modes, engine contracts, quotas, migration |
 | [Web dashboard](docs/webui.md) | Optional administration interface, security and configuration |
 | [Deployment and operations](docs/deployment.md) | Docker, configuration, HTTP, cache, troubleshooting |

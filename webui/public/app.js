@@ -9,25 +9,6 @@ const pages = {
   settings: "Tune search behavior and personalize this browser.",
   connection: "Generate connection settings for your MCP client."
 };
-const catalog = {
-  keenable: ["Keenable", "Public web search with extracted text snippets.", "https://docs.keenable.ai/"],
-  freeserp: ["FreeSerp", "Web results from the FreeSerp search index.", "https://freeserp.ai/serp-scraper-api"],
-  bing_rss: ["Bing RSS", "Web results from Bing's RSS feed. Availability depends on the upstream service.", "https://www.bing.com/"],
-  "ddgs:yahoo": ["Yahoo via DDGS", "Yahoo web results through the DDGS search library.", "https://search.yahoo.com/"],
-  mwmbl: ["Mwmbl", "Community-maintained search index. Anonymous requests have limits.", "https://developer.mwmbl.org/"],
-  youcom_keyless: ["You.com (public MCP)", "Public MCP search with a limited daily allowance.", "https://you.com/docs/agents/mcp-server"],
-  ddg_html: ["DuckDuckGo HTML", "Keyless HTML search. Network reputation and upstream protections can affect results.", "https://duckduckgo.com/"],
-  tinyfish: ["TinyFish TinySearch", "Authenticated web search API. Check allowance and wallet settings.", "https://docs.tinyfish.ai/tinysearch/reference", "https://agent.tinyfish.ai/sign-up"],
-  tavily: ["Tavily", "Search API for research and AI applications.", "https://docs.tavily.com/", "https://app.tavily.com/"],
-  exa: ["Exa", "Semantic and keyword web search API.", "https://docs.exa.ai/", "https://dashboard.exa.ai/"],
-  brave: ["Brave Search", "Web search through Brave's independent search index.", "https://api-dashboard.search.brave.com/documentation", "https://api-dashboard.search.brave.com/"],
-  youcom: ["You.com (API)", "Authenticated You.com web search API.", "https://you.com/docs/guides/search", "https://you.com/"],
-  serper: ["Serper", "Google search results through the Serper API.", "https://serper.dev/", "https://serper.dev/"],
-  jina: ["Jina Search", "Web search with text content prepared for research.", "https://api.jina.ai/docs", "https://jina.ai/api-dashboard/key-manager"],
-  searxng: ["SearXNG", "Your own metasearch instance. Set its URL in the server environment.", "https://docs.searxng.org/dev/search_api.html"],
-  wikipedia: ["Wikipedia", "Encyclopedic search through MediaWiki. Used by the specialized Wikipedia MCP tool.", "https://www.mediawiki.org/wiki/Wikimedia_APIs/Access_policy"],
-  hackernews: ["Hacker News", "Search technology discussions and submissions. Used by the specialized Hacker News MCP tool.", "https://hn.algolia.com/api"]
-};
 let state = null;
 let activePage = "overview";
 let refreshPromise = null;
@@ -36,8 +17,10 @@ let busyCount = 0;
 const providerDrafts = new Map();
 const providerPending = new Set();
 const providerMessages = new Map();
-const selected = new Set(["keenable", "freeserp"]);
+const selected = new Set();
 let settingsDirty = false;
+let defaultsDirty = false;
+let defaultsPending = false;
 let searchPending = false;
 let settingsPending = false;
 let cachePending = false;
@@ -119,7 +102,8 @@ async function confirmAction(title, description, label, destructive = true) {
 function showLogin() {
   authEpoch++;
   state = null; providerDrafts.clear(); providerMessages.clear(); providerPending.clear();
-  settingsDirty = false;
+  settingsDirty = false; defaultsDirty = false;
+  $("default-fields").replaceChildren(); resetSearchOptions(false);
   for (const id of ["provider-list","choices","results","search-attempts","metrics","summary","server-facts","connection-facts","readiness","cache-summary","cache-rows"]) $(id).replaceChildren();
   aiSettingsDirty=false;searchAnswerPreference=null;
   $("search-ai-cards").replaceChildren();$("search-ai-attempts").replaceChildren();$("search-ai-results").hidden=true;
@@ -180,7 +164,9 @@ function facts(node, entries) {
     const row = element("div"); row.append(element("dt",label),element("dd",value)); node.append(row);
   }
 }
-function providerName(id) { return catalog[id]?.[0] || id; }
+function providerName(id) {
+  return state?.providers?.find(p=>p.id===id)?.display_name || id;
+}
 function providerType(p) { return p.kind === "vertical" ? "Specialized" : p.env === "SEARXNG_URL" ? "Self-hosted" : p.env ? "API key" : "Keyless"; }
 function renderOverview() {
   const {providers,metrics,counters,server} = state;
@@ -247,7 +233,7 @@ function renderProviders() {
   list.replaceChildren();
   const items=[...state.providers].sort((a,b)=>Number(!a.available)-Number(!b.available)||providerName(a.id).localeCompare(providerName(b.id)));
   for (const p of items) {
-    const info=catalog[p.id]||[p.id,p.description];
+    const info=[p.display_name||p.id,p.description,p.docs_url,p.signup_url];
     const draft=draftFor(p);
     const row=element("article","","provider-row"); row.dataset.provider=p.id;
     const head=element("div","","provider-head"), title=element("div","","stack");
@@ -256,8 +242,9 @@ function renderProviders() {
     const links=element("div","","actions provider-links");
     if(info[2]) links.append(link("Website / docs",info[2]));
     if(info[3]) links.append(link("Get API key",info[3]));
-    if(p.kind==="general"&&p.available) links.append(action("Test in Playground",()=>{selected.clear();selected.add(p.id);document.querySelector('input[name=search-mode][value=selected]').checked=true;renderChoices();page("playground");$("query").focus();},"tonal"));
+    if(p.kind==="general"&&p.available) links.append(action("Test in Playground",()=>{selected.clear();selected.add(p.id);document.querySelector('input[name=search-mode][value=selected]').checked=true;$("search-overrides").open=true;renderChoices();page("playground");$("query").focus();},"tonal"));
     row.append(head,element("p",info[1],"muted"),links);
+    if(p.usage_note)row.append(element("p",p.usage_note,"muted small"));
     const native = state.native?.find(x=>x.id===p.id);
     if(native){
       const details=element("div","","stack");
@@ -287,7 +274,7 @@ function renderProviders() {
       draft.enabled=toggle.checked;
       const dirty=draft.enabled!==p.enabled||!!draft.credential;
       save.disabled=!dirty||providerPending.has(p.id);
-      toggle.disabled=providerPending.has(p.id); if(input)input.disabled=providerPending.has(p.id);
+      toggle.disabled=providerPending.has(p.id)||!!p.enabled_locked; if(input)input.disabled=providerPending.has(p.id);
       if(remove)remove.disabled=providerPending.has(p.id);
       row.classList.toggle("dirty",dirty);
     }
@@ -310,6 +297,7 @@ function renderProviders() {
     if(p.editable&&p.credential&&!p.managed){
       remove=action("Remove key",async()=>{if(await confirmAction("Remove API key","Remove the stored key for "+info[0]+". Searches using it may become unavailable.","Remove key"))await update(true);},"danger");form.append(remove);
     }
+    if(p.enabled_locked)row.append(element("p","Disabled by MCP_DISABLED_PROVIDERS in the server environment.","notice"));
     if(p.managed)row.append(element("p","Managed by "+p.env+". Change this value in the server environment.","notice"));
     else if(p.env&&!p.editable)row.append(element("p","Set "+p.env+" in the server environment. This URL is intentionally not editable here.","notice"));
     row.append(form,local);list.append(row);syncDraft();
@@ -322,7 +310,16 @@ function renderProviders() {
 $("provider-filter").addEventListener("input",filterProviders);
 for(const input of document.querySelectorAll("input[name=provider-filter-kind]"))input.addEventListener("change",filterProviders);
 $("reset-filter").addEventListener("click",()=>{$("provider-filter").value="";document.querySelector('input[name=provider-filter-kind][value=all]').checked=true;filterProviders();$("provider-filter").focus();});
+const defaultField = id => state?.defaults?.fields?.find(f=>f.id===id);
+const defaultValue = id => defaultField(id)?.value;
+const humanChoice = value => ({
+  auto:"Automatic fallback", keyless:"Keyless fallback", all:"All available engines",
+  selected:"Selected engines", any:"Any time", day:"Past day", week:"Past week",
+  month:"Past month", year:"Past year", off:"Off", moderate:"Moderate", strict:"Strict",
+  explicit:"Choose explicitly", lite:"Lite", standard:"Standard", deep:"Deep"
+}[value] || providerName(value));
 function searchMode(){return document.querySelector("input[name=search-mode]:checked").value;}
+function effectiveSearchMode(){return searchMode()==="default"?(defaultValue("search_mode")||"auto"):searchMode();}
 function renderChoices(){
   const choices=$("choices");choices.replaceChildren();
   for(const p of state?.providers||[]){
@@ -334,32 +331,61 @@ function renderChoices(){
     choices.append(label);
   }
   if(!choices.children.length)choices.append(element("p","No general engine is available. Enable one in Providers.","muted"));
+  for(const [id,key] of [["search-safe-search","search_safe_search"],["search-recency","search_recency"]]){
+    const input=$(id),old=input.value,field=defaultField(key);
+    input.replaceChildren(new Option("Server default"+(field?" ("+humanChoice(field.value)+")":""),""));
+    for(const value of field?.choices||[])input.append(new Option(humanChoice(value),value));
+    if([...input.options].some(o=>o.value===old))input.value=old;
+  }
+  const resultField=defaultField("search_max_results");
+  $("max-results").placeholder=resultField?String(resultField.value):"Server default";
+  if(resultField){$("max-results").min=resultField.min;$("max-results").max=resultField.max;}
   syncSearchMode();
 }
 function chosenProviders(){
-  return (state?.providers||[]).filter(p=>p.kind==="general"&&p.available&&(searchMode()!=="selected"||selected.has(p.id)));
+  const mode=effectiveSearchMode();
+  const ids=searchMode()==="default" ? new Set(defaultValue("search_providers")||[]) : selected;
+  return (state?.providers||[]).filter(p=>p.kind==="general"&&p.available&&
+    (mode!=="selected"||ids.has(p.id))&&(mode!=="keyless"||!p.env));
 }
 function syncSearchMode(){
   $("search-provider-field").hidden=searchMode()!=="selected";
   $("search-provider-field").disabled=searchPending;
-  const chosen=chosenProviders();
+  const chosen=chosenProviders(),mode=effectiveSearchMode();
   $("selection-count").textContent=chosen.length+" selected";
   const authorized=state?.settings?.ai_search_providers||[];
-  const available=!!state?.settings?.ai_search_enabled&&chosen.some(p=>authorized.includes(p.id));
+  const restricted=($("search-safe-search").value||defaultValue("search_safe_search")||"off")!=="off"||
+    ($("search-recency").value||defaultValue("search_recency")||"any")!=="any"||
+    ["allowed_domains","blocked_domains","preferred_domains"].some(k=>(defaultValue(k)||[]).length>0)||
+    $("query").value.trim().length>400;
+  const available=!!state?.settings?.ai_search_enabled&&chosen.some(p=>authorized.includes(p.id))&&!restricted;
   const toggle=$("search-answers");
   toggle.disabled=searchPending||!available;
   toggle.checked=available&&searchAnswerPreference!==false;
-  $("search-answers-hint").textContent=available
-    ?"Uses authorized engines only. May spend provider credits; turn off for retrieval only."
+  $("search-answers-hint").textContent=restricted
+    ?"Domain, freshness, SafeSearch or query-length constraints disable synthesis."
+    :available
+    ?"Uses authorized engines only. Turn off for retrieval only."
     :"No authorized AI engine in this selection. Configure AI-enhanced search in Settings.";
+  const names=mode==="selected"?" · "+chosen.map(p=>providerName(p.id)).join(", "):"";
+  const count=$("max-results").value||defaultValue("search_max_results")||"server default";
+  $("search-default-summary").textContent=(searchMode()==="default"?"Server defaults: ":"Overrides: ")+humanChoice(mode)+names+" · Up to "+count+" results · AI "+(toggle.checked?"enabled":"off");
   $("search-cost").hidden=!chosen.some(p=>p.env);
   $("run-search").disabled=searchPending||chosen.length===0;
 }
-$("search-answers").addEventListener("change",()=>{searchAnswerPreference=$("search-answers").checked;});
-for(const node of document.querySelectorAll("input[name=search-mode]"))node.addEventListener("change",syncSearchMode);
+function resetSearchOptions(render=true){
+  document.querySelector('input[name=search-mode][value=default]').checked=true;
+  selected.clear();searchAnswerPreference=null;
+  $("max-results").value="";$("search-safe-search").value="";$("search-recency").value="";
+  if(render)renderChoices();
+}
+$("search-answers").addEventListener("change",()=>{searchAnswerPreference=$("search-answers").checked;syncSearchMode();});
+for(const node of document.querySelectorAll("input[name=search-mode],#search-safe-search,#search-recency"))node.addEventListener("change",syncSearchMode);
+$("max-results").addEventListener("input",syncSearchMode);
+$("reset-search-options").addEventListener("click",()=>resetSearchOptions());
 $("select-keyless").addEventListener("click",()=>{selected.clear();for(const p of state.providers)if(p.kind==="general"&&p.available&&!p.env)selected.add(p.id);renderChoices();});
 $("clear-selection").addEventListener("click",()=>{selected.clear();renderChoices();});
-$("query").addEventListener("input",()=>{$("query-count").textContent=$("query").value.length+" / 1000";feedback("search-error");});
+$("query").addEventListener("input",()=>{$("query-count").textContent=$("query").value.length+" / 1000";feedback("search-error");syncSearchMode();});
 function renderSearch(data){
   $("search-output").hidden=false; $("search-source").textContent=data.cached?"Cached result":"Live attempt";
   const rows=Array.isArray(data.results)?data.results:[],attempts=data.provider_attempts||[];
@@ -447,7 +473,7 @@ function renderSettings(force=false){
 $("settings-form").addEventListener("input",()=>{settingsDirty=true;feedback("settings-feedback");});
 $("reset-settings").addEventListener("click",()=>{if(state){renderSettings(true);feedback("settings-feedback","Unsaved changes reset.");}});
 function render(){
-  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();
+  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();renderAiSettings();renderDefaultSettings();
 }
 async function refresh(fresh=false){
   if(refreshPromise){if(!fresh)return refreshPromise;await refreshPromise.catch(()=>{});return refresh(true);}
@@ -486,7 +512,7 @@ $("login-form").addEventListener("submit",async event=>{
 $("refresh").addEventListener("click",async()=>{try{await refresh();status("Dashboard refreshed.");}catch(error){status(error.message,true);}});
 $("logout").addEventListener("click",async()=>{
   if(busyCount||refreshPromise){status("An operation is in progress. Wait for it to finish before signing out.",true);return;}
-  if((settingsDirty||aiSettingsDirty||[...providerDrafts.values()].some(d=>d.credential)||state?.providers.some(p=>providerDrafts.get(p.id)?.enabled!==p.enabled))&&!await confirmAction("Sign out","Unsaved settings and credentials will be discarded.","Sign out",false))return;
+  if((settingsDirty||aiSettingsDirty||defaultsDirty||[...providerDrafts.values()].some(d=>d.credential)||state?.providers.some(p=>providerDrafts.get(p.id)?.enabled!==p.enabled))&&!await confirmAction("Sign out","Unsaved settings and credentials will be discarded.","Sign out",false))return;
   const button=$("logout");setPending(button,true,"Signing out…");
   try{await api("logout","POST");showLogin();feedback("login-status","Signed out.");}
   catch(error){status(error.message,true);}
@@ -503,9 +529,13 @@ $("search-form").addEventListener("submit",async event=>{
   if(searchPending)return;
   searchPending=true;busyCount++;setPending($("run-search"),true,"Searching…");syncSearchMode();feedback("search-error");
   $("search-output").hidden=true;
-  for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results"))n.disabled=true;
+  for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results, #search-safe-search, #search-recency, #reset-search-options"))n.disabled=true;
   try{
-    const data={query,mode,max_results:Number($("max-results").value),include_answers:useAnswers};
+    const data={query,include_answers:useAnswers};
+    if(mode!=="default")data.mode=mode;
+    if($("max-results").value)data.max_results=Number($("max-results").value);
+    if($("search-safe-search").value)data.safe_search=$("search-safe-search").value;
+    if($("search-recency").value)data.time_filter=$("search-recency").value;
     if(mode==="selected")data.providers=chosen.map(p=>p.id);
     renderSearch(await api("search","POST",data));
   }catch(error){
@@ -513,7 +543,7 @@ $("search-form").addEventListener("submit",async event=>{
     else feedback("search-error",error.message,true);
   }finally{
     searchPending=false;busyCount--;setPending($("run-search"),false);
-    for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results"))n.disabled=false;
+    for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results, #search-safe-search, #search-recency, #reset-search-options"))n.disabled=false;
     syncSearchMode();
   }
 });
@@ -529,6 +559,104 @@ $("settings-form").addEventListener("submit",async event=>{
   try{await api("settings","PUT",data);settingsDirty=false;await refresh(true);feedback("settings-feedback","Settings saved. Changes apply to new searches.");}
   catch(error){feedback("settings-feedback",error.message,true);}
   finally{settingsPending=false;busyCount--;for(const n of editable)n.disabled=false;setPending(button,false);if(state&&!settingsDirty)renderSettings(true);}
+});
+function renderDefaultSettings(force=false,useBuiltins=false){
+  if(!state)return;
+  if(defaultsDirty&&!force)return;
+  defaultsDirty=useBuiltins;
+  const fields=state.defaults?.fields||[];
+  const root=$("default-fields");
+  const opened=new Set([...root.querySelectorAll("details[open]")].map(n=>n.dataset.group));
+  root.replaceChildren();
+  const groups=new Map();
+  for(const field of fields){
+    if(!groups.has(field.group)){
+      const group=field.group==="Search"?element("section","","default-group"):element("details","","default-group");
+      if(group.tagName==="DETAILS"){group.dataset.group=field.group;group.open=opened.has(field.group);group.append(element("summary",field.group));}
+      else group.append(element("h3",field.group));
+      const content=element("div","","default-grid");group.append(content);root.append(group);groups.set(field.group,content);
+    }
+    const value=useBuiltins&&!field.locked?field.builtin:field.value;
+    const wrapper=element("div","","field default-field");
+    const id="default-"+field.id;
+    const hint=element("p",field.description,"muted small");hint.id=id+"-help";
+    const lock=element("span",field.locked?"Managed by "+field.env:"","muted small");
+    let input;
+    if(field.type==="array"&&field.choices){
+      input=element("fieldset","","default-provider-picker");input.id=id;
+      input.append(element("legend",field.label),hint);
+      const choices=element("div","","choices");
+      for(const name of field.choices){
+        const label=element("label","","choice-chip"),check=document.createElement("input");
+        check.type="checkbox";check.value=name;check.checked=value.includes(name);
+        const p=state.providers.find(x=>x.id===name);
+        label.append(check,element("span",providerName(name)),element("small",p?.available?"Available":"Unavailable","chip-kind"));choices.append(label);
+      }
+      input.append(choices,lock);wrapper.append(input);
+    }else{
+      const label=element("label",field.label);label.htmlFor=id;
+      if(field.choices){
+        input=document.createElement("select");
+        for(const choice of field.choices)input.append(new Option(humanChoice(choice),choice));
+        input.value=value;
+      }else if(field.type==="array"){
+        input=document.createElement("textarea");input.rows=2;input.value=value.join(", ");
+        input.placeholder="example.org, docs.example.com";
+      }else{
+        input=document.createElement("input");input.type="number";input.min=field.min;input.max=field.max;input.required=true;input.value=value;
+      }
+      input.id=id;input.setAttribute("aria-describedby",hint.id);
+      wrapper.append(label,hint,input,lock);
+    }
+    input.disabled=field.locked||defaultsPending;
+    input.dataset.defaultId=field.id;
+    groups.get(field.group).append(wrapper);
+  }
+  syncDefaultSelection();
+  $("save-defaults").disabled=defaultsPending||!fields.some(f=>!f.locked);
+}
+function syncDefaultSelection(){
+  const mode=$("default-search_mode"),providers=$("default-search_providers");
+  if(mode&&providers)providers.closest(".default-field").hidden=mode.value!=="selected";
+}
+function readDefaultInput(field){
+  const input=$("default-"+field.id);
+  if(field.type==="array")return field.choices?[...input.querySelectorAll("input:checked")].map(n=>n.value):input.value.split(/[,\n]+/).map(v=>v.trim()).filter(Boolean);
+  if(field.type==="integer")return Number(input.value);
+  return input.value;
+}
+$("defaults-form").addEventListener("input",()=>{defaultsDirty=true;syncDefaultSelection();feedback("defaults-feedback");});
+$("reset-defaults").addEventListener("click",()=>{renderDefaultSettings(true);feedback("defaults-feedback","Unsaved changes reset.");});
+$("builtin-defaults").addEventListener("click",()=>{renderDefaultSettings(true,true);feedback("defaults-feedback","Built-in values prepared. Save to apply them.");});
+$("defaults-form").addEventListener("submit",async event=>{
+  event.preventDefault();if(defaultsPending)return;
+  const fields=state.defaults?.fields||[],values={};
+  for(const field of fields){
+    if(field.locked)continue;
+    const value=readDefaultInput(field);
+    if(JSON.stringify(value)!==JSON.stringify(field.value))values[field.id]=value;
+  }
+  if(!Object.keys(values).length){feedback("defaults-feedback","No changes to save.");defaultsDirty=false;return;}
+  defaultsPending=true;busyCount++;
+  const button=$("save-defaults");setPending(button,true,"Saving…");
+  const inputs=[...$("defaults-form").querySelectorAll("[data-default-id],button")].filter(n=>n!==button&&!n.disabled);
+  for(const n of inputs)n.disabled=true;
+  try{
+    state.defaults=await api("defaults","PUT",{values});
+    defaultsDirty=false;
+    if(["answer_provider","research_provider","research_effort"].some(k=>Object.hasOwn(values,k))&&!nativePending){
+      $("native-provider").value="";$("native-effort").value="";
+    }
+    renderDefaultSettings(true);renderChoices();renderNativeOptions();
+    try{await refresh(true);}catch{}
+    feedback("defaults-feedback","Defaults saved. Subsequent MCP calls inherit these values.");
+  }catch(error){feedback("defaults-feedback",error.message,true);}
+  finally{
+    defaultsPending=false;busyCount--;
+    for(const n of inputs)n.disabled=false;
+    setPending(button,false);
+    if(!defaultsDirty)renderDefaultSettings(true);
+  }
 });
 function renderAiSettings(force=false){
   if(!state)return;
@@ -588,7 +716,12 @@ function renderNativeOptions(){
     const option=new Option(providerName(p.id)+(p.available?"":" — setup required"),p.id);
     option.disabled=!p.available; select.append(option);
   }
+  const configured=defaultValue(mode==="research"?"research_provider":"answer_provider");
   if(caps.some(p=>p.id===old&&p.available))select.value=old;
+  else if(configured&&configured!=="explicit"){
+    if(caps.some(p=>p.id===configured&&p.available))select.value=configured;
+    else select.selectedIndex=-1;
+  }
   else if(caps.some(p=>p.available))select.value=caps.find(p=>p.available).id;
   else select.selectedIndex=-1;
   const selectedCap=caps.find(p=>p.id===select.value&&p.available);
@@ -599,13 +732,14 @@ function renderNativeOptions(){
   effortSelect.replaceChildren();
   for(const [value,label] of Object.entries(selectedCap?.efforts||{}))effortSelect.append(new Option(label,value));
   if([...effortSelect.options].some(o=>o.value===previousEffort))effortSelect.value=previousEffort;
+  else if([...effortSelect.options].some(o=>o.value===defaultValue("research_effort")))effortSelect.value=defaultValue("research_effort");
   effortSelect.disabled=nativePending||!selectedCap;
   $("native-effort-field").hidden=mode!=="research";
   $("native-run").textContent=nativePending?"Working…":mode==="answer"?"Generate answer":"Run research";
   $("native-run").disabled=nativePending||!selectedCap;
-  select.disabled=nativePending||!selectedCap;
+  select.disabled=nativePending||!caps.some(p=>p.available);
 }
-for(const input of document.querySelectorAll("input[name=native-mode]"))input.addEventListener("change",renderNativeOptions);
+for(const input of document.querySelectorAll("input[name=native-mode]"))input.addEventListener("change",()=>{$("native-provider").value="";$("native-effort").value="";renderNativeOptions();});
 $("native-provider").addEventListener("change",renderNativeOptions);
 $("native-form").addEventListener("submit",async event=>{
   event.preventDefault();if(nativePending)return;

@@ -14,7 +14,7 @@ const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
 const provider=(id,extra={})=>({id,kind:"general",description:"A search engine for web research.",enabled:true,available:true,credential:false,editable:false,managed:false,env:null,...extra});
-let data={native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7-test",sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
+let data={defaults:JSON.parse(await fs.readFile(new URL("./defaults-fixture.json",import.meta.url),"utf8")),native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7-test",sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
 await page.route("http://prism-test.invalid/**",async route=>{
  const url=new URL(route.request().url());
  const pathname=url.pathname;
@@ -25,6 +25,10 @@ await page.route("http://prism-test.invalid/**",async route=>{
    else if(pathname==="/api/overview")body=data;
    else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);p.enabled=d.enabled;p.available=d.enabled;if(d.remove)p.credential=false;}
    else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;}
+   else if(pathname==="/api/defaults"){
+     if(route.request().method()==="PUT"){for(const [id,value] of Object.entries(route.request().postDataJSON().values)){data.defaults.fields.find(f=>f.id===id).value=value;}}
+     body=data.defaults;
+   }
    else if(pathname==="/api/cache/clear"){cleared++;body={deleted_files:2,deleted_bytes:2048};}
    else if(pathname==="/api/logout")logged=false;
    else if(pathname==="/api/native"){lastNative=route.request().postDataJSON();body={provider:"exa",mode:"answer",answer:"Generated answer <script>bad</script>",sources:[{index:1,url:"https://example.org",title:"Native source",excerpt:"Evidence"},{index:2,url:null,title:"Invalid URL",excerpt:""}],truncated:false};}
@@ -101,6 +105,21 @@ try{
  await page.getByRole("button",{name:"Save settings"}).click();
  await page.waitForFunction(()=>document.querySelector("#settings-feedback").textContent.includes("Settings saved"));
  assert.equal(data.settings.preferred,"freeserp");assert.equal(data.settings.timeout,23);
+ // Server-driven defaults are not duplicated by the browser.
+ assert.equal(await page.locator("#default-search_max_results").inputValue(),"10");
+ await page.locator("#default-search_max_results").fill("7");
+ await page.locator("#default-search_mode").selectOption("keyless");
+ await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
+ assert.equal(await page.locator("#default-search_max_results").inputValue(),"7");
+ await page.locator("#save-defaults").click();
+ await page.waitForFunction(()=>document.querySelector("#defaults-feedback").textContent.includes("Defaults saved"));
+ assert.equal(data.defaults.fields.find(f=>f.id==="search_max_results").value,7);
+ assert.equal(data.defaults.fields.find(f=>f.id==="search_mode").value,"keyless");
+ await page.locator('#default-fields details').filter({has:page.locator("summary",{hasText:"Fetching"})}).locator("summary").click();
+ assert.equal(await page.locator("#default-fetch_timeout").isDisabled(),true);
+ await audit("defaults-advanced-dark");
+ await page.locator("#theme").click();await audit("defaults-advanced-white");await page.locator("#theme").click();
+
  await nav("Cache");
  await page.getByRole("button",{name:"Clear all cache",exact:true}).click();
  await page.getByRole("dialog").getByRole("button",{name:"Clear cache",exact:true}).click();
@@ -109,11 +128,17 @@ try{
  await nav("Playground");await page.locator("#query").fill("test query");
  await page.getByRole("button",{name:"Run search"}).click();
  await page.getByRole("link",{name:"Example ↗"}).waitFor();
- assert.equal(lastSearch.mode,"selected");
+ assert.equal(lastSearch.mode,undefined);assert.equal(lastSearch.providers,undefined);assert.equal(lastSearch.max_results,undefined);
+ assert.ok((await page.locator("#search-default-summary").textContent()).includes("Keyless fallback"));
+ assert.ok((await page.locator("#search-default-summary").textContent()).includes("Up to 7"));
+ assert.equal(await page.locator("#search-overrides").evaluate(e=>e.open),false);
+ await page.locator("#search-overrides > summary").click();
  await page.locator('input[name=search-mode][value=auto]').check();
+ await page.locator("#max-results").fill("3");
+ await page.locator("#search-recency").selectOption("any");
  await page.getByRole("button",{name:"Run search"}).click();
  await page.waitForFunction(()=>!document.querySelector("#run-search").disabled);
- assert.equal(lastSearch.mode,"auto");assert.equal(lastSearch.providers,undefined);
+ assert.equal(lastSearch.mode,"auto");assert.equal(lastSearch.providers,undefined);assert.equal(lastSearch.max_results,3);assert.equal(lastSearch.time_filter,"any");
  // Authorize once, then search without another cost dialog for the authorized engine.
  assert.equal(await page.locator("#search-answers").isDisabled(),true);
  data.providers.push(provider("exa",{editable:true,credential:true,env:"EXA_API_KEY"}));

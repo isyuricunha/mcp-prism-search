@@ -204,7 +204,8 @@ def test_dashboard_search_modes(panel, monkeypatch):
     assert client.post("/api/search", headers=HEADERS,
                        json={"query": " ", "providers": ["keenable"]}).status_code == 400
     assert client.post("/api/search", headers=HEADERS,
-                       json={"query": "test"}).status_code == 400
+                       json={"query": "test"}).status_code == 200
+    assert calls[-1] == ("test", {"max_results": None})
 
 
 def test_native_panel_cost_gate(panel, monkeypatch):
@@ -244,3 +245,39 @@ def test_ai_search_settings_persist(panel, monkeypatch):
     assert client.put("/api/settings", headers=HEADERS, json={
         "ai_search_enabled": True,
     }).status_code == 400
+
+
+def test_defaults_api_schema_and_shared_resolution(panel, monkeypatch):
+    from mcp_prism_search.defaults import ENV, effective_defaults
+
+    client, store, _ = panel
+    assert client.get("/api/defaults").status_code == 401
+    sign_in(client)
+    response = client.get("/api/defaults")
+    fields = {f["id"]: f for f in response.json()["fields"]}
+    rows = client.get("/api/overview").json()["providers"]
+    assert len(rows) == 17
+    assert all(p["display_name"] and p["docs_url"] and p["usage_note"] for p in rows)
+    assert fields["search_max_results"]["value"] == 10
+    assert fields["search_max_results"]["min"] == 1
+    assert "keyless" in fields["search_mode"]["choices"]
+    response = client.put("/api/defaults", headers=HEADERS, json={"values": {
+        "search_mode": "selected", "search_providers": ["keenable"], "search_max_results": 6,
+    }})
+    assert response.status_code == 200
+    assert effective_defaults().search_max_results == 6
+    assert store.options[ENV["search_mode"]] == "selected"
+    response = client.put("/api/defaults", headers=HEADERS, json={"values": {
+        "search_providers": [], "fetch_max_chars": 6000,
+    }})
+    assert response.status_code == 400
+    assert effective_defaults().fetch_max_chars == 12000
+    monkeypatch.setenv(ENV["search_max_results"], "4")
+    assert client.put("/api/defaults", headers=HEADERS, json={"values": {
+        "search_max_results": 5,
+    }}).status_code == 400
+    monkeypatch.setenv("MCP_DISABLED_PROVIDERS", "keenable")
+    row = next(p for p in client.get("/api/overview").json()["providers"] if p["id"]=="keenable")
+    assert row["enabled_locked"] and not row["available"]
+    assert client.put("/api/providers/keenable", headers=HEADERS,
+                      json={"enabled": True}).status_code == 400

@@ -23,9 +23,9 @@ The MCP endpoint remains `http://127.0.0.1:49317/mcp`.
 The dashboard is independent of MCP authentication.
 
 To disable it, start the stack again using only the base Compose file.
-The dashboard data is retained but not loaded in headless mode; credentials
-and options saved through the dashboard therefore require enabling the
-dashboard again. Environment-configured providers remain independent.
+Existing settings, encrypted credentials and provider flags are loaded by
+the MCP process even in headless mode. The dashboard is only a management
+interface over the same server state. See [server defaults](defaults.md).
 
 ## Local development (HTTP transport)
 
@@ -53,15 +53,16 @@ example password or print credentials.
 | MCP_WEBUI_HOST | 127.0.0.1 | Local administrative bind address |
 | MCP_WEBUI_PORT | 49318 | Administrative port |
 | MCP_WEBUI_ALLOWED_HOSTS | localhost,127.0.0.1 | Exact allowed hostnames; no wildcard |
-| MCP_WEBUI_DATA_DIR | ~/.local/share/prism-admin | Private data directory, mode 0700 |
+| MCP_STATE_DIR | ~/.local/share/prism-admin (Docker uses /data/admin) | Canonical private state directory, mode 0700 |
+| MCP_WEBUI_DATA_DIR | existing image default /data/admin | Backward-compatible state directory alias |
 | MCP_WEBUI_ASSETS | webui/dist in source checkout | Static assets directory |
 | MCP_PREFERRED_PROVIDER | unset | Optional tie-break preference in auto routing |
 
 The Docker image sets the assets path to /app/webui and the state directory
 to /data/admin. Both MCP and the admin listener run in the same Python
 process. Enabling the dashboard with stdio is rejected explicitly; use
-HTTP if you need live management. When disabled the panel module is not
-loaded and no panel database or listener is created.
+HTTP if you need live management. When disabled no panel module or listener is loaded. Existing server state
+is still loaded; a fresh headless installation does not create a database.
 
 ## Features
 
@@ -74,14 +75,15 @@ loaded and no panel database or listener is created.
   keys; open the playground with an available provider selected. Unsaved form
   edits survive refresh. Environment credentials are read-only and take
   precedence. SearXNG's instance URL is intentionally environment-only.
-- Playground: search a single/selected set of available general providers,
-  use automatic fallback, or query all available general providers in parallel.
-  Adjust the result limit and inspect cached/live results and individual attempts.
+- Playground: start with only a query, inherit live server defaults, and
+  expand optional overrides for keyless, automatic, selected or all engines,
+  result limits, SafeSearch, freshness and AI. Inspect result sources and attempts.
   Keyed or self-hosted selections require explicit confirmation in the UI.
   Specialized Wikipedia and Hacker News tools remain available through MCP.
 - Cache: inspect counts, disk usage and namespaces, prune expired/corrupt
   entries, or clear a selected namespace/all after confirmation.
-- Settings: provider timeout, search/fetch cache TTLs, preferred engine
+- Settings: server-owned defaults for search, extraction, vertical and native AI
+  tools; provider timeout, search/fetch cache TTLs, preferred engine
   (a health tie-breaker), and browser-local appearance. Locked values identify
   their environment source. Unsaved edits can be reset.
 - Connection: enter the endpoint reachable by your client and copy OpenCode
@@ -98,7 +100,7 @@ is shipped to the browser.
 Provider availability means configured/enabled, not a successful upstream
 health check. Use the playground to test a provider. Metrics count actual
 upstream attempts, not HTTP calls made internally by paginated providers,
-and are collected only while the dashboard is enabled. Query text is not
+and are collected whenever persistent server state is active. Query text is not
 stored in the metrics database; the existing search cache and upstream
 HTTP logs can still contain query text.
 

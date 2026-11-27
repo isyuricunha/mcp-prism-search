@@ -24,6 +24,8 @@ from starlette.staticfiles import StaticFiles
 
 from mcp_prism_search import __version__, cache, providers, runtime
 from mcp_prism_search.ai_search import ENABLED_ENV, PROVIDERS_ENV, SUPPORTED, policy
+from mcp_prism_search.defaults import Recency, describe_defaults, update_defaults
+from mcp_prism_search.models import SafeSearch
 from mcp_prism_search.native import Effort, NativeError, capabilities, synthesize
 from mcp_prism_search.panel_store import PanelStore
 from mcp_prism_search.search import aggregated_search, get_ddg_timeout_seconds
@@ -63,6 +65,11 @@ class Settings(BaseModel):
     ai_search_providers: list[str] | None = Field(default=None, max_length=5)
 
 
+class DefaultsPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    values: dict[str, str | int | list[str] | None]
+
+
 class ClearCache(BaseModel):
     model_config = ConfigDict(extra="forbid")
     namespace: Literal["search", "fetch", "all"]
@@ -73,18 +80,20 @@ class Query(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=1000)
     providers: list[str] | None = Field(default=None, min_length=1, max_length=50)
-    mode: Literal["selected", "auto", "all"] = "selected"
-    max_results: int = Field(default=5, ge=1, le=10)
+    mode: Literal["default", "selected", "auto", "keyless", "all"] | None = None
+    max_results: int | None = Field(default=None, ge=1, le=30)
+    safe_search: SafeSearch | None = None
+    time_filter: Recency | None = None
     include_answers: bool | None = Field(default=None, strict=True)
 
 
 class NativeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=4000)
-    provider: Literal["tavily", "exa", "youcom", "brave", "jina"]
+    provider: Literal["tavily", "exa", "youcom", "brave", "jina"] | None = None
     mode: Literal["answer", "research"]
     allow_cost: bool = Field(default=False, strict=True)
-    effort: Effort = "lite"
+    effort: Effort | None = None
 
 
 def error(message: str, status: int = 400):
@@ -153,7 +162,10 @@ def create_app(password: str, store: PanelStore, assets: Path,
             env = spec.needs
             rows.append({
                 "id": name, "kind": spec.kind, "description": spec.description,
+                "display_name": spec.display_name or name, "docs_url": spec.docs_url,
+                "signup_url": spec.signup_url, "usage_note": spec.usage_note,
                 "enabled": runtime.enabled(name), "available": name in available,
+                "enabled_locked": runtime.disabled_by_env(name),
                 "credential": bool(env and runtime.setting(env)),
                 "managed": bool(env and os.getenv(env)),
                 "editable": bool(env and env != "SEARXNG_URL"), "env": env,
@@ -167,6 +179,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
             },
             "providers": rows, "metrics": store.metrics(), "counters": store.counters(),
             "settings": current_settings(),
+            "defaults": describe_defaults(),
             "native": capabilities(),
             "cache": (await asyncio.to_thread(cache.get_cache_stats)).to_dict(),
         })
@@ -203,6 +216,15 @@ def create_app(password: str, store: PanelStore, assets: Path,
         store.set_options(values)
         return JSONResponse(current_settings())
 
+    async def defaults(request):
+        if request.method == "PUT":
+            patch = await body(request, DefaultsPatch)
+            try:
+                update_defaults(store, patch.values)
+            except ValueError as exc:
+                return error(str(exc))
+        return JSONResponse(describe_defaults())
+
     async def update(request):
         name = request.path_params["name"]
         providers.available_providers()
@@ -210,19 +232,23 @@ def create_app(password: str, store: PanelStore, assets: Path,
         if not spec:
             return error("Unknown provider", 404)
         data = await body(request, Update)
+        if data.enabled and runtime.disabled_by_env(name):
+            return error("Provider is disabled by the server environment")
         if data.credential is not None and data.remove:
             return error("Choose replace or remove, not both")
         if (data.credential is not None or data.remove) and (
             not spec.needs or spec.needs == "SEARXNG_URL" or os.getenv(spec.needs)
         ):
             return error("Credential is not editable")
-        store.update(name, spec.needs, data.enabled, data.credential, data.remove)
+        enabled = store.flags.get(name, True) if runtime.disabled_by_env(name) else data.enabled
+        store.update(name, spec.needs, enabled, data.credential, data.remove)
         return JSONResponse({"ok": True})
 
     async def search(request):
         data = await body(request, Query)
         available = providers.available_providers("general")
-        if data.mode == "selected":
+        mode = data.mode or ("selected" if data.providers is not None else "default")
+        if mode == "selected":
             if not data.providers or any(name not in available for name in data.providers):
                 return error("Choose available general providers")
         elif data.providers is not None:
@@ -232,11 +258,15 @@ def create_app(password: str, store: PanelStore, assets: Path,
         if search_slots.locked():
             return error("Too many concurrent searches", 429)
         async with search_slots:
-            kwargs = {"providers": data.providers} if data.mode == "selected" else {
-                "provider": data.mode
-            }
+            kwargs = {"providers": data.providers} if mode == "selected" else (
+                {} if mode == "default" else {"provider": mode}
+            )
             if data.include_answers is not None:
                 kwargs["include_answers"] = data.include_answers
+            if data.safe_search is not None:
+                kwargs["safe_search"] = data.safe_search
+            if data.time_filter is not None:
+                kwargs["time_filter"] = data.time_filter
             result = await aggregated_search(
                 data.query.strip(), max_results=data.max_results, **kwargs
             )
@@ -269,11 +299,12 @@ def create_app(password: str, store: PanelStore, assets: Path,
 
     @asynccontextmanager
     async def lifespan(app):
+        previous = runtime.state()
         runtime.install(store)
         try:
             yield
         finally:
-            runtime.install(None)
+            runtime.install(previous)
 
     app = Starlette(routes=[
         Route("/api/login", login, methods=["POST"]),
@@ -285,6 +316,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         Route("/api/cache/prune", prune, methods=["POST"]),
         Route("/api/cache/clear", clear, methods=["POST"]),
         Route("/api/settings", settings, methods=["PUT"]),
+        Route("/api/defaults", defaults, methods=["GET", "PUT"]),
         Mount("/", app=StaticFiles(directory=assets, html=True)),
     ], lifespan=lifespan)
 
@@ -320,7 +352,6 @@ def create_app(password: str, store: PanelStore, assets: Path,
 
 
 def configured_app():
-    directory = Path(os.getenv("MCP_WEBUI_DATA_DIR", str(Path.home() / ".local/share/prism-admin")))
     assets = Path(os.getenv(
         "MCP_WEBUI_ASSETS", str(Path(__file__).resolve().parents[2] / "webui/dist")
     ))
@@ -331,4 +362,5 @@ def configured_app():
     hosts = [h.strip() for h in hosts if h.strip()]
     if not hosts or any("*" in h for h in hosts):
         raise RuntimeError("Use explicit MCP_WEBUI_ALLOWED_HOSTS values")
-    return create_app(password, PanelStore(directory), assets, hosts)
+    store = runtime.state() or runtime.configured_store(create=True)
+    return create_app(password, store, assets, hosts)

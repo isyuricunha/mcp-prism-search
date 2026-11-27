@@ -30,6 +30,10 @@ class ProviderSpec:
     needs: str | None  # env var required to enable (None = keyless)
     description: str
     search: ProviderFn
+    display_name: str = ""
+    docs_url: str | None = None
+    signup_url: str | None = None
+    usage_note: str = ""
 
 
 @dataclass

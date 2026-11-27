@@ -81,6 +81,9 @@ loopback port; see [Web Dashboard](webui.md).
 
 ## Environment variables (reference)
 
+See [server defaults](defaults.md) for inherited tool parameters, provider
+policy, state persistence and configuration reference.
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `MCP_TRANSPORT` | `stdio` | `stdio` or `http` (streamable HTTP) |
@@ -114,7 +117,7 @@ allowed), known placeholder tokens, invalid `MCP_PORT`, invalid
 
 Configuration changes: edit `.env`/compose and `docker compose up -d`
 again. Code/image changes: re-pull the previous image tag or re-deploy the
-previous commit. The cache volume is disposable by design — deleting it
+previous commit. The cache directory is disposable by design — deleting only that directory
 never loses user data.
 
 
@@ -431,7 +434,7 @@ TTL checks on read prevent stale cache values from being returned, but TTL on
 read alone does not remove old files from disk. Long-running deployments can
 therefore accumulate expired cache files unless pruning deletes them. This
 server prunes cache files on startup when `CACHE_PRUNE_ON_START=true` and also
-opportunistically during cache access/write, throttled by
+periodically in HTTP mode, controlled by
 `CACHE_PRUNE_INTERVAL_SECONDS`.
 
 Pruning covers both known cache namespaces:
@@ -484,7 +487,7 @@ This project does not rotate proxies, bypass captchas, or attempt to evade rate 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `MCP_CACHE_DIR` | `/data/cache` | Directory for JSON cache files. |
-| `SEARCH_PROVIDER` | `duckduckgo_html` | Search provider mode: `duckduckgo_html`, `ddgs`, or `auto`. Invalid values safely fall back to `duckduckgo_html`. |
+| `SEARCH_PROVIDER` | `duckduckgo_html` | Legacy DuckDuckGo tool mode: `duckduckgo_html`, `ddgs`, or `auto`. Invalid values safely fall back to `duckduckgo_html`. |
 | `DDGS_BACKEND` | `duckduckgo` | Backend passed to `DDGS().text(...)` when `SEARCH_PROVIDER=ddgs` or `SEARCH_PROVIDER=auto`. `duckduckgo` keeps `ddgs` DuckDuckGo-focused when supported. `auto` is broader metasearch mode and may query multiple upstream providers. Invalid values safely fall back to `duckduckgo`. |
 | `DDG_CACHE_TTL_SECONDS` | `21600` | Search cache TTL in seconds. |
 | `FETCH_CACHE_TTL_SECONDS` | `7200` | Web fetch cache TTL in seconds. |
@@ -500,6 +503,6 @@ This project does not rotate proxies, bypass captchas, or attempt to evade rate 
 | `MCP_ALLOWED_HOSTS` | `*` | Comma-separated Host allowlist for HTTP mode. `*` supports arbitrary deployment hosts by disabling SDK Host/Origin rebinding checks; prefer exact values. |
 | `MCP_ALLOWED_ORIGINS` | `*` | Comma-separated Origin allowlist for HTTP mode. `*` supports arbitrary origins by disabling SDK Host/Origin rebinding checks; prefer exact values. |
 | `CACHE_PRUNE_ON_START` | `true` | Run cache pruning once when the MCP server starts. |
-| `CACHE_PRUNE_INTERVAL_SECONDS` | `3600` | Minimum interval between opportunistic runtime prune attempts triggered by cache access/write. |
+| `CACHE_PRUNE_INTERVAL_SECONDS` | `3600` | Interval between background pruning attempts in HTTP mode. |
 | `CACHE_MAX_AGE_SECONDS` | unset | Optional maximum cache file age in seconds. If unset, invalid, or `0`, max-age pruning is disabled. The compose file sets `604800` (7 days). |
 | `CACHE_MAX_SIZE_MB` | unset | Optional total cache size limit in MiB. If unset, invalid, or `0`, size-based pruning is disabled. The compose file sets `512`. |

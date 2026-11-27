@@ -237,7 +237,7 @@ def test_parallel_combined_engines(configure, monkeypatch):
     assert len(result.results) == 1
 
 
-def test_auto_keyless_winner_preserves_cache(configure, monkeypatch):
+def test_auto_prioritizes_authorized_ai_and_optout_preserves_cache(configure, monkeypatch):
     from mcp_prism_search import providers
     from mcp_prism_search.models import SearchResult
 
@@ -249,7 +249,17 @@ def test_auto_keyless_winner_preserves_cache(configure, monkeypatch):
 
     monkeypatch.setattr(providers, "resolve_chain", lambda *args: ["keenable", "tavily"])
     monkeypatch.setattr(providers, "run_provider", retrieve)
-    first = asyncio.run(search.aggregated_search("question", provider="auto"))
-    second = asyncio.run(search.aggregated_search("question", provider="auto"))
+    first = asyncio.run(search.aggregated_search(
+        "question", provider="auto", include_answers=False,
+    ))
+    second = asyncio.run(search.aggregated_search(
+        "question", provider="auto", include_answers=False,
+    ))
     assert first.provider == "keenable" and not first.answers
     assert second.cached and not second.answers and calls == ["keenable"]
+
+    mock_http(monkeypatch, lambda req: httpx.Response(200, json={
+        "answer": "AI", "results": [ROW],
+    }))
+    third = asyncio.run(search.aggregated_search("question", provider="auto"))
+    assert third.provider == "tavily" and third.answers and not third.cached

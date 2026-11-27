@@ -235,9 +235,18 @@ async def _tavily_research(client, headers, payload):
             raise ValueError("Research failed")
 
 
-async def synthesize(query: str, provider: str, mode: Mode, *,
-                     allow_cost: bool = False, effort: Effort = "lite",
+async def synthesize(query: str, provider: str | None, mode: Mode, *,
+                     allow_cost: bool = False, effort: Effort | None = None,
                      wait_for_slot: bool = False) -> NativeResponse:
+    from mcp_prism_search.defaults import effective_defaults
+
+    defaults = effective_defaults()
+    if provider is None:
+        provider = defaults.answer_provider if mode == "answer" else defaults.research_provider
+        if provider == "explicit":
+            raise NativeError("Choose a provider or configure a default provider.")
+    if effort is None:
+        effort = defaults.research_effort if mode == "research" else "lite"
     query = query.strip()
     if not query or len(query) > 4000:
         raise NativeError("Enter a question of 1–4000 characters.")

@@ -39,9 +39,9 @@ reports synthesis outcomes. No additional LLM key is needed.
   upstream web results (the provider controls the result count).
 - Brave Answers and Jina DeepSearch use separate generation requests only
   after successful ordinary retrieval; they can cost more and take longer.
-- Auto mode enhances only authorized engines it actually attempts; it does
-  not force extra providers into the fallback chain. Selected/all modes
-  enhance the corresponding authorized providers.
+- Auto mode prioritizes authorized eligible engines within the existing
+  chain. Selected/all modes enhance the corresponding authorized providers.
+  Keyless mode never calls authenticated engines. See [server defaults](defaults.md).
 - Domain controls, freshness, non-off SafeSearch and queries longer than
   400 characters skip synthesis to avoid silently weakening constraints.
 - If synthesis fails, valid retrieval results remain available. When the
@@ -49,7 +49,7 @@ reports synthesis outcomes. No additional LLM key is needed.
   search request instead (which may also cost credits). No synthesis retry
   or automatic paid synthesis fallback is performed.
 - Synthesized results are not cached. Retrieval-only searches retain their
-  regular cache; auto can reuse a cached ordinary winner. Enhanced searches
+  regular cache; an eligible AI search bypasses retrieval-only cached winners. Enhanced searches
   bound each answer to 6,000 characters, 12 sources and 500 characters per
   excerpt, with a truncation flag. Two synthesis calls may run concurrently;
   queued combined calls share the provider timeout budget.

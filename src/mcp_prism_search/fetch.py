@@ -10,6 +10,7 @@ from urllib.parse import urljoin, urlparse, urlunparse
 import httpx
 
 from mcp_prism_search.cache import JsonFileCache, build_fetch_cache, get_env_int
+from mcp_prism_search.defaults import effective_defaults, search_parameters
 from mcp_prism_search.models import (
     DeepSearchPage,
     DeepSearchRequest,
@@ -47,7 +48,7 @@ FETCH_HEADERS = {
 
 
 def get_fetch_timeout_seconds() -> int:
-    return get_env_int("FETCH_TIMEOUT_SECONDS", DEFAULT_FETCH_TIMEOUT_SECONDS)
+    return effective_defaults().fetch_timeout
 
 
 def get_fetch_max_bytes() -> int:
@@ -57,7 +58,7 @@ def get_fetch_max_bytes() -> int:
 def get_max_concurrency(max_concurrency: int | None = None) -> int:
     if max_concurrency is not None:
         return max_concurrency
-    return min(get_env_int("MAX_CONCURRENCY", DEFAULT_MAX_CONCURRENCY), 12)
+    return effective_defaults().deep_concurrency
 
 
 def _cache_payload(request: FetchRequest) -> dict[str, Any]:
@@ -260,11 +261,14 @@ def _response_to_fetch_response(
 
 async def web_fetch(
     url: str,
-    max_chars: int = 12000,
+    max_chars: int | None = None,
     *,
     cache: JsonFileCache | None = None,
 ) -> FetchResponse:
-    request = FetchRequest(url=url, max_chars=max_chars)
+    request = FetchRequest(
+        url=url,
+        max_chars=max_chars if max_chars is not None else effective_defaults().fetch_max_chars,
+    )
 
     try:
         await validate_fetch_url(request.url)
@@ -303,11 +307,11 @@ async def web_fetch(
 
 async def ddg_deep_search(
     query: str,
-    max_results: int = 10,
+    max_results: int | None = None,
     search_window: int | None = None,
-    max_pages: int = 5,
-    max_chars_per_page: int = 12000,
-    safe_search: str = "off",
+    max_pages: int | None = None,
+    max_chars_per_page: int | None = None,
+    safe_search: str | None = None,
     time_filter: str | None = None,
     blocked_domains: list[str] | None = None,
     allowed_domains: list[str] | None = None,
@@ -315,18 +319,19 @@ async def ddg_deep_search(
     max_concurrency: int | None = None,
     progress_callback: Any = None,
 ) -> DeepSearchResponse:
+    defaults = effective_defaults()
     request = DeepSearchRequest(
         query=query,
-        max_results=max_results,
         search_window=search_window,
-        max_pages=max_pages,
-        max_chars_per_page=max_chars_per_page,
-        safe_search=safe_search,
-        time_filter=time_filter,
-        blocked_domains=blocked_domains or [],
-        allowed_domains=allowed_domains or [],
-        preferred_domains=preferred_domains or [],
+        max_pages=max_pages if max_pages is not None else defaults.deep_max_pages,
+        max_chars_per_page=(max_chars_per_page if max_chars_per_page is not None
+                            else defaults.fetch_max_chars),
         max_concurrency=max_concurrency,
+        **search_parameters(
+            defaults, max_results=max_results, safe_search=safe_search,
+            time_filter=time_filter, blocked_domains=blocked_domains,
+            allowed_domains=allowed_domains, preferred_domains=preferred_domains,
+        ),
     )
 
     async def _safe_progress(progress: float, total: float) -> None:
@@ -345,7 +350,7 @@ async def ddg_deep_search(
         max_results=request.max_results,
         search_window=request.search_window,
         safe_search=request.safe_search,
-        time_filter=request.time_filter,
+        time_filter=request.time_filter or "any",
         blocked_domains=request.blocked_domains,
         allowed_domains=request.allowed_domains,
         preferred_domains=request.preferred_domains,

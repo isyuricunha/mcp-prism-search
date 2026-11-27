@@ -15,6 +15,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from mcp_prism_search.cache import JsonFileCache, build_search_cache, get_env_int
+from mcp_prism_search.defaults import effective_defaults, search_parameters
 from mcp_prism_search.domains import apply_domain_controls
 from mcp_prism_search.models import (
     SearchProvider,
@@ -137,7 +138,7 @@ def search_ttl_for_query(query: str) -> int | None:
     """
     tokens = set(re.findall(r"\w+", query.lower()))
     if tokens & NEWS_HINT_TOKENS:
-        return NEWS_SEARCH_TTL_SECONDS
+        return effective_defaults().news_cache_ttl
     return None
 
 
@@ -362,9 +363,9 @@ def apply_search_domain_controls(
 
 async def ddg_search(
     query: str,
-    max_results: int = 10,
+    max_results: int | None = None,
     search_window: int | None = None,
-    safe_search: str = "off",
+    safe_search: str | None = None,
     time_filter: str | None = None,
     blocked_domains: list[str] | None = None,
     allowed_domains: list[str] | None = None,
@@ -372,15 +373,15 @@ async def ddg_search(
     *,
     cache: JsonFileCache | None = None,
 ) -> SearchResponse:
+    defaults = effective_defaults()
     request = SearchRequest(
         query=query,
-        max_results=max_results,
         search_window=search_window,
-        safe_search=safe_search,
-        time_filter=time_filter,
-        blocked_domains=blocked_domains or [],
-        allowed_domains=allowed_domains or [],
-        preferred_domains=preferred_domains or [],
+        **search_parameters(
+            defaults, max_results=max_results, safe_search=safe_search,
+            time_filter=time_filter, blocked_domains=blocked_domains,
+            allowed_domains=allowed_domains, preferred_domains=preferred_domains,
+        ),
     )
     cache = cache or build_search_cache()
     provider = cast(SearchProvider, get_search_provider())
@@ -399,7 +400,11 @@ async def ddg_search(
     provider_errors: list[str] = []
     provider_attempts: list[str] = []
 
-    if provider in {"duckduckgo_html", "auto"}:
+    from mcp_prism_search import runtime
+
+    if provider in {"duckduckgo_html", "auto"} and not runtime.enabled("ddg_html"):
+        provider_errors.append("DuckDuckGo HTML provider disabled")
+    if provider in {"duckduckgo_html", "auto"} and runtime.enabled("ddg_html"):
         try:
             LOGGER.debug("Running DuckDuckGo HTML search")
             html_results = apply_search_domain_controls(
@@ -421,7 +426,7 @@ async def ddg_search(
             provider_errors.append("duckduckgo_html returned no results")
         except Exception as exc:  # noqa: BLE001 - provider failures must not crash the server.
             provider_attempts.append("duckduckgo_html: error")
-            provider_errors.append(f"duckduckgo_html failed: {exc}")
+            provider_errors.append(f"duckduckgo_html failed: {type(exc).__name__}")
 
     if provider in {"ddgs", "auto"}:
         backend = ddgs_backend or DEFAULT_DDGS_BACKEND
@@ -448,7 +453,7 @@ async def ddg_search(
             provider_errors.append(f"ddgs backend {backend} returned no results")
         except Exception as exc:  # noqa: BLE001 - provider failures must not crash the server.
             provider_attempts.append(f"ddgs ({backend}): error")
-            provider_errors.append(f"ddgs backend {backend} failed: {exc}")
+            provider_errors.append(f"ddgs backend {backend} failed: {type(exc).__name__}")
 
     return SearchResponse(
         query=request.query,
@@ -538,11 +543,11 @@ def _final_results(results: list[SearchResult], request: SearchRequest) -> list[
 async def aggregated_search(
     query: str,
     *,
-    provider: str = "auto",
+    provider: str | None = None,
     providers: list[str] | None = None,
-    max_results: int = 10,
+    max_results: int | None = None,
     search_window: int | None = None,
-    safe_search: str = "off",
+    safe_search: str | None = None,
     time_filter: str | None = None,
     blocked_domains: list[str] | None = None,
     allowed_domains: list[str] | None = None,
@@ -555,15 +560,27 @@ async def aggregated_search(
     from mcp_prism_search import runtime
     from mcp_prism_search.providers import resolve_chain
 
+    defaults = effective_defaults()
+    inherited_selection = provider is None and providers is None and kind == "general"
+    if providers is not None:
+        provider = provider or "auto"
+    elif provider is None:
+        provider = defaults.vertical_source if kind == "vertical" else defaults.search_mode
+        if provider == "selected":
+            from mcp_prism_search.providers import available_providers
+
+            available = available_providers("general")
+            providers = [name for name in defaults.search_providers if name in available]
+            provider = "auto"
     request = SearchRequest(
         query=query,
-        max_results=max_results,
         search_window=search_window,
-        safe_search=safe_search,
-        time_filter=time_filter,
-        blocked_domains=blocked_domains or [],
-        allowed_domains=allowed_domains or [],
-        preferred_domains=preferred_domains or [],
+        **search_parameters(
+            defaults, max_results=max_results, safe_search=safe_search,
+            time_filter=time_filter, blocked_domains=blocked_domains,
+            allowed_domains=allowed_domains, preferred_domains=preferred_domains,
+            vertical=kind == "vertical",
+        ),
     )
     cache = cache or build_search_cache()
     attempts: list[str] = []
@@ -580,13 +597,15 @@ async def aggregated_search(
         )
 
     try:
+        if inherited_selection and providers == []:
+            raise ValueError("No default selected providers are available")
         if providers is not None:
             if provider not in {"auto", "all"} or not providers:
                 raise ValueError("Provide a nonempty providers list without a single provider.")
             chain = list(dict.fromkeys(providers))
             for name in chain:
                 resolve_chain(name, kind)
-                if name in {"auto", "all"}:
+                if name in {"auto", "all", "keyless", "selected"}:
                     raise ValueError("Select explicit provider names in providers.")
         else:
             chain = resolve_chain(provider, kind)
@@ -599,6 +618,10 @@ async def aggregated_search(
     from mcp_prism_search.ai_search import eligible
 
     enhanced = eligible(chain, request, include_answers) if kind == "general" else set()
+    # An administrator who opted into AI answers expects auto to actually try
+    # an eligible provider first. Retain health order within both groups.
+    if provider == "auto" and providers is None and enhanced:
+        chain.sort(key=lambda name: name not in enhanced)
     attempted_enhanced = set()
 
     async def run_one(name, count, timeout):
@@ -610,12 +633,10 @@ async def aggregated_search(
     parallel = provider == "all" or providers is not None
     payload = request.to_cache_payload(
         _aggregator_version=2, _mode=mode, _kind=kind,
-        _providers=sorted(chain) if mode == "auto" else chain,
+        _providers=sorted(chain) if mode in {"auto", "keyless"} else chain,
     )
-    # In auto mode an ordinary cached winner is still a valid fallback result;
-    # only bypass it when that winner is eligible for synthesis.
-    cache_read = not enhanced or mode == "auto"
-    cached = cache.get(payload, ttl_seconds=search_ttl_for_query(query)) if cache_read else None
+    # A cached retrieval-only winner must not suppress the requested AI preference.
+    cached = None if enhanced else cache.get(payload, ttl_seconds=search_ttl_for_query(query))
     if cached is not None:
         try:
             result = SearchResponse.model_validate(cached).model_copy(update={"cached": True})

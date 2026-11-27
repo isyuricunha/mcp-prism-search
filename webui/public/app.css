@@ -233,3 +233,15 @@ button[aria-busy=true]::after { content:""; display:inline-block; width:12px; he
 .ai-provider-row small { overflow-wrap:anywhere; }
 #search-ai-results { gap:12px; }
 #ai-provider-field p { margin:8px 0 12px; }
+
+.search-options { border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); padding:12px; }
+.search-options[open] { display:grid; gap:14px; }
+.search-options summary,.default-group summary { cursor:pointer; font-weight:500; color:var(--text-primary); padding:5px 0; }
+.search-options summary .muted { margin-left:8px; }
+.default-group { border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); padding:14px; }
+.default-group[open],section.default-group { display:grid; gap:12px; }
+.default-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.default-field:has(.default-provider-picker) { grid-column:1/-1; }
+.default-provider-picker { display:grid; gap:10px; }
+.default-field select,.search-options select { font:inherit; color:var(--text-primary); background:var(--yu-bg-input); border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); padding:10px 12px; min-height:44px; width:100%; }
+@media(max-width:720px) { .default-grid { grid-template-columns:1fr; } }

@@ -11,7 +11,9 @@ The agent/client reasons over the returned data; the server never calls models.
 |---|---|
 | `server.py` | MCPServer wiring, tool definitions, bearer auth middleware, HTTP settings, background prune loop, `/health` route |
 | `search.py` | Multi-provider orchestration, cache, health-ordered fallback, parallel selection, ranking and legacy DuckDuckGo search |
-| `providers/` | Provider registry and engine-specific API adapters |
+| `providers/` | Provider registry, canonical public metadata and engine-specific adapters |
+| `defaults.py` | Validated server-owned defaults, precedence and settings metadata |
+| `runtime.py` | Shared runtime state, environment precedence and optional persisted settings |
 | `fetch.py` | SSRF-checked webpage fetching with IP pinning, redirect chain validation, streamed byte cap, clean text extraction, deep search orchestration |
 | `cache.py` | File-based TTL JSON cache (one file per key), atomic writes, background-capable pruning, stats and clear tools |
 | `security.py` | URL shape validation, hostname/IP blocklists, DNS resolution checks, safe-address pinning helper |
@@ -246,8 +248,9 @@ Unsupported schemes such as `file://`, `ftp://`, `ssh://`, `gopher://`, and `dat
 The independent admin ASGI listener uses the same process and search registry,
 but a separate password/session authentication boundary. Static Astro assets
 are served directly from disk. SQLite stores encrypted keys, provider flags,
-settings and bounded aggregate metrics. Headless mode does not import the panel
-or initialize state. See [dashboard design and operations](webui.md).
+settings and bounded aggregate metrics. Headless mode does not import the panel or create new state, but loads
+existing settings and encrypted credentials. The dashboard renders metadata
+from the core registry and configuration model. See [dashboard design and operations](webui.md).
 
 ## Optional native synthesis
 

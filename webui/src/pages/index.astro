@@ -58,7 +58,7 @@ const sections = [
             <div class="card"><div class="heading"><div class="stack"><h2>Installed server</h2><p class="muted">Version information comes from the running MCP process.</p></div><span class="badge ready" id="server-status">Connected</span></div><dl class="facts" id="server-facts"></dl><div class="actions"><button data-go="connection" type="button" class="tonal">Connect a client</button><a href="https://modelcontextprotocol.io/specification" target="_blank" rel="noopener noreferrer">MCP specification ↗</a></div></div>
             <div class="card"><div class="stack"><h2>Provider readiness</h2><p class="muted">Configuration status, not an external health check.</p></div><dl class="facts" id="readiness"></dl><div class="actions"><button data-go="providers" type="button">Manage providers</button><button data-go="playground" type="button">Test a search</button></div></div>
           </div>
-          <div class="card"><div class="heading"><div class="stack"><h2>Provider activity</h2><p class="muted">Cumulative attempts recorded while the dashboard is enabled. A cached search makes no new upstream attempt.</p></div></div>
+          <div class="card"><div class="heading"><div class="stack"><h2>Provider activity</h2><p class="muted">Cumulative attempts recorded while persistent server state is active. A cached search makes no new upstream attempt.</p></div></div>
             <div class="table-wrap" tabindex="0" role="region" aria-label="Provider activity table"><table><thead><tr><th scope="col">Provider</th><th scope="col">Attempts</th><th scope="col">Success</th><th scope="col">Empty</th><th scope="col">Errors</th><th scope="col">Rate limits</th><th scope="col">Avg. latency</th></tr></thead><tbody id="metrics"></tbody></table></div>
             <p class="muted small">Rate limits are included in errors. Attempts are not billing units; providers may make several upstream HTTP requests per attempt.</p>
           </div>
@@ -76,15 +76,26 @@ const sections = [
           <form id="search-form" class="card">
             <div class="stack"><h2>Search the web</h2><p class="muted">Run the same general search engine selection used by MCP clients. Cached results may be reused. Search terms are sent to the chosen providers.</p></div>
             <div class="field"><label for="query">Search query</label><textarea id="query" required maxlength="1000" rows="3" placeholder="e.g. Python asyncio TaskGroup documentation"></textarea><span id="query-count" class="muted small">0 / 1000</span></div>
-            <fieldset><legend>Search mode</legend><div class="mode-grid">
-              <label class="mode-option"><input type="radio" name="search-mode" value="selected" checked /><span><strong>Selected engines</strong><small>Search one engine or several in parallel.</small></span></label>
-              <label class="mode-option"><input type="radio" name="search-mode" value="auto" /><span><strong>Automatic fallback</strong><small>Try available engines until results are found.</small></span></label>
-              <label class="mode-option"><input type="radio" name="search-mode" value="all" /><span><strong>All engines</strong><small>Search every available general engine in parallel.</small></span></label>
-            </div></fieldset>
-            <fieldset id="search-provider-field"><legend>Choose engines</legend><div class="actions"><button id="select-keyless" type="button">Select keyless</button><button id="clear-selection" type="button">Clear selection</button><span id="selection-count" class="muted small"></span></div><div id="choices" class="choices"></div></fieldset>
-            <div class="stack"><label class="switch-label"><input id="search-answers" type="checkbox" class="switch" role="switch" aria-describedby="search-answers-hint" />Include provider AI answers</label><p id="search-answers-hint" class="muted small">Enable AI-enhanced search in Settings to use this option.</p><button type="button" class="tonal" data-go="settings">Manage AI search</button></div>
-            <div id="search-cost" class="notice" hidden>One or more selected engines require an API key or private instance. Requests may consume credits.</div>
-            <div class="form-footer"><div class="field compact"><label for="max-results">Maximum results</label><input id="max-results" type="number" min="1" max="10" value="5" required /></div><button id="run-search" type="submit" class="primary">Run search</button></div>
+            <p id="search-default-summary" class="muted small" role="status">Loading server defaults…</p>
+            <details id="search-overrides" class="search-options"><summary>Search options <span class="muted small">Optional overrides</span></summary>
+              <fieldset><legend>Search mode</legend><div class="mode-grid">
+                <label class="mode-option"><input type="radio" name="search-mode" value="default" checked /><span><strong>Server defaults</strong><small>Use the configuration shared by all MCP clients.</small></span></label>
+                <label class="mode-option"><input type="radio" name="search-mode" value="auto" /><span><strong>Automatic</strong><small>Try available engines until results are found.</small></span></label>
+                <label class="mode-option"><input type="radio" name="search-mode" value="keyless" /><span><strong>Keyless only</strong><small>Automatic fallback without API keys.</small></span></label>
+                <label class="mode-option"><input type="radio" name="search-mode" value="selected" /><span><strong>Selected engines</strong><small>Search one or several in parallel.</small></span></label>
+                <label class="mode-option"><input type="radio" name="search-mode" value="all" /><span><strong>All engines</strong><small>Search every available general engine in parallel.</small></span></label>
+              </div></fieldset>
+              <fieldset id="search-provider-field" hidden><legend>Choose engines</legend><div class="actions"><button id="select-keyless" type="button">Select keyless</button><button id="clear-selection" type="button">Clear selection</button><span id="selection-count" class="muted small"></span></div><div id="choices" class="choices"></div></fieldset>
+              <div class="fields-grid">
+                <div class="field"><label for="max-results">Maximum results</label><input id="max-results" type="number" min="1" max="30" aria-describedby="max-results-hint" /><span id="max-results-hint" class="muted small">Leave blank to inherit.</span></div>
+                <div class="field"><label for="search-safe-search">SafeSearch</label><select id="search-safe-search"></select></div>
+                <div class="field"><label for="search-recency">Freshness</label><select id="search-recency"></select></div>
+              </div>
+              <div class="stack"><label class="switch-label"><input id="search-answers" type="checkbox" class="switch" role="switch" aria-describedby="search-answers-hint" />Include provider AI answers</label><p id="search-answers-hint" class="muted small">Enable AI-enhanced search in Settings to use this option.</p></div>
+              <div class="actions"><button type="button" class="tonal" data-go="settings">Manage server defaults</button><button type="button" id="reset-search-options">Use server defaults</button></div>
+            </details>
+            <div id="search-cost" class="notice" hidden>One or more possible engines require an API key or private instance. Requests may consume credits.</div>
+            <div class="form-footer"><span class="muted small">Only the query is required.</span><button id="run-search" type="submit" class="primary">Run search</button></div>
             <p id="search-error" class="feedback" role="alert"></p>
           </form>
           <details class="card native-panel" id="native-panel">
@@ -110,7 +121,13 @@ const sections = [
         </section>
         <section id="settings" class="page" hidden aria-labelledby="page-title">
           <div class="card appearance-card"><div class="stack"><h2>Appearance</h2><p class="muted">Preferences apply only to this browser.</p></div><div class="appearance-options"><button id="settings-theme" type="button">Switch to White</button><label class="switch-label"><input id="starfield-toggle" class="switch" type="checkbox" role="switch" aria-describedby="starfield-hint" />Starfield Depth</label></div><p id="starfield-hint" class="muted">Optional animated background.</p></div>
-          <form id="ai-settings-form" class="card"><div class="stack"><h2>AI-enhanced search</h2><p class="muted">Allow normal web searches to include native AI responses from explicitly authorized engines. Disabled by default. Enabling this setting authorizes credit consumption for the selected providers across MCP clients and the Playground, without a separate confirmation on every search.</p></div>
+          <form id="defaults-form" class="card">
+            <div class="stack"><h2>Server defaults</h2><p class="muted">Configure once. MCP clients and the Playground inherit these values unless a request explicitly overrides them. Environment-managed values are locked. These are preferences, not security policies.</p></div>
+            <div id="default-fields" class="stack"></div>
+            <div class="actions"><button id="save-defaults" type="submit" class="primary">Save defaults</button><button id="reset-defaults" type="button">Reset unsaved changes</button><button id="builtin-defaults" type="button">Use built-in values</button></div>
+            <p id="defaults-feedback" class="feedback" role="status"></p>
+          </form>
+          <form id="ai-settings-form" class="card"><div class="stack"><h2>AI-enhanced search</h2><p class="muted">Allow normal web searches to include native AI responses from explicitly authorized engines. Disabled by default. Automatic fallback prioritizes authorized engines when synthesis is eligible. Enabling this setting authorizes credit consumption for the selected providers across MCP clients and the Playground, without a separate confirmation on every search.</p></div>
             <label class="switch-label"><input id="ai-search-enabled" type="checkbox" role="switch" class="switch" aria-describedby="ai-policy-lock" />Enable AI-enhanced search</label>
             <p id="ai-policy-lock" class="muted small"></p>
             <fieldset id="ai-provider-field"><legend>Authorized providers</legend><p class="muted small">Choose engines individually. Only enabled and configured providers can be used. Tavily, Exa and You.com return search and answers in a single call; Brave and Jina use additional generation calls.</p><div id="ai-provider-list" class="stack"></div></fieldset>
@@ -118,7 +135,7 @@ const sections = [
             <div class="actions"><button id="save-ai-settings" class="primary" type="submit">Save AI search settings</button><button id="reset-ai-settings" type="button">Reset unsaved changes</button></div>
             <p id="ai-settings-feedback" class="feedback" role="status"></p>
           </form>
-          <form id="settings-form" class="card"><div class="stack"><h2>Search settings</h2><p class="muted">These settings apply to subsequent searches. Values supplied by environment variables are locked and take priority.</p></div>
+          <form id="settings-form" class="card"><div class="stack"><h2>Operational settings</h2><p class="muted">Timeout and cache settings apply to subsequent searches. Values supplied by environment variables are locked and take priority.</p></div>
             <div class="field"><label for="timeout">Provider timeout (seconds)</label><p id="timeout-help" class="muted small">Time budget for each provider, between 2 and 120 seconds. Automatic fallback can take longer overall.</p><input id="timeout" type="number" min="2" max="120" required aria-describedby="timeout-help timeout-lock" /><span id="timeout-lock" class="muted small"></span></div>
             <div class="fields-grid"><div class="field"><label for="search_ttl">Search cache TTL (seconds)</label><p id="search-ttl-help" class="muted small">How long to reuse search results. Freshness-sensitive searches may use a shorter TTL.</p><input id="search_ttl" type="number" min="60" max="604800" required aria-describedby="search-ttl-help search_ttl-lock" /><span id="search_ttl-lock" class="muted small"></span></div>
             <div class="field"><label for="fetch_ttl">Fetch cache TTL (seconds)</label><p id="fetch-ttl-help" class="muted small">How long to reuse extracted webpage content.</p><input id="fetch_ttl" type="number" min="60" max="604800" required aria-describedby="fetch-ttl-help fetch_ttl-lock" /><span id="fetch_ttl-lock" class="muted small"></span></div></div>
