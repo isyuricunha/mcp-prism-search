@@ -502,3 +502,11 @@ def test_whitespace_only_environment_key_is_not_configured(panel, monkeypatch):
                if p["id"] == "tinyfish")
     assert not row["credential"] and not row["configured"] and not row["available"]
     assert row["managed"]
+
+
+def test_native_capabilities_publish_provider_answer_limits(panel):
+    client, _, _ = panel
+    sign_in(client)
+    caps = {p["id"]: p for p in client.get("/api/overview").json()["native"]}
+    assert caps["youcom"]["answer_max_chars"] == 400
+    assert caps["tinyfish"]["answer_max_chars"] == 2000

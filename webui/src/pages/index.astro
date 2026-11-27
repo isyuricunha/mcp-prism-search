@@ -76,7 +76,7 @@ const sections = [
         <section id="playground" class="page" hidden aria-labelledby="page-title">
           <form id="search-form" class="card">
             <div class="stack"><h2>Search the web</h2><p class="muted">Run the same general search engine selection used by MCP clients. Cached results may be reused. Search terms are sent to the chosen providers.</p></div>
-            <div class="field"><label for="query">Search query</label><textarea id="query" required maxlength="4000" aria-describedby="query-count" rows="3" placeholder="e.g. Python asyncio TaskGroup documentation"></textarea><span id="query-count" class="muted small">0 / 4000</span></div>
+            <div class="field"><label for="query">Search query</label><textarea id="query" required maxlength="8000" aria-describedby="query-count" rows="3" placeholder="e.g. Python asyncio TaskGroup documentation"></textarea><span id="query-count" class="muted small">0 / 4000</span></div>
             <p id="search-default-summary" class="muted small" role="status">Loading server defaults…</p>
             <details id="search-overrides" class="search-options"><summary>Search options <span class="muted small">Optional overrides</span></summary>
               <fieldset><legend>Search mode</legend><div class="mode-grid">
@@ -103,7 +103,7 @@ const sections = [
             <summary>AI answers &amp; research <span class="badge">Optional · API credits</span></summary>
             <form id="native-form" class="stack">
               <p class="muted">Ask a provider's own AI to synthesize sources. Prism does not run a language model. Generated answers may be inaccurate; verify the sources. No automatic fallback or retries.</p>
-              <div class="field"><label for="native-query">Question</label><textarea id="native-query" rows="3" maxlength="4000" required placeholder="What would you like to understand?"></textarea></div>
+              <div class="field"><label for="native-query">Question</label><textarea id="native-query" rows="3" maxlength="8000" required aria-describedby="native-count" placeholder="What would you like to understand?"></textarea><span id="native-count" class="muted small">0 / 4000</span></div>
               <fieldset><legend>Capability</legend><div class="choices"><label class="choice-chip"><input type="radio" name="native-mode" value="answer" checked />Answer</label><label class="choice-chip"><input type="radio" name="native-mode" value="research" />Multi-step research</label></div></fieldset>
               <div class="field"><label for="native-provider">Provider</label><select id="native-provider"></select><p id="native-pricing" class="muted small"></p><div id="native-links" class="actions"></div></div>
               <div id="native-effort-field" class="field" hidden><label for="native-effort">Research depth</label><select id="native-effort"></select><p class="muted small">Depth and pricing depend on the provider. Prices are in USD and may change.</p></div>

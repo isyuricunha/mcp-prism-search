@@ -415,7 +415,7 @@ function syncSearchMode(){
   const restricted=($("search-safe-search").value||defaultValue("search_safe_search")||"off")!=="off"||
     ($("search-recency").value||defaultValue("search_recency")||"any")!=="any"||
     ["allowed_domains","blocked_domains","preferred_domains"].some(k=>(defaultValue(k)||[]).length>0)||
-    $("query").value.trim().length>400;
+    Array.from($("query").value.trim()).length>400;
   const available=!!state?.settings?.ai_search_enabled&&chosen.some(p=>authorized.includes(p.id))&&!restricted;
   const toggle=$("search-answers");
   toggle.disabled=searchPending||!available;
@@ -429,7 +429,7 @@ function syncSearchMode(){
   const count=$("max-results").value||defaultValue("search_max_results")||"server default";
   $("search-default-summary").textContent=(searchMode()==="default"?"Server defaults: ":"Overrides: ")+humanChoice(mode)+names+" · Up to "+count+" results · AI "+(toggle.checked?"enabled":"off");
   $("search-cost").hidden=!chosen.some(p=>p.env);
-  $("run-search").disabled=searchPending||chosen.length===0;
+  $("run-search").disabled=searchPending||chosen.length===0||!$("query").validity.valid;
 }
 function resetSearchOptions(render=true){
   document.querySelector('input[name=search-mode][value=default]').checked=true;
@@ -444,9 +444,11 @@ $("reset-search-options").addEventListener("click",()=>resetSearchOptions());
 $("select-keyless").addEventListener("click",()=>{selected.clear();for(const p of state.providers)if(p.kind==="general"&&p.available&&!p.env)selected.add(p.id);renderChoices();});
 $("clear-selection").addEventListener("click",()=>{selected.clear();renderChoices();});
 function updateQueryCount(){
-  const input=$("query");
-  input.maxLength=state?.limits?.query_max_chars||4000;
-  $("query-count").textContent=input.value.length+" / "+input.maxLength;
+  const input=$("query"),limit=state?.limits?.query_max_chars||4000;
+  const count=Array.from(input.value).length;
+  input.maxLength=limit*2;
+  input.setCustomValidity(count>limit?"Use at most "+limit+" characters.":"");
+  $("query-count").textContent=count+" / "+limit;
 }
 $("query").addEventListener("input",()=>{updateQueryCount();feedback("search-error");syncSearchMode();});
 function renderSearch(data){
@@ -794,6 +796,12 @@ function appendNativeSources(list,sources){
   }
 }
 function nativeMode(){return document.querySelector("input[name=native-mode]:checked").value;}
+function updateNativeCount(){
+  const input=$("native-query"),limit=Number(input.dataset.limit||4000),count=Array.from(input.value).length;
+  input.setCustomValidity(count>limit?"Use at most "+limit+" characters.":"");
+  $("native-count").textContent=count+" / "+limit;
+}
+$("native-query").addEventListener("input",()=>{updateNativeCount();feedback("native-feedback");});
 function renderNativeOptions(){
   if(nativePending)return;
   const mode=nativeMode(),select=$("native-provider"),old=select.value;
@@ -811,7 +819,10 @@ function renderNativeOptions(){
   }
   else select.value="";
   const selectedCap=caps.find(p=>p.id===select.value&&p.available);
-  $("native-query").maxLength=mode==="answer"?(selectedCap?.answer_max_chars||4000):4000;
+  const question=$("native-query");
+  question.dataset.limit=String(mode==="answer"?(selectedCap?.answer_max_chars||4000):4000);
+  question.maxLength=Number(question.dataset.limit)*2;
+  updateNativeCount();
   $("native-pricing").textContent=selectedCap?(selectedCap.pricing+(mode==="research"&&selectedCap.research_wait_note?" "+selectedCap.research_wait_note:"")):
     (caps.some(p=>p.available)?"Choose an available provider to review pricing.":"No configured provider for this capability. Add an API key in Providers.");
   $("native-links").replaceChildren();
@@ -836,7 +847,7 @@ $("native-form").addEventListener("submit",async event=>{
   const query=$("native-query").value.trim(),provider=$("native-provider").value,mode=nativeMode(),effort=$("native-effort").value||"lite";
   const capability=state?.native?.find(p=>p.id===provider&&p.available&&p[mode]);
   if(!query||!capability){feedback("native-feedback","Enter a question and select an available provider.",true);return;}
-  if(query.length>$("native-query").maxLength){feedback("native-feedback","Question exceeds this provider’s character limit.",true);return;}
+  if(Array.from(query).length>Number($("native-query").dataset.limit||4000)){feedback("native-feedback","Question exceeds this provider’s character limit.",true);return;}
   if(mode==="research"&&!$("native-effort").value){feedback("native-feedback","Choose a supported research effort.",true);return;}
   if(!await confirmAction("Use provider AI?",providerName(provider)+" may spend API credits. "+capability.pricing+(mode==="research"?" "+($("native-effort").selectedOptions[0]?.textContent||"")+"."+(capability.research_wait_note?" "+capability.research_wait_note:""):""),"Continue",false))return;
   if(nativePending)return;

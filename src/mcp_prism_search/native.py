@@ -54,7 +54,8 @@ CAPABILITIES = {
         "pricing_url": "https://exa.ai/pricing",
     },
     "youcom": {
-        "answer": True, "research": True,
+        "answer": True, "research": True, "answer_max_chars": 400,
+        "answer_name": "You.com Answer",
         "pricing": (
             "Answer $0.005; research lite $0.012, standard $0.05, "
             "deep $0.10, exhaustive $0.45."
@@ -410,10 +411,10 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
         mode == "research" and effort not in CAPABILITIES[provider].get("efforts", {})
     ):
         raise NativeError("Unsupported research effort for this provider.")
-    if provider == "youcom" and mode == "answer" and len(query) > 400:
-        raise NativeError("You.com Answer supports at most 400 characters.")
-    if provider == "tinyfish" and mode == "answer" and len(query) > 2000:
-        raise NativeError("TinyAnswer supports at most 2000 characters.")
+    answer_limit = CAPABILITIES[provider].get("answer_max_chars", 4000)
+    if mode == "answer" and len(query) > answer_limit:
+        label = CAPABILITIES[provider].get("answer_name", provider + " Answer")
+        raise NativeError(f"{label} supports at most {answer_limit} characters.")
     if provider == "tinyfish":
         url = "https://api.answer.tinyfish.ai/"
         headers = {"X-API-Key": credential}
