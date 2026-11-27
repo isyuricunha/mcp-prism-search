@@ -63,3 +63,17 @@ def test_native_oversize_response_does_not_retry(monkeypatch):
     with pytest.raises(native.NativeError, match="invalid or unavailable"):
         asyncio.run(native.synthesize("question", "exa", "answer", allow_cost=True))
     assert len(calls) == 1
+
+
+def test_legacy_html_search_bounds_response_before_parsing(monkeypatch):
+    from mcp_prism_search import search
+
+    monkeypatch.setattr(upstream, "MAX_RESPONSE_BYTES", 1024)
+    original = httpx.AsyncClient
+    stream = Chunks([b"x" * 65536])
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, stream=stream)), **kw))
+    with pytest.raises(ValueError, match="size limit"):
+        asyncio.run(search._search_with_duckduckgo_html(SearchRequest(query="test"), 5))
+    assert stream.closed

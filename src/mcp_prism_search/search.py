@@ -23,6 +23,7 @@ from mcp_prism_search.models import (
     SearchResult,
 )
 from mcp_prism_search.text import normalize_whitespace
+from mcp_prism_search.upstream import bounded_request
 
 DUCKDUCKGO_HTML_URL = "https://html.duckduckgo.com/html/"
 DDGS_SAFE_SEARCH = {"off": "off", "moderate": "moderate", "strict": "on"}
@@ -329,8 +330,7 @@ async def _search_with_duckduckgo_html(
         follow_redirects=False,
         headers=SEARCH_HEADERS,
     ) as client:
-        response = await client.get(DUCKDUCKGO_HTML_URL, params=params)
-        response.raise_for_status()
+        response = await bounded_request(client, "GET", DUCKDUCKGO_HTML_URL, params=params)
     return parse_duckduckgo_html_results(response.text, provider_request_size(request))
 
 
