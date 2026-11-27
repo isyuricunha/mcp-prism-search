@@ -58,9 +58,9 @@ class Update(BaseModel):
 
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    timeout: int | None = Field(default=None, ge=2, le=120)
-    search_ttl: int | None = Field(default=None, ge=60, le=604800)
-    fetch_ttl: int | None = Field(default=None, ge=60, le=604800)
+    timeout: int | None = Field(default=None, ge=2, le=120, strict=True)
+    search_ttl: int | None = Field(default=None, ge=60, le=604800, strict=True)
+    fetch_ttl: int | None = Field(default=None, ge=60, le=604800, strict=True)
     preferred: str | None = Field(default=None, max_length=100)
     ai_search_enabled: bool | None = Field(default=None, strict=True)
     ai_search_providers: list[str] | None = Field(default=None, max_length=5)
@@ -82,7 +82,7 @@ class Query(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
     providers: list[str] | None = Field(default=None, min_length=1, max_length=20)
     mode: Literal["default", "selected", "auto", "keyless", "all"] | None = None
-    max_results: int | None = Field(default=None, ge=1, le=30)
+    max_results: int | None = Field(default=None, ge=1, le=30, strict=True)
     safe_search: SafeSearch | None = None
     time_filter: Recency | None = None
     include_answers: bool | None = Field(default=None, strict=True)

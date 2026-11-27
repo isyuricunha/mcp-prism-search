@@ -543,3 +543,14 @@ def test_malformed_searxng_instance_is_not_available(panel, monkeypatch, value):
     assert not row["configured"] and not row["available"]
     monkeypatch.setenv("SEARXNG_URL", "http://127.0.0.1:8080/searx")
     assert "searxng" in providers.available_providers()
+
+
+@pytest.mark.parametrize("payload", [{"timeout": True}, {"search_ttl": "3600"},
+                                    {"fetch_ttl": 3600.5}])
+def test_admin_settings_reject_noninteger_json_values(panel, payload):
+    client, _, _ = panel
+    sign_in(client)
+    assert client.put("/api/settings", headers=HEADERS, json=payload).status_code == 400
+    assert client.post("/api/search", headers=HEADERS, json={
+        "query": "test", "max_results": True,
+    }).status_code == 400
