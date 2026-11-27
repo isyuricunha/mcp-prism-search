@@ -294,6 +294,9 @@ def prune_cache(
                 delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
             continue
 
+        if cache_file.size > MAX_CACHE_ENTRY_BYTES:
+            delete_candidates[cache_file.path] = (cache_file.size, cache_file.identity)
+            continue
         created_at = _read_cache_created_at(cache_file)
 
         namespace_ttl = prune_config.namespace_ttls[cache_file.namespace]

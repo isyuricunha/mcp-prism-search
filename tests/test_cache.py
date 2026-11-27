@@ -336,3 +336,15 @@ def test_cache_scan_is_lazy_and_preserves_totals(tmp_path):
     scan = _iter_cache_files(tmp_path)
     assert isinstance(scan, Iterator)
     assert len(list(scan)) == get_cache_stats(tmp_path).total_files == 20
+
+
+def test_prune_removes_fresh_oversized_entries_without_decoding(tmp_path, monkeypatch):
+    from mcp_prism_search import cache as module
+
+    monkeypatch.setattr(module, "MAX_CACHE_ENTRY_BYTES", 100)
+    path = tmp_path / "search" / "oversized.json"
+    _write_cache_file(path, created_at=time.time(), value={"large": "x" * 500})
+    plan = prune_cache(config=_prune_config(tmp_path), dry_run=True)
+    assert plan.deleted_files == 1 and path.exists()
+    stats = prune_cache(config=_prune_config(tmp_path))
+    assert stats.deleted_files == 1 and not path.exists()
