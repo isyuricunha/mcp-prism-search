@@ -333,3 +333,17 @@ def test_invalid_dashboard_port(monkeypatch, port):
     monkeypatch.setenv("MCP_WEBUI_PORT", port)
     with pytest.raises(RuntimeError, match="Invalid MCP_WEBUI_PORT"):
         asyncio.run(server._serve_http(None, _configure_http_settings()))
+
+
+def test_server_http_without_dashboard(monkeypatch):
+    from mcp_prism_search import server
+
+    monkeypatch.setenv("MCP_WEBUI_ENABLED", "false")
+    calls = []
+
+    class FakeServer:
+        async def serve(self):
+            calls.append("serve")
+
+    asyncio.run(server._serve_http(FakeServer(), _configure_http_settings()))
+    assert calls == ["serve"]
