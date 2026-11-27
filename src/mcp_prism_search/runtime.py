@@ -1,10 +1,12 @@
 """Shared server state; a fresh headless install needs no database."""
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
+LOGGER = logging.getLogger(__name__)
 _state: Any = None
 
 
@@ -56,9 +58,15 @@ def configured_store(*, create: bool = False):
 
 def record_metric(name: str, outcome: str, elapsed: float) -> None:
     if _state:
-        _state.record(name, outcome, elapsed)
+        try:
+            _state.record(name, outcome, elapsed)
+        except Exception:  # noqa: BLE001 - telemetry must not affect retrieval.
+            LOGGER.warning("Provider telemetry unavailable")
 
 
 def record_cache(hit: bool) -> None:
     if _state:
-        _state.cache_result(hit)
+        try:
+            _state.cache_result(hit)
+        except Exception:  # noqa: BLE001 - telemetry must not affect retrieval.
+            LOGGER.warning("Cache telemetry unavailable")

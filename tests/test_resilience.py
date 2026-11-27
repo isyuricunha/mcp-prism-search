@@ -162,3 +162,16 @@ def test_ranking_skips_bad_urls_and_retains_good_results():
         "https://[bad", "https://example.org:bad", "https://example.org",
     )]
     assert rank_results(rows, "test") == rows[2:]
+
+
+def test_telemetry_backend_failure_does_not_propagate(monkeypatch):
+    from types import SimpleNamespace
+
+    from mcp_prism_search import runtime
+
+    def fail(*args):
+        raise RuntimeError("telemetry offline")
+
+    monkeypatch.setattr(runtime, "_state", SimpleNamespace(record=fail, cache_result=fail))
+    runtime.record_metric("test", "ok", 0.1)
+    runtime.record_cache(True)
