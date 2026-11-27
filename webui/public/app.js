@@ -79,7 +79,7 @@ async function api(path, method = "GET", data) {
   const epoch = authEpoch;
   const controller=new AbortController();
   sessionRequests.add(controller);
-  let response;
+  let response,body;
   try {
     response = await fetch("/api/" + path, {
       method, credentials: "same-origin",
@@ -87,6 +87,8 @@ async function api(path, method = "GET", data) {
       ...(data === undefined ? {} : { body: JSON.stringify(data) }),
       signal: AbortSignal.any([controller.signal,AbortSignal.timeout(path==="native"&&data?.mode==="research"&&data?.provider==="tinyfish"?2820000:path==="native"&&data?.effort==="exhaustive"?360000:["search","native"].includes(path) ? 180000 : 20000)])
     });
+    try{body=await response.json();}
+    catch(error){if(error.name!=="SyntaxError")throw error;body=null;}
   } catch (e) {
     if(epoch!==authEpoch)throw new Error("Session changed. Please retry.");
     throw new Error(e.name === "TimeoutError" ? (["search","native"].includes(path) ? "The browser stopped waiting. The server may still be searching; check activity before retrying." : "The request timed out. Try again.") : "Cannot reach the server. Check the connection and retry.");
@@ -94,8 +96,7 @@ async function api(path, method = "GET", data) {
     sessionRequests.delete(controller);
   }
   if (epoch !== authEpoch) throw new Error("Session changed. Please retry.");
-  const body = await response.json().catch(() => null);
-  if (epoch !== authEpoch) throw new Error("Session changed. Please retry.");
+  // The controller remains registered until response body consumption ends.
   if (response.status === 401 && path !== "login") showLogin();
   if (!response.ok) {
     const error = new Error(body?.error || ("Server returned HTTP " + response.status + "."));

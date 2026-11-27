@@ -422,6 +422,25 @@ try{
  await page.locator("#dashboard").waitFor({state:"visible"});
  assert.equal(await page.locator("#native-query").isDisabled(),false);
  await page.locator("#native-panel > summary").click();
+ // The fetch controller must stay registered while response JSON is pending.
+ const bodyAbort=await page.evaluate(async()=>{
+  const original=window.fetch;
+  let complete;
+  const ready=new Promise(resolve=>{complete=resolve;});
+  window.fetch=async(url,options)=>({ok:true,status:200,json:()=>new Promise((resolve,reject)=>{
+   options.signal.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true});
+   complete();
+  })});
+  try{
+   const pending=api("overview").catch(e=>e.message);
+   await ready;
+   const count=sessionRequests.size;
+   for(const controller of sessionRequests)controller.abort();
+   return {count,error:await pending,remaining:sessionRequests.size};
+  }finally{window.fetch=original;}
+ });
+ assert.equal(bodyAbort.count,1);assert.equal(bodyAbort.remaining,0);
+ assert.ok(bodyAbort.error.includes("Cannot reach"));
  await nav("Connection");
  for(const invalid of ["https://example.com:0/mcp","https://example.com/"+String.fromCharCode(92)+"mcp","https://example.com/mcp a"]){
   await page.locator("#endpoint").fill(invalid);
