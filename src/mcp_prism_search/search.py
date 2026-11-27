@@ -512,7 +512,7 @@ async def _search_one(
         if raw is None:
             async with asyncio.timeout(timeout):
                 raw = await run_provider(name, request, count, timeout)
-        valid = _dedupe_results(raw)
+        valid = rank_results(raw, request.query)
         filtered = apply_domain_controls(
             valid,
             get_url=lambda item: item.url,

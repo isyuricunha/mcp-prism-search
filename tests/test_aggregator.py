@@ -366,3 +366,14 @@ def test_hackernews_invalid_link_uses_valid_story_permalink(monkeypatch):
         ]})), **kw))
     rows = asyncio.run(hackernews.search(SearchRequest(query="test"), 1, 5))
     assert rows[0].url == "https://news.ycombinator.com/item?id=42"
+
+
+def test_provider_batch_preserves_more_relevant_duplicate(registry):
+    register, _ = registry
+    register("keenable", [
+        result("https://a.test/", title="Generic"),
+        result("https://a.test/#answer", title="needle"),
+    ])
+    rows, _ = asyncio.run(search._search_one(
+        "keenable", SearchRequest(query="needle"), 5, 5))
+    assert [row.title for row in rows] == ["needle"]
