@@ -44,3 +44,14 @@ def test_duplicate_url_retains_more_relevant_description():
                  "Python structured concurrency with asyncio TaskGroup")
     request = SearchRequest(query="Python asyncio TaskGroup")
     assert _final_results([weak, strong], request) == [strong]
+
+
+def test_final_results_bound_title_and_snippet_context():
+    from mcp_prism_search.search import MAX_RESULT_SNIPPET, MAX_RESULT_TITLE
+
+    result = row("needle " * 200, "https://example.org", "evidence " * 1000)
+    request = SearchRequest(query="needle")
+    bounded = _final_results([result], request)[0]
+    assert 0 < len(bounded.title) <= MAX_RESULT_TITLE
+    assert 0 < len(bounded.snippet) <= MAX_RESULT_SNIPPET
+    assert bounded.url == result.url

@@ -415,10 +415,8 @@ async def ddg_search(
     if provider in {"duckduckgo_html", "auto"} and runtime.enabled("ddg_html"):
         try:
             LOGGER.debug("Running DuckDuckGo HTML search")
-            html_results = apply_search_domain_controls(
-                rank_results(await _search_with_duckduckgo_html(request, timeout_seconds),
-                             request.query),
-                request,
+            html_results = _final_results(
+                await _search_with_duckduckgo_html(request, timeout_seconds), request
             )
             if html_results:
                 response = SearchResponse(
@@ -446,11 +444,8 @@ async def ddg_search(
                 error="; ".join(provider_errors), provider_attempts=provider_attempts,
             )
         try:
-            ddgs_results = apply_search_domain_controls(
-                rank_results(await asyncio.to_thread(
-                    _search_with_ddgs, request, timeout_seconds, backend), request.query),
-                request,
-            )
+            ddgs_results = _final_results(await asyncio.to_thread(
+                _search_with_ddgs, request, timeout_seconds, backend), request)
             if ddgs_results:
                 response = SearchResponse(
                     query=request.query,
@@ -550,10 +545,16 @@ async def _search_one(
     return [], f"{name}: error ({status})"
 
 
+MAX_RESULT_TITLE = 500
+MAX_RESULT_SNIPPET = 4000
+
+
 def _final_results(results: list[SearchResult], request: SearchRequest) -> list[SearchResult]:
-    return apply_search_domain_controls(
-        rank_results(results, request.query), request
-    )
+    ranked = apply_search_domain_controls(rank_results(results, request.query), request)
+    return [row.model_copy(update={
+        "title": row.title[:MAX_RESULT_TITLE].rstrip(),
+        "snippet": row.snippet[:MAX_RESULT_SNIPPET].rstrip(),
+    }) for row in ranked]
 
 
 async def aggregated_search(
@@ -648,7 +649,7 @@ async def aggregated_search(
 
     parallel = provider == "all" or providers is not None
     payload = request.to_cache_payload(
-        _aggregator_version=2, _mode=mode, _kind=kind,
+        _aggregator_version=3, _mode=mode, _kind=kind,
         _providers=sorted(chain) if mode in {"auto", "keyless"} else chain,
     )
     # A cached retrieval-only winner must not suppress the requested AI preference.
