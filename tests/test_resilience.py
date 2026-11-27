@@ -553,3 +553,12 @@ def test_dedupe_default_ports_without_merging_nondefault_ports():
     assert identity("https://example.org:443/path") == identity("https://example.org/path")
     assert identity("http://[2001:4860::1]:80/") == identity("http://[2001:4860::1]/")
     assert identity("https://example.org:8443/path") != identity("https://example.org/path")
+
+
+def test_text_media_type_does_not_accept_explicit_binary_from_filename():
+    from mcp_prism_search.text import is_plain_text_content
+
+    assert not is_plain_text_content("image/png", "https://example.org/file.txt")
+    assert not is_plain_text_content("application/notjson", "https://example.org/data")
+    assert is_plain_text_content("application/problem+json; charset=utf-8", "https://example.org")
+    assert is_plain_text_content("application/octet-stream", "https://example.org/file.md")

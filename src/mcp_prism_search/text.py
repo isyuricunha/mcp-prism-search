@@ -31,13 +31,15 @@ def truncate_text(value: str, max_chars: int) -> str:
 
 
 def is_plain_text_content(content_type: str, url: str) -> bool:
-    lowered = content_type.lower()
-    path = urlparse(url).path.lower()
-    return (
-        lowered.startswith("text/")
-        or "json" in lowered
-        or path.endswith(TEXT_FILE_EXTENSIONS)
-    )
+    media_type = content_type.partition(";")[0].strip().lower()
+    if media_type.startswith("text/") or media_type == "application/json" or (
+        media_type.startswith("application/") and media_type.endswith("+json")
+    ):
+        return True
+    # A filename is only a fallback when the server provides no useful type.
+    return media_type in {"", "application/octet-stream"} and urlparse(
+        url
+    ).path.lower().endswith(TEXT_FILE_EXTENSIONS)
 
 
 def _clean_soup(soup: BeautifulSoup) -> None:
