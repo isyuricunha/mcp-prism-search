@@ -19,7 +19,8 @@ def normalize_domain(value: str) -> str:
     except ValueError:
         pass
     parsed = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
-    if parsed.username is not None or parsed.password is not None or not parsed.hostname:
+    if (parsed.scheme not in {"", "http", "https"} or parsed.username is not None
+            or parsed.password is not None or not parsed.hostname or parsed.port == 0):
         raise ValueError("Invalid domain")
     normalized = parsed.hostname.rstrip(".")
     try:
@@ -32,7 +33,7 @@ def normalize_domain(value: str) -> str:
         for label in normalized.split(".")
     ):
         raise ValueError("Invalid domain")
-    if normalized.startswith("www."):
+    if normalized.startswith("www.") and "." in normalized[4:]:
         normalized = normalized[4:]
     return normalized
 

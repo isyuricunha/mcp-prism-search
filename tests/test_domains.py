@@ -135,3 +135,11 @@ def test_invalid_domain_filter_is_not_silently_removed():
     for value in ("*.example.org", "user@example.org", "invalid domain"):
         with pytest.raises(ValueError, match="Invalid domain"):
             SearchRequest(query="test", allowed_domains=[value])
+
+
+def test_domain_filter_does_not_strip_single_label_www_suffix():
+    from mcp_prism_search.domains import normalize_domain
+
+    assert normalize_domain("www.example") == "www.example"
+    assert normalize_domain("www.example.org") == "example.org"
+    assert not domain_matches("evil.example", "www.example")
