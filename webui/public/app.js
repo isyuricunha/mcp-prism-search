@@ -849,7 +849,14 @@ function renderLogs(){
       ...(Number.isInteger(row.duration_ms)?[element("span",number(row.duration_ms)+" ms")]:[]),
       ...(Number.isInteger(row.result_count)?[element("span",number(row.result_count)+" results")]:[]));
     article.append(head,meta);
-    if(row.request_id)article.append(element("code",row.request_id));
+    if(row.request_id){
+      const details=element("div","","log-meta");
+      details.append(element("code",row.request_id),action("Related events",()=>{
+        $("logs-level").value="";$("logs-provider").value="";$("logs-period").value="all";
+        $("logs-search").value=row.request_id;changeLogs();$("logs-search").focus();
+      }));
+      article.append(details);
+    }
     list.append(article);
   }
   if(!logRows.length)list.append(element("p","No matching events.","muted"));

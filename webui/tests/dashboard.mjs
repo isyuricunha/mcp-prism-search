@@ -150,6 +150,12 @@ try{
  const exported=JSON.parse(await fs.readFile(await download.path(),"utf8"));
  assert.equal(exported.length,1);
  assert.equal(exported[0].status_code,429);
+ await page.locator(".log-entry").getByRole("button",{name:"Related events",exact:true}).click();
+ assert.equal(await page.locator("#logs-level").inputValue(),"");
+ assert.equal(await page.locator("#logs-provider").inputValue(),"");
+ assert.equal(await page.locator("#logs-search").inputValue(),"0123456789abcdef0123456789abcdef");
+ await page.waitForFunction(()=>document.querySelectorAll(".log-entry").length===1);
+ assert.ok((await page.locator("#logs-list").textContent()).includes("HTTP 429"));
  await audit("logs-filtered-dark");
  await page.locator("#theme").click();await audit("logs-filtered-white");await page.locator("#theme").click();
  await nav("Providers");
