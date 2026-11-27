@@ -86,6 +86,20 @@ const sections = [
             <div class="form-footer"><div class="field compact"><label for="max-results">Maximum results</label><input id="max-results" type="number" min="1" max="10" value="5" required /></div><button id="run-search" type="submit" class="primary">Run search</button></div>
             <p id="search-error" class="feedback" role="alert"></p>
           </form>
+          <details class="card native-panel" id="native-panel">
+            <summary>AI answers &amp; research <span class="badge">Optional · API credits</span></summary>
+            <form id="native-form" class="stack">
+              <p class="muted">Ask a provider's own AI to synthesize sources. Prism does not run a language model. Generated answers may be inaccurate; verify the sources. No automatic fallback or retries.</p>
+              <div class="field"><label for="native-query">Question</label><textarea id="native-query" rows="3" maxlength="4000" required placeholder="What would you like to understand?"></textarea></div>
+              <fieldset><legend>Capability</legend><div class="choices"><label class="choice-chip"><input type="radio" name="native-mode" value="answer" checked />Answer</label><label class="choice-chip"><input type="radio" name="native-mode" value="research" />Multi-step research</label></div></fieldset>
+              <div class="field"><label for="native-provider">Provider</label><select id="native-provider"></select><p id="native-pricing" class="muted small"></p><div id="native-links" class="actions"></div></div>
+              <div id="native-effort-field" class="field" hidden><label for="native-effort">Research depth</label><select id="native-effort"></select><p class="muted small">Depth and pricing depend on the provider. Prices are in USD and may change.</p></div>
+              <p class="notice">This operation sends your question to the selected provider and may spend API credits. The normal search mode is unchanged.</p>
+              <div class="actions"><button id="native-run" type="submit" class="primary">Generate answer</button><button type="button" data-go="providers">Manage API keys</button></div>
+              <p id="native-feedback" class="feedback" role="status"></p>
+            </form>
+            <div id="native-result" class="stack" hidden><h2 id="native-heading">Generated answer</h2><p id="native-answer" class="native-answer"></p><p id="native-note" class="muted small"></p><h3>Sources supplied by provider</h3><ol id="native-sources" class="steps"></ol></div>
+          </details>
           <div id="search-output" class="page" hidden><div class="card"><div class="heading"><h2>Search outcome</h2><span id="search-source" class="badge"></span></div><p id="search-summary" role="status" aria-live="polite"></p><ul id="search-attempts" class="attempt-list"></ul></div><div id="results" class="result-list"></div></div>
         </section>
         <section id="cache" class="page" hidden aria-labelledby="page-title">

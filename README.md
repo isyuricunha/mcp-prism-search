@@ -342,6 +342,8 @@ quotas, fallback ordering and migration notes.
 | Tool | Purpose |
 |---|---|
 | `web_search` | General search across one, selected or all engines |
+| `web_answer` | Optional native AI answer with sources (configured key + explicit cost consent) |
+| `web_research` | Optional provider-native multi-step synthesis (configured key + explicit cost consent) |
 | `vertical_search` | Wikipedia or Hacker News |
 | `web_fetch` | Fetch and extract a single public HTTP(S) page |
 | `ddg_search` | Legacy DuckDuckGo search |
@@ -456,3 +458,7 @@ for published versions.
 ## License
 
 [AGPL-3.0](LICENSE).
+
+## Optional provider-native AI
+
+Use `web_answer` for provider-generated answers and `web_research` for multi-step synthesis. Both require a configured supported API key and explicit `allow_cost: true`. Ordinary web search never calls these APIs. See [native AI tools and pricing](docs/native-ai.md).

@@ -217,3 +217,12 @@ button[aria-busy=true]::after { content:""; display:inline-block; width:12px; he
 [data-theme="yu-daylight"] button.danger,
 [data-theme="yu-daylight"] .feedback.error,
 [data-theme="yu-daylight"] .status.error { color:color-mix(in srgb,var(--danger) 70%,var(--text-primary)); }
+
+.native-panel { display:block; }
+.native-panel[open] { display:grid; }
+.native-panel > summary { cursor:pointer; color:var(--text-primary); font-weight:500; font-size:16px; line-height:1.6; }
+.native-panel > summary .badge { margin-left:8px; }
+.native-panel form { gap:12px; }
+.native-panel select { font:inherit; color:var(--text-primary); background:var(--yu-bg-input); border:var(--border-width) solid var(--border-default); border-radius:var(--radius-lg); padding:10px 12px; min-height:44px; width:100%; }
+.native-answer { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.75; }
+.native-panel .actions a { font-size:13px; }

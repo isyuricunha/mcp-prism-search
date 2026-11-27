@@ -41,6 +41,7 @@ let settingsDirty = false;
 let searchPending = false;
 let settingsPending = false;
 let cachePending = false;
+let nativePending = false;
 
 function element(tag, value = "", className = "") {
   const node = document.createElement(tag);
@@ -84,10 +85,10 @@ async function api(path, method = "GET", data) {
       method, credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Prism-Admin": "1" },
       ...(data === undefined ? {} : { body: JSON.stringify(data) }),
-      signal: AbortSignal.timeout(path === "search" ? 180000 : 20000)
+      signal: AbortSignal.timeout(["search","native"].includes(path) ? 180000 : 20000)
     });
   } catch (e) {
-    throw new Error(e.name === "TimeoutError" ? (path === "search" ? "The browser stopped waiting. The server may still be searching; check activity before retrying." : "The request timed out. Try again.") : "Cannot reach the server. Check the connection and retry.");
+    throw new Error(e.name === "TimeoutError" ? (["search","native"].includes(path) ? "The browser stopped waiting. The server may still be searching; check activity before retrying." : "The request timed out. Try again.") : "Cannot reach the server. Check the connection and retry.");
   }
   if (epoch !== authEpoch) throw new Error("Session changed. Please retry.");
   const body = await response.json().catch(() => null);
@@ -117,6 +118,7 @@ function showLogin() {
   state = null; providerDrafts.clear(); providerMessages.clear(); providerPending.clear();
   settingsDirty = false;
   for (const id of ["provider-list","choices","results","search-attempts","metrics","summary","server-facts","connection-facts","readiness","cache-summary","cache-rows"]) $(id).replaceChildren();
+  $("native-query").value = ""; $("native-answer").textContent = ""; $("native-sources").replaceChildren(); $("native-result").hidden=true; feedback("native-feedback");
   $("query").value = ""; $("query-count").textContent = "0 / 1000"; $("search-output").hidden = true;
   $("endpoint").value = ["localhost","127.0.0.1"].includes(location.hostname) ? "http://127.0.0.1:49317/mcp" : ""; connection();
   $("password").value = ""; $("password").type = "password";
@@ -251,6 +253,13 @@ function renderProviders() {
     if(info[3]) links.append(link("Get API key",info[3]));
     if(p.kind==="general"&&p.available) links.append(action("Test in Playground",()=>{selected.clear();selected.add(p.id);document.querySelector('input[name=search-mode][value=selected]').checked=true;renderChoices();page("playground");$("query").focus();},"tonal"));
     row.append(head,element("p",info[1],"muted"),links);
+    const native = state.native?.find(x=>x.id===p.id);
+    if(native){
+      const details=element("div","","stack");
+      details.append(element("p","AI capabilities: "+(native.answer?"Answer":"")+(native.research?" · Multi-step research":""),"muted small"),
+        element("p",native.pricing,"muted small"),link("AI API pricing",native.pricing_url));
+      row.append(details);
+    }
     const form=element("form","","provider-actions");
     const toggleLabel=element("label","Enabled","switch-label");
     const toggle=document.createElement("input"); toggle.type="checkbox";toggle.className="switch";toggle.id="enable-"+p.id;toggle.setAttribute("role","switch");toggle.setAttribute("aria-label","Enable "+info[0]);toggle.checked=draft.enabled;
@@ -411,7 +420,7 @@ function renderSettings(force=false){
 $("settings-form").addEventListener("input",()=>{settingsDirty=true;feedback("settings-feedback");});
 $("reset-settings").addEventListener("click",()=>{if(state){renderSettings(true);feedback("settings-feedback","Unsaved changes reset.");}});
 function render(){
-  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();
+  renderOverview();renderProviders();renderChoices();renderCache();renderSettings();renderNativeOptions();
 }
 async function refresh(fresh=false){
   if(refreshPromise){if(!fresh)return refreshPromise;await refreshPromise.catch(()=>{});return refresh(true);}
@@ -491,6 +500,66 @@ $("settings-form").addEventListener("submit",async event=>{
   try{await api("settings","PUT",data);settingsDirty=false;await refresh(true);feedback("settings-feedback","Settings saved. Changes apply to new searches.");}
   catch(error){feedback("settings-feedback",error.message,true);}
   finally{settingsPending=false;busyCount--;for(const n of editable)n.disabled=false;setPending(button,false);if(state&&!settingsDirty)renderSettings(true);}
+});
+function nativeMode(){return document.querySelector("input[name=native-mode]:checked").value;}
+function renderNativeOptions(){
+  const mode=nativeMode(),select=$("native-provider"),old=select.value;
+  const caps=(state?.native||[]).filter(p=>p[mode]);
+  select.replaceChildren();
+  for(const p of caps){
+    const option=new Option(providerName(p.id)+(p.available?"":" — setup required"),p.id);
+    option.disabled=!p.available; select.append(option);
+  }
+  if(caps.some(p=>p.id===old&&p.available))select.value=old;
+  else if(caps.some(p=>p.available))select.value=caps.find(p=>p.available).id;
+  else select.selectedIndex=-1;
+  const selectedCap=caps.find(p=>p.id===select.value&&p.available);
+  $("native-pricing").textContent=selectedCap?.pricing||"No configured provider for this capability. Add an API key in Providers.";
+  $("native-links").replaceChildren();
+  if(selectedCap)$("native-links").append(link("API documentation",mode==="research"?(selectedCap.research_docs||selectedCap.docs):selectedCap.docs),link("Pricing",selectedCap.pricing_url));
+  const effortSelect=$("native-effort"),previousEffort=effortSelect.value;
+  effortSelect.replaceChildren();
+  for(const [value,label] of Object.entries(selectedCap?.efforts||{}))effortSelect.append(new Option(label,value));
+  if([...effortSelect.options].some(o=>o.value===previousEffort))effortSelect.value=previousEffort;
+  effortSelect.disabled=nativePending||!selectedCap;
+  $("native-effort-field").hidden=mode!=="research";
+  $("native-run").textContent=nativePending?"Working…":mode==="answer"?"Generate answer":"Run research";
+  $("native-run").disabled=nativePending||!selectedCap;
+  select.disabled=nativePending||!selectedCap;
+}
+for(const input of document.querySelectorAll("input[name=native-mode]"))input.addEventListener("change",renderNativeOptions);
+$("native-provider").addEventListener("change",renderNativeOptions);
+$("native-form").addEventListener("submit",async event=>{
+  event.preventDefault();if(nativePending)return;
+  const query=$("native-query").value.trim(),provider=$("native-provider").value,mode=nativeMode(),effort=$("native-effort").value||"lite";
+  const capability=state?.native?.find(p=>p.id===provider&&p.available&&p[mode]);
+  if(!query||!capability){feedback("native-feedback","Enter a question and select an available provider.",true);return;}
+  if(!await confirmAction("Use provider AI?",providerName(provider)+" may spend API credits. "+capability.pricing,"Continue",false))return;
+  if(nativePending)return;
+  nativePending=true;busyCount++;
+  const inputs=[...$("native-form").querySelectorAll("textarea,select,input,button")].filter(n=>!n.disabled);
+  for(const n of inputs)n.disabled=true;
+  $("native-run").textContent="Working…";$("native-run").setAttribute("aria-busy","true");
+  feedback("native-feedback","Waiting for the provider…");$("native-result").hidden=true;
+  try{
+    const data=await api("native","POST",{query,provider,mode,effort,allow_cost:true});
+    $("native-heading").textContent=providerName(data.provider)+(data.mode==="research"?" · Research":" · Answer");
+    $("native-answer").textContent=data.answer;
+    $("native-note").textContent=(data.truncated?"Response truncated to limit context. ":"")+"Generated by the provider; not independently verified. "+(data.source_kind==="search_results"?"These are retrieved search results, not verified citations.":data.source_kind==="grounding"?"These are grounding sources returned for the synthesized answer.":"Citation numbering follows the upstream response.");
+    $("native-sources").replaceChildren();
+    for(const source of data.sources){
+      const li=element("li");li.value=source.index;
+      let url;try{url=new URL(source.url);}catch{}
+      if(source.url&&url&&["http:","https:"].includes(url.protocol))li.append(link(source.title||url.hostname,url.href));else li.append(element("span",source.title+" (URL unavailable)"));
+      if(source.excerpt)li.append(element("p",source.excerpt,"muted small"));
+      $("native-sources").append(li);
+    }
+    $("native-result").hidden=false;feedback("native-feedback","Completed.");
+  }catch(error){feedback("native-feedback",error.message,true);}
+  finally{
+    nativePending=false;busyCount--;for(const n of inputs)n.disabled=false;
+    $("native-run").removeAttribute("aria-busy");renderNativeOptions();
+  }
 });
 function connection(){
   let url;

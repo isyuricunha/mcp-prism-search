@@ -23,6 +23,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from mcp_prism_search import __version__, cache, providers, runtime
+from mcp_prism_search.native import Effort, NativeError, capabilities, synthesize
 from mcp_prism_search.panel_store import PanelStore
 from mcp_prism_search.search import aggregated_search, get_ddg_timeout_seconds
 
@@ -69,6 +70,15 @@ class Query(BaseModel):
     providers: list[str] | None = Field(default=None, min_length=1, max_length=50)
     mode: Literal["selected", "auto", "all"] = "selected"
     max_results: int = Field(default=5, ge=1, le=10)
+
+
+class NativeQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=4000)
+    provider: Literal["tavily", "exa", "youcom"]
+    mode: Literal["answer", "research"]
+    allow_cost: bool = Field(default=False, strict=True)
+    effort: Effort = "lite"
 
 
 def error(message: str, status: int = 400):
@@ -151,6 +161,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
             },
             "providers": rows, "metrics": store.metrics(), "counters": store.counters(),
             "settings": current_settings(),
+            "native": capabilities(),
             "cache": (await asyncio.to_thread(cache.get_cache_stats)).to_dict(),
         })
 
@@ -218,6 +229,17 @@ def create_app(password: str, store: PanelStore, assets: Path,
             result.model_dump(mode="json"), status_code=400 if result.error else 200
         )
 
+    async def native(request):
+        data = await body(request, NativeQuery)
+        try:
+            result = await synthesize(
+                data.query, data.provider, data.mode,
+                allow_cost=data.allow_cost, effort=data.effort,
+            )
+        except NativeError as exc:
+            return error(str(exc))
+        return JSONResponse(result.model_dump(mode="json"))
+
     async def prune(request):
         # Preserve active entries; clearing is a separate confirmed operation.
         return JSONResponse((await asyncio.to_thread(
@@ -244,6 +266,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
         Route("/api/overview", overview),
         Route("/api/providers/{name}", update, methods=["PUT"]),
         Route("/api/search", search, methods=["POST"]),
+        Route("/api/native", native, methods=["POST"]),
         Route("/api/cache/prune", prune, methods=["POST"]),
         Route("/api/cache/clear", clear, methods=["POST"]),
         Route("/api/settings", settings, methods=["PUT"]),

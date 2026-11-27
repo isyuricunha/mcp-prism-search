@@ -248,3 +248,7 @@ but a separate password/session authentication boundary. Static Astro assets
 are served directly from disk. SQLite stores encrypted keys, provider flags,
 settings and bounded aggregate metrics. Headless mode does not import the panel
 or initialize state. See [dashboard design and operations](webui.md).
+
+## Optional native synthesis
+
+The native synthesis adapter is independent of the search aggregator. A caller chooses a configured provider and explicitly accepts credit consumption. The same bounded adapter serves the MCP tools and the authenticated panel; no implicit synthesis, retries, cross-provider fallback, local LLM or answer cache. See [native AI](native-ai.md).

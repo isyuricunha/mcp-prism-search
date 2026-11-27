@@ -33,6 +33,14 @@ from mcp_prism_search.models import (
     SearchResponse,
     TimeFilter,
 )
+from mcp_prism_search.native import (
+    AnswerProvider,
+    Effort,
+    NativeError,
+    NativeResponse,
+    ResearchProvider,
+    synthesize,
+)
 from mcp_prism_search.search import aggregated_search as perform_aggregated_search
 from mcp_prism_search.search import ddg_search as perform_ddg_search
 
@@ -77,7 +85,8 @@ mcp = MCPServer(
     version=__version__,
     instructions=(
         "Multi-provider web search and safe webpage fetching tools. "
-        "This server does not call LLMs, summarize, or generate reports."
+        "Ordinary search is retrieval only. Optional web_answer and web_research delegate "
+        "synthesis to explicitly selected providers with cost consent."
     ),
     log_level=_validated_log_level(),
 )
@@ -367,6 +376,46 @@ async def web_search(
     if response.error:
         raise ToolError(response.error)
     return response
+
+
+@mcp.tool(annotations=_tool_annotations())
+async def web_answer(
+    query: Annotated[str, Field(min_length=1, max_length=4000)],
+    provider: AnswerProvider,
+    allow_cost: Annotated[
+        bool, Field(strict=True, description="Set true only with user consent to spend credits."),
+    ] = False,
+) -> NativeResponse:
+    """Get a provider-generated answer and sources, not independent verification.
+
+    Requires a configured Tavily, Exa or You.com key and explicit allow_cost=true.
+    Use web_search instead for ordinary retrieval or keyless searches. No fallback.
+    """
+    try:
+        return await synthesize(query, provider, "answer", allow_cost=allow_cost)
+    except NativeError as exc:
+        raise ToolError(str(exc)) from None
+
+
+@mcp.tool(annotations=_tool_annotations())
+async def web_research(
+    query: Annotated[str, Field(min_length=1, max_length=4000)],
+    provider: ResearchProvider,
+    allow_cost: Annotated[
+        bool, Field(strict=True, description="Set true only with user consent to spend credits."),
+    ] = False,
+    effort: Effort = "lite",
+) -> NativeResponse:
+    """Delegate multi-step research to Exa or You.com; returns unverified synthesis and sources.
+
+    Requires a configured key and explicit cost consent. Exa supports lite/deep;
+    You.com supports lite/standard/deep. Review pricing before increasing effort.
+    No automatic retries or provider fallback.
+    """
+    try:
+        return await synthesize(query, provider, "research", allow_cost=allow_cost, effort=effort)
+    except NativeError as exc:
+        raise ToolError(str(exc)) from None
 
 
 @mcp.tool(annotations=_tool_annotations(read_only=True))

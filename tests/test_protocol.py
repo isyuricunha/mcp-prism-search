@@ -26,6 +26,7 @@ def test_protocol_compatibility(mode, protocol, monkeypatch, tmp_path) -> None:
             assert {tool.name for tool in tools} == {
                 "web_search", "web_fetch", "ddg_search", "ddg_deep_search",
                 "vertical_search", "cache_stats", "cache_prune", "cache_clear",
+                "web_answer", "web_research",
             }
             result = await client.call_tool("cache_stats", {})
             assert not result.is_error

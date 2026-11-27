@@ -64,3 +64,7 @@ requires a key. The legacy `ddg_search` / `ddg_deep_search` contracts remain.
 
 Mojeek and Startpage failed initial LAB probes and are not enabled.
 You.com keyless MCP passed follow-up discovery and search using SDK v2.
+
+## Native synthesis
+
+The separate [native AI tools](native-ai.md) use provider-generated answers and research only on explicit request with cost consent. Normal search is unchanged.

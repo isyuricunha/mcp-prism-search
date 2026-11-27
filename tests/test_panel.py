@@ -205,3 +205,19 @@ def test_dashboard_search_modes(panel, monkeypatch):
                        json={"query": " ", "providers": ["keenable"]}).status_code == 400
     assert client.post("/api/search", headers=HEADERS,
                        json={"query": "test"}).status_code == 400
+
+
+def test_native_panel_cost_gate(panel, monkeypatch):
+    client, _, _ = panel
+    monkeypatch.setenv("EXA_API_KEY", "test-key")
+    assert client.post("/api/native", headers=HEADERS, json={
+        "mode": "answer", "provider": "exa", "query": "test",
+    }).status_code == 401
+    sign_in(client)
+    caps = client.get("/api/overview").json()["native"]
+    assert any(p["id"] == "exa" and p["available"] for p in caps)
+    result = client.post("/api/native", headers=HEADERS, json={
+        "mode": "answer", "provider": "exa", "query": "test",
+    })
+    assert result.status_code == 400
+    assert "allow_cost" in result.json()["error"]
