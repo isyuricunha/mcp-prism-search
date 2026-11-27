@@ -59,7 +59,11 @@ def _candidate_tags(soup: BeautifulSoup) -> list[Tag]:
         for tag in soup.find_all(["section", "div"], class_=CONTENT_CLASS_RE)
         if isinstance(tag, Tag)
     )
-    return candidates
+    # A descendant cannot contain more text than its candidate ancestor.
+    # Preserve document-order tie behavior by retaining the original order.
+    identities = {id(tag) for tag in candidates}
+    return [tag for tag in candidates
+            if not any(id(parent) in identities for parent in tag.parents)]
 
 
 def extract_html_text(html: str, max_chars: int) -> ExtractedText:

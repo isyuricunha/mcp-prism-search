@@ -438,3 +438,14 @@ def _fake_fetch_result():
         url="https://a.example/", final_url="https://a.example/", title="T",
         content="c", content_type="text/html", cached=False, success=True, error=None,
     )
+
+
+def test_html_nested_candidates_do_not_repeat_text_extraction():
+    from bs4 import BeautifulSoup
+
+    from mcp_prism_search.text import _candidate_tags
+
+    html = '<main>' + '<div class="content">' * 80 + "Text" + "</div>" * 80 + "</main>"
+    soup = BeautifulSoup(html, "html.parser")
+    assert [tag.name for tag in _candidate_tags(soup)] == ["main"]
+    assert extract_html_text(html, 1000).content == "Text"
