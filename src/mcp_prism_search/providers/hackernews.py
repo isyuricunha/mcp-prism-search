@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 
 from mcp_prism_search.models import SearchRequest, SearchResult
@@ -23,13 +25,18 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         data = response.json()
 
     results: list[SearchResult] = []
-    for hit in data.get("hits", []):
+    if not isinstance(data, dict) or not isinstance(data.get("hits"), list):
+        raise ValueError("Invalid Hacker News response")
+    for hit in data["hits"]:
         if not isinstance(hit, dict):
             continue
         title = normalize_whitespace(str(hit.get("title") or hit.get("story_title") or ""))
         url = str(hit.get("url") or hit.get("story_url") or "")
-        if not url.startswith("http"):
-            url = f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
+        if not url.startswith(("http://", "https://")):
+            identifier = str(hit.get("objectID") or "")
+            if not re.fullmatch(r"[0-9]{1,20}", identifier):
+                continue
+            url = f"https://news.ycombinator.com/item?id={identifier}"
         if not title:
             continue
         snippet = normalize_whitespace(str(hit.get("story_text") or hit.get("comment_text") or ""))

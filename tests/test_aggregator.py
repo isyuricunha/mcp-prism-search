@@ -178,3 +178,17 @@ def test_provider_disabled_after_chain_resolution_is_not_called(monkeypatch):
     monkeypatch.setenv("MCP_DISABLED_PROVIDERS", "keenable")
     with pytest.raises(ValueError, match="no longer available"):
         asyncio.run(providers.run_provider("keenable", SearchRequest(query="test"), 5, 5))
+
+
+def test_hackernews_fallback_requires_valid_story_id(monkeypatch):
+    from mcp_prism_search.providers import hackernews
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"hits": [
+            {"title": "Missing ID"},
+            {"title": "Injected ID", "objectID": "42&other=1"},
+            {"title": "Valid story", "objectID": "42"},
+        ]})), **kw))
+    rows = asyncio.run(hackernews.search(SearchRequest(query="test"), 1, 5))
+    assert len(rows) == 1 and rows[0].url.endswith("id=42")
