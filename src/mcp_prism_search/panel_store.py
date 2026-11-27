@@ -19,11 +19,11 @@ class PanelStore:
             raise RuntimeError("Panel state directory must be private (0700)")
         key_path = directory / "encryption.key"
         self.path = directory / "settings.sqlite3"
-        if self.path.is_symlink():
+        if self.path.is_symlink() or (self.path.exists() and not self.path.is_file()):
             raise RuntimeError("Invalid panel database path")
         if self.path.exists() and not key_path.is_file():
             raise RuntimeError("Existing state encryption key is missing")
-        if key_path.is_symlink():
+        if key_path.is_symlink() or (key_path.exists() and not key_path.is_file()):
             raise RuntimeError("Invalid panel encryption key path")
         try:
             fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

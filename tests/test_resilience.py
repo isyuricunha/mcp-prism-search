@@ -395,3 +395,14 @@ def test_partial_html_notice_survives_article_extraction():
     result = fetch._response_to_fetch_response("https://example.org", raw, 1000)
     assert result.truncated and result.content.startswith("[PARTIAL CONTENT:")
     assert "hello" in result.content and len(result.content) <= 1000
+
+
+@pytest.mark.parametrize("name", ["settings.sqlite3", "encryption.key"])
+def test_panel_store_rejects_nonregular_state_paths(tmp_path, name):
+    from mcp_prism_search.panel_store import PanelStore
+
+    state = tmp_path / "state"
+    state.mkdir(mode=0o700)
+    (state / name).mkdir()
+    with pytest.raises(RuntimeError, match="Invalid panel"):
+        PanelStore(state)
