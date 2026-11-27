@@ -650,16 +650,16 @@ $("settings-form").addEventListener("submit",async event=>{
   const data={};
   for(const key of ["timeout","search_ttl","fetch_ttl"])if(!$(key).disabled)data[key]=Number($(key).value);
   if(!$("preferred-field").disabled)data.preferred=$("preferred").querySelector("input:checked")?.value||null;
-  const button=event.currentTarget.querySelector('button[type=submit]');
+  const button=event.currentTarget.querySelector('button[type=submit]'),epoch=authEpoch;
   settingsPending=true;busyCount++;setPending(button,true,"Saving…");
   const editable=[...$("settings-form").querySelectorAll("input,button,fieldset")].filter(n=>n!==button&&!n.disabled);
   for(const n of editable)n.disabled=true;
   try{
     state.settings=await api("settings","PUT",data);settingsDirty=false;
-    try{await refresh(true);feedback("settings-feedback","Settings saved. Changes apply to new searches.");}
-    catch{if(state)feedback("settings-feedback","Settings saved. Dashboard refresh failed; refresh to see current server information.",true);}
+    try{await refresh(true);if(epoch===authEpoch)feedback("settings-feedback","Settings saved. Changes apply to new searches.");}
+    catch{if(epoch===authEpoch&&state)feedback("settings-feedback","Settings saved. Dashboard refresh failed; refresh to see current server information.",true);}
   }
-  catch(error){feedback("settings-feedback",error.message,true);}
+  catch(error){if(epoch===authEpoch)feedback("settings-feedback",error.message,true);}
   finally{settingsPending=false;busyCount--;for(const n of editable)n.disabled=false;setPending(button,false);if(state&&!settingsDirty)renderSettings(true);}
 });
 function renderDefaultSettings(force=false,useBuiltins=false){
@@ -766,6 +766,7 @@ $("defaults-form").addEventListener("submit",async event=>{
     if(JSON.stringify(value)!==JSON.stringify(field.value))values[field.id]=value;
   }
   if(!Object.keys(values).length){feedback("defaults-feedback","No changes to save.");defaultsDirty=false;return;}
+  const epoch=authEpoch;
   defaultsPending=true;busyCount++;
   const button=$("save-defaults");setPending(button,true,"Saving…");
   const inputs=[...$("defaults-form").querySelectorAll("[data-default-id],button")].filter(n=>n!==button&&!n.disabled);
@@ -777,9 +778,9 @@ $("defaults-form").addEventListener("submit",async event=>{
       $("native-provider").value="";$("native-effort").value="";
     }
     renderDefaultSettings(true);renderChoices();renderNativeOptions();
-    try{await refresh(true);feedback("defaults-feedback","Defaults saved. Subsequent MCP calls inherit these values.");}
-    catch{if(state)feedback("defaults-feedback","Defaults saved. Dashboard refresh failed; refresh to see current server information.",true);}
-  }catch(error){feedback("defaults-feedback",error.message,true);}
+    try{await refresh(true);if(epoch===authEpoch)feedback("defaults-feedback","Defaults saved. Subsequent MCP calls inherit these values.");}
+    catch{if(epoch===authEpoch&&state)feedback("defaults-feedback","Defaults saved. Dashboard refresh failed; refresh to see current server information.",true);}
+  }catch(error){if(epoch===authEpoch)feedback("defaults-feedback",error.message,true);}
   finally{
     defaultsPending=false;busyCount--;
     for(const n of inputs)n.disabled=false;
@@ -821,14 +822,15 @@ $("ai-settings-form").addEventListener("submit",async event=>{
   if(enabled&&!names.length){feedback("ai-settings-feedback","Select at least one authorized provider.",true);return;}
   if(enabled&&!await confirmAction("Authorize AI-enhanced searches?","Future searches may spend credits with "+names.map(providerName).join(", ")+". This applies to all MCP clients using this server.","Authorize and save",false))return;
   if(aiSettingsPending)return;
+  const epoch=authEpoch;
   aiSettingsPending=true;busyCount++;
   const button=$("save-ai-settings");setPending(button,true,"Saving…");global.disabled=true;field.disabled=true;
   try{
     state.settings=await api("settings","PUT",data);aiSettingsDirty=false;syncSearchMode();
-    try{await refresh(true);feedback("ai-settings-feedback","AI search settings saved.");}
-    catch{if(state)feedback("ai-settings-feedback","AI search settings saved. Dashboard refresh failed; refresh to see current server information.",true);}
+    try{await refresh(true);if(epoch===authEpoch)feedback("ai-settings-feedback","AI search settings saved.");}
+    catch{if(epoch===authEpoch&&state)feedback("ai-settings-feedback","AI search settings saved. Dashboard refresh failed; refresh to see current server information.",true);}
   }
-  catch(error){feedback("ai-settings-feedback",error.message,true);}
+  catch(error){if(epoch===authEpoch)feedback("ai-settings-feedback",error.message,true);}
   finally{aiSettingsPending=false;busyCount--;setPending(button,false);renderAiSettings();}
 });
 function appendNativeSources(list,sources){

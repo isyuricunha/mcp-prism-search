@@ -544,7 +544,16 @@ try{
   await page.getByRole("button",{name:"Sign in",exact:true}).click();
   await page.locator("#dashboard").waitFor({state:"visible"});
   assert.equal(await page.locator("#provider-feedback-keenable").textContent(),"");
-  await page.locator("#logout").click();await page.locator("#login").waitFor({state:"visible"});
+  await nav("Settings");
+ await page.locator("#timeout").fill("24");
+ logged=false;
+ await page.getByRole("button",{name:"Save settings"}).click();
+ await page.locator("#login").waitFor({state:"visible"});
+ await page.locator("#password").fill("test-only-password");
+ await page.getByRole("button",{name:"Sign in",exact:true}).click();
+ await page.locator("#dashboard").waitFor({state:"visible"});
+ assert.equal(await page.locator("#settings-feedback").textContent(),"");
+ await page.locator("#logout").click();await page.locator("#login").waitFor({state:"visible"});
  await page.locator("#login-theme").click();await audit("login-white");
  assert.deepEqual(errors,[]);
  console.log("Interaction tests PASS");
