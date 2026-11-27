@@ -444,6 +444,8 @@ class JsonFileCache:
     """TTL-based JSON cache backed by one file per key."""
 
     def __init__(self, root_dir: Path, namespace: str, ttl_seconds: int) -> None:
+        if namespace not in CACHE_NAMESPACES:
+            raise ValueError("Unknown cache namespace")
         self.root_dir = root_dir
         self.namespace = namespace
         self.ttl_seconds = ttl_seconds

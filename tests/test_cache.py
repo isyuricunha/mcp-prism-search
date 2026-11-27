@@ -318,3 +318,8 @@ def test_clear_requires_literal_boolean(tmp_path, confirmation):
     _write_cache_file(path, created_at=time.time())
     result = clear_cache(namespace="search", confirm=confirmation, root_dir=tmp_path)
     assert result.error and path.exists()
+
+
+def test_cache_namespace_cannot_escape_root(tmp_path):
+    with pytest.raises(ValueError, match="Unknown cache namespace"):
+        JsonFileCache(tmp_path, "../outside", 60)
