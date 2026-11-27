@@ -183,6 +183,7 @@ async def synthesis_slot(*, wait: bool = False):
 
 
 SSE_MAX_EVENT_CHARS = 1_000_000
+SSE_MAX_STREAM_BYTES = 32 * 1024 * 1024
 
 
 async def _sse_data(response):
@@ -192,7 +193,15 @@ async def _sse_data(response):
     fields = []
     size = 0
     trailing_cr = False
+    total_bytes = 0
+    if response.headers.get("content-encoding", "identity").strip().lower() not in {
+        "", "identity",
+    }:
+        raise ValueError("Unsupported stream content encoding")
     async for chunk in response.aiter_bytes(chunk_size=4096):
+        total_bytes += len(chunk)
+        if total_bytes > SSE_MAX_STREAM_BYTES:
+            raise ValueError("SSE stream exceeds size limit")
         text = decoder.decode(chunk)
         if not text:
             continue
@@ -229,7 +238,9 @@ async def _chat_stream(client, url, headers, payload, provider):
     numbers = []
     size = 0
     finished = False
-    async with client.stream("POST", url, headers=headers, json=payload) as response:
+    async with client.stream(
+        "POST", url, headers={**headers, "Accept-Encoding": "identity"}, json=payload
+    ) as response:
         response.raise_for_status()
         async for data in _sse_data(response):
             value = data.strip()
@@ -298,7 +309,8 @@ async def _tiny_research(client, headers, query: str, effort: Effort) -> NativeR
     try:
         async with client.stream(
             "POST", TINY_RESEARCH_BASE + "/v1/automation/run-research",
-            headers=headers, json={"query": query, "mode": effort, "stream": False},
+            headers={**headers, "Accept-Encoding": "identity"},
+            json={"query": query, "mode": effort, "stream": False},
         ) as response:
             response.raise_for_status()
             candidate = response.headers.get("X-Research-Run-Id", "")

@@ -77,3 +77,20 @@ def test_legacy_html_search_bounds_response_before_parsing(monkeypatch):
     with pytest.raises(ValueError, match="size limit"):
         asyncio.run(search._search_with_duckduckgo_html(SearchRequest(query="test"), 5))
     assert stream.closed
+
+
+def test_sse_bounds_total_ignored_comment_traffic(monkeypatch):
+    from mcp_prism_search import native
+
+    monkeypatch.setattr(native, "SSE_MAX_STREAM_BYTES", 4096)
+    stream = Chunks([b": heartbeat\n\n" * 4096])
+
+    async def consume():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda req: httpx.Response(200, stream=stream)
+        )) as client, client.stream("GET", "https://example.org") as response:
+            return [event async for event in native._sse_data(response)]
+
+    with pytest.raises(ValueError, match="stream exceeds"):
+        asyncio.run(consume())
+    assert stream.closed
