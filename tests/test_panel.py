@@ -624,3 +624,15 @@ def test_panel_rejects_conflicting_credential_actions(panel):
                           headers=HEADERS)
     assert response.status_code == 400
     assert (store.credentials, store.flags) == before
+
+
+@pytest.mark.parametrize("query", [
+    {"limit": "bad"}, {"limit": 0}, {"limit": 501}, {"period": "month"},
+    {"level": "INVALID"}, {"search": "x" * 101},
+])
+def test_panel_invalid_log_query(panel, query):
+    client, _, _ = panel
+    sign_in(client)
+    response = client.get("/api/logs", params=query)
+    assert response.status_code == 400
+    assert "error" in response.json()
