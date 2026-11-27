@@ -75,3 +75,27 @@ python -m ruff check .
 
 Browser dependency installation retries transient APT or CDN failures up to
 three times. A permanent installation failure still blocks publication.
+
+
+## Dependency updates
+
+Dependabot groups GitHub Actions version updates into a single weekly
+pull request (all-actions). Security updates use their own urgent group
+(security-actions) because GitHub treats security updates separately.
+The existing scope is GitHub Actions only; adding Python or npm updates
+requires a separate lockfile compatibility policy.
+
+The repository requires the full CI validation job and GitGuardian's
+security check on main, with strict up-to-date branch checks. Repository
+administrators retain their existing direct-push workflow. The trusted
+workflow_run auto-merge job never executes PR source or artifacts; it
+queues only same-repository grouped Dependabot PRs with a successful
+CI check on the exact head. GitHub enforces required checks before merge.
+An ungrouped PR, human PR, failed check, or update outside the permitted
+workflow directory is not automatically merged. Major updates are included
+in the group, so one incompatible update blocks the whole group.
+
+The native auto-merge uses squash merging. GitHub may suppress a subsequent
+push-triggered workflow for merges performed with GITHUB_TOKEN. Dependency
+chore updates do not intentionally create a new release; use the manual CI
+and Release workflow if post-merge validation or publication is needed.

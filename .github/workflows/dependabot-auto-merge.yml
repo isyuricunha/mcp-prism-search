@@ -1,0 +1,83 @@
+name: Dependabot grouped auto-merge
+
+on:
+  workflow_run:
+    workflows: ["CI and Release"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-grouped-auto-merge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    # This job runs trusted default-branch code only; never check out the PR,
+    # execute its scripts, restore its cache, or download its artifacts.
+    if: >-
+      github.repository == 'isyuricunha/mcp-prism-search' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+      RUN_EVENT: ${{ github.event_name }}
+    steps:
+      - name: Queue only verified grouped Dependabot updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Refuse to operate if the required checks were removed.
+          gh api "repos/$REPO/branches/main" |
+            jq -e '
+              .protected == true and
+              (.protection.required_status_checks.checks |
+                any(.[]; .context == "Validate exact source and plan release" and .app_id == 15368) and
+                any(.[]; .context == "GitGuardian Security Checks" and .app_id == 46505))
+            ' >/dev/null
+
+          # Filter trusted bot identity, same-repository source, base and grouped branches.
+          gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" |
+            jq -r --arg repo "$REPO" --arg sha "$RUN_SHA" --arg event "$RUN_EVENT" '
+              .[] | select(
+                .user.login == "dependabot[bot]" and .user.id == 49699333 and
+                .user.type == "Bot" and .head.repo.full_name == $repo and
+                .base.ref == "main" and (.draft | not) and
+                (.head.ref | test("^dependabot/github_actions/(all-actions|security-actions)-")) and
+                ($event == "workflow_dispatch" or .head.sha == $sha)
+              ) | [.number, .head.sha] | @tsv
+            ' | while IFS=$'\t' read -r number sha; do
+              # Require the trusted CI check on the exact head. GitHub itself
+              # enforces both required checks and up-to-date branch protection.
+              gh api "repos/$REPO/commits/$sha/check-runs" |
+                jq -e 'any(.check_runs[];
+                  .name == "Validate exact source and plan release" and
+                  .app.id == 15368 and .conclusion == "success")' >/dev/null || continue
+              # Never enable merge for arbitrary source changes. Dependabot is
+              # currently configured for GitHub Actions only.
+              gh api --paginate "repos/$REPO/pulls/$number/files?per_page=100" |
+                jq -es '
+                  def changes: .patch | split("\n") | map(select(test("^[+-]")));
+                  def action_pin: test("^[+-] +uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}( +# v?[0-9][A-Za-z0-9.-]*)? *$");
+                  def names($sign): map(select(startswith($sign)) | sub("^[+-]"; "") | sub("@[0-9a-f]{40}.*$"; "")) | sort;
+                  flatten | length > 0 and all(.[];
+                    (.filename | startswith(".github/workflows/")) and
+                    .status == "modified" and (.patch | type == "string") and
+                    (changes | length > 0 and all(.[]; action_pin) and
+                      (names("+") == names("-"))))
+                ' >/dev/null || continue
+              gh pr merge "$number" --repo "$REPO" --auto --squash --match-head-commit "$sha"
+            done
