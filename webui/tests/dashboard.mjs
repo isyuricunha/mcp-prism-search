@@ -393,6 +393,23 @@ try{
  assert.equal(lastNative.mode,"research");
  assert.equal(lastNative.effort,"deep");
  assert.ok((await page.locator("#native-heading").textContent()).endsWith(" · Research"));
+ // Session expiry must abort the browser wait for an old synthesis.
+ holdNative=new Promise(resolve=>{releaseNative=resolve;});
+ await page.locator("#native-run").click();
+ await page.getByRole("dialog").getByRole("button",{name:"Continue",exact:true}).click();
+ try{
+  await page.waitForFunction(()=>document.querySelector("#native-run").hasAttribute("aria-busy"));
+  logged=false;
+  await page.evaluate(()=>refresh().catch(()=>{}));
+  await page.locator("#login").waitFor({state:"visible"});
+  await page.waitForFunction(()=>!document.querySelector("#native-run").hasAttribute("aria-busy"));
+  assert.equal(await page.locator("#native-answer").textContent(),"");
+  assert.equal(await page.locator("#native-feedback").textContent(),"");
+ }finally{releaseNative();holdNative=null;}
+ await page.locator("#password").fill("test-only-password");
+ await page.getByRole("button",{name:"Sign in",exact:true}).click();
+ await page.locator("#dashboard").waitFor({state:"visible"});
+ assert.equal(await page.locator("#native-query").isDisabled(),false);
  await page.locator("#native-panel > summary").click();
  await nav("Connection");await page.locator("#endpoint").fill("https://example.com/mcp");
  assert.equal(JSON.parse(await page.locator("#connection-json").textContent()).mcp["prism-search"].url,"https://example.com/mcp");

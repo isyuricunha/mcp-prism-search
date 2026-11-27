@@ -30,6 +30,7 @@ let aiSettingsDirty = false;
 let aiSettingsPending = false;
 let searchAnswerPreference = null;
 let logRows=[],logsPending=false,logsRevision=0,logsSearch="";
+const sessionRequests=new Set();
 
 function element(tag, value = "", className = "") {
   const node = document.createElement(tag);
@@ -76,16 +77,21 @@ function setPending(button, pending, label) {
 }
 async function api(path, method = "GET", data) {
   const epoch = authEpoch;
+  const controller=new AbortController();
+  sessionRequests.add(controller);
   let response;
   try {
     response = await fetch("/api/" + path, {
       method, credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Prism-Admin": "1" },
       ...(data === undefined ? {} : { body: JSON.stringify(data) }),
-      signal: AbortSignal.timeout(path==="native"&&data?.mode==="research"&&data?.provider==="tinyfish"?2820000:path==="native"&&data?.effort==="exhaustive"?360000:["search","native"].includes(path) ? 180000 : 20000)
+      signal: AbortSignal.any([controller.signal,AbortSignal.timeout(path==="native"&&data?.mode==="research"&&data?.provider==="tinyfish"?2820000:path==="native"&&data?.effort==="exhaustive"?360000:["search","native"].includes(path) ? 180000 : 20000)])
     });
   } catch (e) {
+    if(epoch!==authEpoch)throw new Error("Session changed. Please retry.");
     throw new Error(e.name === "TimeoutError" ? (["search","native"].includes(path) ? "The browser stopped waiting. The server may still be searching; check activity before retrying." : "The request timed out. Try again.") : "Cannot reach the server. Check the connection and retry.");
+  } finally {
+    sessionRequests.delete(controller);
   }
   if (epoch !== authEpoch) throw new Error("Session changed. Please retry.");
   const body = await response.json().catch(() => null);
@@ -112,6 +118,8 @@ async function confirmAction(title, description, label, destructive = true) {
 }
 function showLogin() {
   authEpoch++;
+  for(const request of sessionRequests)request.abort();
+  sessionRequests.clear();
   logsRevision++;logRows=[];$("logs-list").replaceChildren();$("logs-export").disabled=true;
   $("logs-search").value="";logsSearch="";
   $("logs-level").value="";$("logs-provider").value="";$("logs-period").value="all";
@@ -576,6 +584,7 @@ $("search-form").addEventListener("submit",async event=>{
   const useAnswers=$("search-answers").checked;
   if(chosen.some(p=>p.env&&!(useAnswers&&authorized.includes(p.id)))&&!await confirmAction("Use authenticated engines?","This search may consume provider credits or access your private instance. Continue with "+chosen.length+" engine(s)?","Run search",false))return;
   if(searchPending)return;
+  const epoch=authEpoch;
   searchPending=true;busyCount++;setPending($("run-search"),true,"Searching…");syncSearchMode();feedback("search-error");
   $("search-output").hidden=true;
   for(const n of document.querySelectorAll("input[name=search-mode], #query, #max-results, #search-safe-search, #search-recency, #reset-search-options"))n.disabled=true;
@@ -588,6 +597,7 @@ $("search-form").addEventListener("submit",async event=>{
     if(mode==="selected")data.providers=chosen.map(p=>p.id);
     renderSearch(await api("search","POST",data));
   }catch(error){
+    if(epoch!==authEpoch)return;
     if(Array.isArray(error.body?.results))renderSearch(error.body);
     else feedback("search-error",error.message,true);
   }finally{
@@ -813,6 +823,7 @@ $("native-form").addEventListener("submit",async event=>{
   if(mode==="research"&&!$("native-effort").value){feedback("native-feedback","Choose a supported research effort.",true);return;}
   if(!await confirmAction("Use provider AI?",providerName(provider)+" may spend API credits. "+capability.pricing+(mode==="research"?" "+($("native-effort").selectedOptions[0]?.textContent||"")+"."+(capability.research_wait_note?" "+capability.research_wait_note:""):""),"Continue",false))return;
   if(nativePending)return;
+  const epoch=authEpoch;
   nativePending=true;busyCount++;
   const inputs=[...$("native-form").querySelectorAll("textarea,select,input,button")].filter(n=>!n.disabled);
   for(const n of inputs)n.disabled=true;
@@ -826,7 +837,7 @@ $("native-form").addEventListener("submit",async event=>{
     $("native-sources").replaceChildren();
     appendNativeSources($("native-sources"),data.sources);
     $("native-result").hidden=false;feedback("native-feedback","Completed.");
-  }catch(error){feedback("native-feedback",error.message,true);}
+  }catch(error){if(epoch===authEpoch)feedback("native-feedback",error.message,true);}
   finally{
     nativePending=false;busyCount--;for(const n of inputs)n.disabled=false;
     $("native-run").removeAttribute("aria-busy");renderNativeOptions();
