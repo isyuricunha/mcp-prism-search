@@ -22,7 +22,7 @@ dependencies = [
   "packaging>=24",
   "opentelemetry-api>=1.44,<2",
   "pydantic>=2.7",
-  "starlette>=1.6,<2",
+  "starlette>=1.7,<2",
 ]
 
 [project.optional-dependencies]
@@ -51,6 +51,7 @@ packages = ["src/mcp_prism_search"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning"]
 
 [tool.ruff]
 line-length = 100
