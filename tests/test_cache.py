@@ -375,3 +375,26 @@ def test_legacy_empty_cached_result_cannot_hide_retrieval(tmp_path, monkeypatch)
     monkeypatch.setattr(search_module, "_search_with_duckduckgo_html", retrieve)
     response = asyncio.run(ddg_search("test", cache=store))
     assert response.results and not response.cached
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="POSIX no-follow protection")
+def test_cache_read_rejects_symlink_swapped_after_path_check(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    store = JsonFileCache(tmp_path, "search", 60)
+    key = {"query": "test"}
+    store.set(key, {"value": "original"})
+    path = store.path_for(key)
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"created_at": time.time(), "value": {"private": True}}))
+    original = Path.is_file
+
+    def swap(candidate):
+        if candidate == path:
+            path.unlink()
+            path.symlink_to(outside)
+            return True
+        return original(candidate)
+
+    monkeypatch.setattr(Path, "is_file", swap)
+    assert store.get(key) is None

@@ -492,7 +492,11 @@ class JsonFileCache:
         try:
             if self.cache_dir.is_symlink() or path.is_symlink() or not path.is_file():
                 return None
-            with path.open("rb") as cache_file:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                         | getattr(os, "O_NONBLOCK", 0))
+            with os.fdopen(fd, "rb") as cache_file:
+                if not stat.S_ISREG(os.fstat(cache_file.fileno()).st_mode):
+                    return None
                 raw = cache_file.read(MAX_CACHE_ENTRY_BYTES + 1)
             if len(raw) > MAX_CACHE_ENTRY_BYTES:
                 return None
