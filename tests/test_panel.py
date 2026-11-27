@@ -636,3 +636,12 @@ def test_panel_invalid_log_query(panel, query):
     response = client.get("/api/logs", params=query)
     assert response.status_code == 400
     assert "error" in response.json()
+
+
+def test_panel_store_rejects_shared_state(tmp_path):
+    directory = tmp_path / "admin"
+    directory.mkdir(mode=0o755)
+    directory.chmod(0o755)
+    with pytest.raises(RuntimeError, match="private"):
+        PanelStore(directory)
+    assert not (directory / "encryption.key").exists()
