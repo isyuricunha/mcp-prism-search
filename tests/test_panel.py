@@ -675,3 +675,18 @@ def test_panel_store_rejects_unsafe_key(tmp_path, symlink):
         PanelStore(directory)
     if symlink:
         assert target.read_text() == "keep"
+
+
+def test_panel_store_metrics_unavailable(tmp_path, monkeypatch, caplog):
+    import sqlite3
+
+    store = PanelStore(tmp_path / "admin")
+
+    def unavailable():
+        raise sqlite3.OperationalError("database unavailable")
+
+    monkeypatch.setattr(store, "connect", unavailable)
+    store.cache_result(True)
+    store.record("keenable", "ok", 0.1)
+    assert "counter write failed" in caplog.text
+    assert "metric write failed" in caplog.text
