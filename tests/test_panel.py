@@ -432,3 +432,30 @@ def test_unconfigured_explicit_provider_is_mcp_error(panel, monkeypatch):
     monkeypatch.delenv("TINYFISH_API_KEY", raising=False)
     with pytest.raises(server.ToolError):
         asyncio.run(server.web_search("test", provider="tinyfish"))
+
+
+
+def test_tinyfish_native_panel_explicit_only(panel, monkeypatch):
+    client, _, _ = panel
+    monkeypatch.setenv("TINYFISH_API_KEY", "fixture-key")
+    sign_in(client)
+    cap = next(c for c in client.get("/api/overview").json()["native"]
+               if c["id"] == "tinyfish")
+    assert cap["available"] and not cap["automatic_search"]
+    assert cap["answer_max_chars"] == 2000
+    assert set(cap["efforts"]) == {"deep", "max"}
+    assert client.put("/api/settings", headers=HEADERS, json={
+        "ai_search_providers": ["tinyfish"],
+    }).status_code == 400
+    for mode, effort in [("answer", "lite"), ("research", "max")]:
+        response = client.post("/api/native", headers=HEADERS, json={
+            "mode": mode, "provider": "tinyfish", "query": "test", "effort": effort,
+        })
+        assert response.status_code == 400
+        assert "allow_cost" in response.json()["error"]
+    assert client.put("/api/defaults", headers=HEADERS, json={"values": {
+        "research_provider": "tinyfish", "research_effort": "lite",
+    }}).status_code == 400
+    assert client.put("/api/defaults", headers=HEADERS, json={"values": {
+        "research_provider": "tinyfish", "research_effort": "deep",
+    }}).status_code == 200

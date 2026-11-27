@@ -311,3 +311,168 @@ def test_queued_synthesis_rechecks_policy_after_slot(configure, monkeypatch, pro
             await task
 
     asyncio.run(verify())
+
+
+
+@pytest.fixture
+def tinyfish_config(monkeypatch):
+    monkeypatch.setenv("TINYFISH_API_KEY", "fixture-key")
+    monkeypatch.setenv("MCP_AI_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("MCP_AI_SEARCH_PROVIDERS", "tinyfish")
+
+
+def test_tinyfish_answer_contract_and_consent(tinyfish_config, monkeypatch):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        assert str(request.url) == "https://api.answer.tinyfish.ai/"
+        assert request.headers["X-API-Key"] == "fixture-key"
+        assert json.loads(request.content) == {"question": "question"}
+        return httpx.Response(200, json={
+            "answer": "Answer [1]", "citations": [{"url": ROW["url"], "title": None}],
+            "request_id": "fixture",
+        })
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError, match="allow_cost"):
+        asyncio.run(native.synthesize("question", "tinyfish", "answer"))
+    with pytest.raises(native.NativeError, match="2000"):
+        asyncio.run(native.synthesize("x" * 2001, "tinyfish", "answer", allow_cost=True))
+    assert not calls
+    result = asyncio.run(native.synthesize(" question ", "tinyfish", "answer", allow_cost=True))
+    assert result.answer == "Answer [1]"
+    assert result.sources[0].index == 1 and result.sources[0].url == ROW["url"]
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("effort", ["deep", "max"])
+def test_tinyfish_research_authoritative_final_only(tinyfish_config, monkeypatch, effort):
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        assert str(req.url) == "https://agent.tinyfish.ai/v1/automation/run-research"
+        assert req.headers["X-API-Key"] == "fixture-key"
+        assert json.loads(req.content) == {"query": "question", "mode": effort, "stream": False}
+        return httpx.Response(200, text=sse(
+            {"event": "created", "research_run_id": "fixture-id"},
+            {"event": "partial_summary", "result": "Do not include"},
+            {"event": "synthesis_delta", "text": "Draft"},
+            {"event": "final_result", "result": "Report [1]",
+             "citations": [ROW["url"], "javascript:alert(1)", ROW],
+             "termination_reason": "planner_done"},
+            {"event": "done"},
+        ), headers={"Content-Type": "text/event-stream",
+                    "X-Research-Run-Id": "fixture-id"})
+
+    mock_http(monkeypatch, handler)
+    result = asyncio.run(native.synthesize(
+        "question", "tinyfish", "research", allow_cost=True, effort=effort,
+    ))
+    assert result.answer == "Report [1]" and result.effort == effort
+    assert [source.index for source in result.sources] == [1, 2, 3]
+    assert [source.url for source in result.sources] == [ROW["url"], None, ROW["url"]]
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("status", [402, 403, 429])
+def test_tinyfish_http_error_never_retries(tinyfish_config, monkeypatch, status):
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(status, json={"error": {"message": "private detail"}})
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError, match=f"HTTP {status}") as error:
+        asyncio.run(native.synthesize("question", "tinyfish", "answer", allow_cost=True))
+    assert "private detail" not in str(error.value) and len(calls) == 1
+
+
+@pytest.mark.parametrize("final", [False, True])
+def test_tinyfish_unfinished_run_cancel_only_when_needed(tinyfish_config, monkeypatch, final):
+    calls = []
+
+    def handler(req):
+        calls.append(str(req.url))
+        if req.url.path.endswith("/cancel"):
+            return httpx.Response(200, json={"status": "CANCELLED", "cancelled": True})
+        event = (
+            {"event": "final_result", "result": "Interim", "citations": [],
+             "termination_reason": "synthesis_failed"}
+            if final else {"event": "error", "message": "private detail"}
+        )
+        return httpx.Response(200, text=sse(event, {"event": "done"}),
+                              headers={"X-Research-Run-Id": "fixture-id"})
+
+    mock_http(monkeypatch, handler)
+    with pytest.raises(native.NativeError) as error:
+        asyncio.run(native.synthesize(
+            "question", "tinyfish", "research", allow_cost=True, effort="deep",
+        ))
+    assert "private detail" not in str(error.value)
+    assert len(calls) == (1 if final else 2)
+    if not final:
+        assert calls[-1].endswith("/v1/research-run/fixture-id/cancel")
+
+
+def test_tinyfish_explicit_only_and_disabled_provider(tinyfish_config, monkeypatch):
+    assert not ai_search.eligible(["tinyfish"], SearchRequest(query="question"), True)
+    cap = next(c for c in native.capabilities() if c["id"] == "tinyfish")
+    assert cap["available"] and not cap["automatic_search"]
+    monkeypatch.setenv("MCP_DISABLED_PROVIDERS", "tinyfish")
+
+    def unexpected(req):
+        pytest.fail("Disabled provider must not be contacted")
+
+    mock_http(monkeypatch, unexpected)
+    with pytest.raises(native.NativeError, match="enabled and configured"):
+        asyncio.run(native.synthesize("question", "tinyfish", "answer", allow_cost=True))
+
+
+def test_youcom_exhaustive_contract(configure, monkeypatch):
+    def handler(req):
+        assert str(req.url) == "https://api.you.com/v1/research"
+        assert json.loads(req.content) == {"input": "question", "research_effort": "exhaustive"}
+        return httpx.Response(200, json={"output": {"content": "Report", "sources": [ROW]}})
+
+    mock_http(monkeypatch, handler)
+    result = asyncio.run(native.synthesize(
+        "question", "youcom", "research", allow_cost=True, effort="exhaustive",
+    ))
+    assert result.effort == "exhaustive" and result.answer == "Report"
+
+
+
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+def test_tinyfish_mcp_contract_and_cost_gate(tinyfish_config, monkeypatch, mode):
+    from mcp import Client
+
+    from mcp_prism_search.server import mcp
+
+    calls = []
+
+    def handler(req):
+        calls.append(req)
+        if req.url.host == "api.answer.tinyfish.ai":
+            return httpx.Response(200, json={"answer": "Answer", "citations": []})
+        return httpx.Response(200, text=sse({
+            "event": "final_result", "result": "Report", "citations": [ROW["url"]],
+            "termination_reason": "planner_done",
+        }))
+
+    mock_http(monkeypatch, handler)
+
+    async def verify():
+        async with Client(mcp, mode=mode) as client:
+            for tool, extra in [("web_answer", {}), ("web_research", {"effort": "max"})]:
+                args = {"query": "test", "provider": "tinyfish", **extra}
+                denied = await client.call_tool(tool, args)
+                assert denied.is_error
+                accepted = await client.call_tool(tool, dict(args, allow_cost=True))
+                assert not accepted.is_error
+                assert accepted.structured_content["provider"] == "tinyfish"
+        assert len(calls) == 2
+
+    asyncio.run(verify())

@@ -417,7 +417,8 @@ async def web_answer(
     """Get a provider-generated answer and sources, not independent verification.
 
     Omit provider to use the configured answer default. Requires a configured key
-    and explicit allow_cost=true.
+    and explicit allow_cost=true. TinyAnswer supports at most 2000 characters
+    and requires account entitlement; it may consume credits.
     Use web_search instead for ordinary retrieval or keyless searches. No fallback.
     """
     try:
@@ -439,7 +440,9 @@ async def web_research(
 
     Omit provider and effort to use configured defaults. Requires explicit cost consent.
     Exa, Tavily and Jina support
-    lite/deep; You.com supports lite/standard/deep; Brave requires deep.
+    lite/deep; You.com supports lite/standard/deep/exhaustive; Brave requires deep.
+    TinyFish supports deep ($2) or max ($3), up to 45 minutes. Use a client
+    timeout above 46 minutes for TinyResearch. TinyFish synthesis is explicit only.
     Review provider pricing before increasing effort.
     No automatic retries or provider fallback.
     """

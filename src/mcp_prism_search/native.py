@@ -14,10 +14,28 @@ import httpx
 from mcp_prism_search import providers, runtime
 from mcp_prism_search.native_models import Effort, Mode, NativeResponse, Source
 
-AnswerProvider = Literal["tavily", "exa", "youcom", "brave"]
-ResearchProvider = Literal["exa", "youcom", "tavily", "brave", "jina"]
+AnswerProvider = Literal["tavily", "exa", "youcom", "brave", "tinyfish"]
+ResearchProvider = Literal["exa", "youcom", "tavily", "brave", "jina", "tinyfish"]
 
 CAPABILITIES = {
+    "tinyfish": {
+        "answer": True, "research": True, "automatic_search": False,
+        "pricing": (
+            "TinyAnswer: account-dependent access and billing; no confirmed free quota. "
+            "TinyResearch: Deep $2/run, Max $3/run. Personal API key required for Answer."
+        ),
+        "answer_max_chars": 2000,
+        "answer_name": "TinyFish · TinyAnswer",
+        "research_name": "TinyFish · TinyResearch",
+        "research_docs": "https://docs.tinyfish.ai/tinyresearch/reference",
+        "efforts": {"deep": "Deep — $2/run (5–20 min)", "max": "Max — $3/run (5–45 min)"},
+        "research_wait_note": (
+            "Research can take up to 45 minutes. Keep this request open; "
+            "do not retry a disconnected request without checking the provider run."
+        ),
+        "docs": "https://docs.tinyfish.ai/api-reference/answer-a-question",
+        "pricing_url": "https://www.tinyfish.ai/pricing",
+    },
     "tavily": {
         "answer": True, "research": True,
         "pricing": "Basic search: 1 credit; 1,000 free credits/month. Research: 4–250 credits.",
@@ -36,12 +54,16 @@ CAPABILITIES = {
     },
     "youcom": {
         "answer": True, "research": True,
-        "pricing": "Answer $0.005; research lite $0.012, standard $0.05, deep $0.10.",
+        "pricing": (
+            "Answer $0.005; research lite $0.012, standard $0.05, "
+            "deep $0.10, exhaustive $0.45."
+        ),
         "research_docs": "https://you.com/docs/guides/research",
         "efforts": {
             "lite": "Lite — $0.012/call",
             "standard": "Standard — $0.05/call",
             "deep": "Deep — $0.10/call",
+            "exhaustive": "Exhaustive — $0.45/call (up to 5 min)",
         },
         "docs": "https://you.com/docs/choose-the-right-api",
         "pricing_url": "https://you.com/pricing",
@@ -75,7 +97,7 @@ _loop: asyncio.AbstractEventLoop | None = None
 def capabilities():
     available = providers.available_providers("general")
     return [
-        {"id": name, "available": name in available, **spec}
+        {"id": name, "available": name in available, "automatic_search": True, **spec}
         for name, spec in CAPABILITIES.items()
     ]
 
@@ -223,6 +245,81 @@ async def _chat_stream(client, url, headers, payload, provider):
     return answer, [_source(i, row) for i, row in sorted(zip(numbers, rows, strict=True))]
 
 
+TINY_RESEARCH_TIMEOUT = 2760
+TINY_RESEARCH_BASE = "https://agent.tinyfish.ai"
+
+
+async def _tiny_research(client, headers, query: str, effort: Effort) -> NativeResponse:
+    """One upstream run. Consume only the authoritative final_result, not drafts."""
+    run_id = None
+    completed = False
+    try:
+        async with client.stream(
+            "POST", TINY_RESEARCH_BASE + "/v1/automation/run-research",
+            headers=headers, json={"query": query, "mode": effort, "stream": False},
+        ) as response:
+            response.raise_for_status()
+            candidate = response.headers.get("X-Research-Run-Id", "")
+            if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", candidate):
+                run_id = candidate
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                if len(line) > 1000000:
+                    raise ValueError("Research event exceeds limit")
+                event = json.loads(line[5:].strip())
+                if not isinstance(event, dict):
+                    raise ValueError("Invalid research event")
+                kind = event.get("event")
+                if kind == "created" and run_id is None:
+                    candidate = event.get("research_run_id")
+                    if isinstance(candidate, str) and re.fullmatch(
+                        r"[A-Za-z0-9_-]{1,128}", candidate
+                    ):
+                        run_id = candidate
+                elif kind == "error":
+                    raise ValueError("Research failed")
+                elif kind == "final_result":
+                    # The provider may bill a completed run even if its final
+                    # report cannot be parsed locally. Never resubmit it.
+                    completed = True
+                    answer, rows = event.get("result"), event.get("citations")
+                    reason = event.get("termination_reason")
+                    if reason == "synthesis_failed":
+                        raise NativeError("tinyfish: final synthesis failed; check saved run.")
+                    if (not isinstance(answer, str) or not answer.strip()
+                            or not isinstance(rows, list)):
+                        raise ValueError("Invalid research report")
+                    if reason in {"deadline", "max_iterations", "abort", "planner_no_queries"}:
+                        answer = (
+                            "[Research ended at a provider budget or planning limit.] " + answer
+                        )
+                    return NativeResponse(
+                        provider="tinyfish", mode="research", effort=effort,
+                        answer=answer[:24000], source_kind="citations",
+                        sources=[
+                            _source(i, {"url": row} if isinstance(row, str) else row)
+                            for i, row in enumerate(rows[:100], 1)
+                        ],
+                        truncated=len(answer) > 24000 or len(rows) > 100,
+                    )
+                elif kind == "done":
+                    break
+        raise ValueError("No final research report")
+    finally:
+        # A disconnected stream does not cancel a TinyResearch job by itself.
+        # Best-effort cancellation of known unfinished runs, no new creation.
+        if run_id and not completed:
+            try:
+                async with asyncio.timeout(10):
+                    await client.post(
+                        TINY_RESEARCH_BASE + "/v1/research-run/" + run_id + "/cancel",
+                        headers=headers, timeout=10,
+                    )
+            except (httpx.HTTPError, TimeoutError):
+                pass
+
+
 TAVILY_POLL_SECONDS = 2
 
 
@@ -263,7 +360,7 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
     if (mode not in {"answer", "research"} or provider not in CAPABILITIES
             or not CAPABILITIES[provider][mode]):
         raise NativeError("Provider does not support this synthesis mode.")
-    if not allow_cost:
+    if allow_cost is not True:
         raise NativeError("Explicit allow_cost=true is required; provider credits may be consumed.")
     spec = providers.available_providers("general").get(provider)
     if not spec or not spec.needs:
@@ -271,13 +368,19 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
     credential = runtime.setting(spec.needs)
     if not credential:
         raise NativeError("Provider must be configured.")
-    if effort not in {"lite", "standard", "deep"} or (
+    if effort not in {"lite", "standard", "deep", "max", "exhaustive"} or (
         mode == "research" and effort not in CAPABILITIES[provider].get("efforts", {})
     ):
         raise NativeError("Unsupported research effort for this provider.")
     if provider == "youcom" and mode == "answer" and len(query) > 400:
         raise NativeError("You.com Answer supports at most 400 characters.")
-    if provider == "tavily":
+    if provider == "tinyfish" and mode == "answer" and len(query) > 2000:
+        raise NativeError("TinyAnswer supports at most 2000 characters.")
+    if provider == "tinyfish":
+        url = "https://api.answer.tinyfish.ai/"
+        headers = {"X-API-Key": credential}
+        payload = {"question": query}
+    elif provider == "tavily":
         url = "https://api.tavily.com/search"
         headers = {"Authorization": "Bearer " + credential}
         payload = {"query": query, "search_depth": "basic", "include_answer": "basic",
@@ -322,10 +425,18 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
         payload = {"query": query} if mode == "answer" else {
             "input": query, "research_effort": effort,
         }
-    timeout = 45 if mode == "answer" else {"lite": 60, "standard": 90, "deep": 150}[effort]
+    if provider == "tinyfish":
+        timeout = 70 if mode == "answer" else TINY_RESEARCH_TIMEOUT
+    else:
+        timeout = 45 if mode == "answer" else {
+            "lite": 60, "standard": 90, "deep": 150, "exhaustive": 330,
+        }[effort]
     start = monotonic()
     outcome = "error"
     async with synthesis_slot(wait=wait_for_slot):
+        if (provider not in providers.available_providers("general")
+                or runtime.setting(spec.needs) != credential):
+            raise NativeError("Provider configuration changed before synthesis.")
         if require_search_policy:
             from mcp_prism_search.ai_search import policy
 
@@ -337,7 +448,9 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
         try:
             async with asyncio.timeout(timeout):
                 async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-                    if provider in {"brave", "jina"}:
+                    if provider == "tinyfish" and mode == "research":
+                        result = await _tiny_research(client, headers, query, effort)
+                    elif provider in {"brave", "jina"}:
                         answer, sources = await _chat_stream(
                             client, url, headers, payload, provider
                         )
@@ -373,6 +486,8 @@ async def synthesize(query: str, provider: str | None, mode: Mode, *,
         except (TimeoutError, httpx.TimeoutException):
             outcome = "timeout"
             raise NativeError(f"{provider}: timed out; check usage before retrying.") from None
+        except NativeError:
+            raise
         except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
             raise NativeError(f"{provider}: invalid or unavailable native response.") from None
         finally:

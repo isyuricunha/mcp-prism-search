@@ -81,7 +81,8 @@ def build_registry() -> None:
         "Official web search API with domain and recency filtering.",
         "https://docs.tinyfish.ai/tinysearch/reference", tinyfish.search,
         signup="https://agent.tinyfish.ai/sign-up",
-        usage="30/min, 500/hour; pages count separately. Check Wallet spending and allowance.")
+        usage="Free Search: 30/min, 500/hour; pages count separately. "
+              "Check account allowance and Wallet settings. TinyAnswer and Research are separate.")
     add("tavily", "general", "TAVILY_API_KEY", "Tavily",
         "Search API for research and AI applications.",
         "https://docs.tavily.com/", tavily.search,

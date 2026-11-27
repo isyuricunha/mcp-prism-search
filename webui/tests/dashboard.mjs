@@ -31,7 +31,7 @@ async function nativeComplete(response){
    !document.querySelector("#native-result").hidden);
 }
 const provider=(id,extra={})=>({id,kind:"general",description:"A search engine for web research.",enabled:true,available:true,credential:false,editable:false,managed:false,env:null,...extra});
-let data={defaults:JSON.parse(await fs.readFile(new URL("./defaults-fixture.json",import.meta.url),"utf8")),native:[{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7",build_kind:"release",commit:null,sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
+let data={defaults:JSON.parse(await fs.readFile(new URL("./defaults-fixture.json",import.meta.url),"utf8")),native:[{id:"tinyfish",answer:true,research:true,automatic_search:false,available:true,answer_max_chars:2000,answer_name:"TinyFish · TinyAnswer",research_name:"TinyFish · TinyResearch",efforts:{deep:"Deep — $2/run",max:"Max — $3/run"},pricing:"Account-dependent Answer; Research $2/$3",research_wait_note:"Up to 45 minutes",docs:"https://docs.tinyfish.ai/tinyanswer",research_docs:"https://docs.tinyfish.ai/tinyresearch/reference",pricing_url:"https://www.tinyfish.ai/pricing"},{id:"exa",answer:true,research:true,efforts:{lite:"Deep Lite",deep:"Deep"},available:true,pricing:"$5/1,000 calls",docs:"https://exa.ai/docs/reference/answer",pricing_url:"https://exa.ai/pricing"},{id:"youcom",answer:true,research:true,available:false,pricing:"API credits",docs:"https://you.com/docs/guides/research",pricing_url:"https://you.com/pricing"}],server:{version:"9.8.7",build_kind:"release",commit:null,sdk_version:"2.3.0",protocol_version:"2026-07-28",transport:"streamable-http"},providers:[provider("keenable"),provider("freeserp"),provider("tinyfish",{editable:true,credential:true,env:"TINYFISH_API_KEY"})],metrics:[],counters:{},cache:{total_files:12,total_bytes:10240,cache_dir:"/data/cache",namespaces:{search:{files:10,bytes:8192},fetch:{files:2,bytes:2048}}},settings:{timeout:15,search_ttl:21600,fetch_ttl:7200,preferred:null,ai_search_enabled:false,ai_search_providers:[],locked:[]}};
 await page.route("http://prism-test.invalid/**",async route=>{
  const url=new URL(route.request().url());
  const pathname=url.pathname;
@@ -279,7 +279,13 @@ try{
  await page.locator("#native-query").fill("test answer");
  assert.equal(await page.locator("#native-provider").inputValue(),"");
  assert.equal(await page.locator("#native-run").isDisabled(),true);
+ await page.locator("#native-provider").selectOption("tinyfish");
+ assert.equal(await page.locator("#native-query").getAttribute("maxlength"),"2000");
+ assert.equal(await page.locator("#native-provider option:checked").textContent(),"TinyFish · TinyAnswer");
+ assert.ok((await page.locator("#native-pricing").textContent()).includes("Account-dependent"));
+ assert.equal(await page.locator('#ai-provider-list input[value="tinyfish"]').count(),0);
  await page.locator("#native-provider").selectOption("exa");
+ assert.equal(await page.locator("#native-query").getAttribute("maxlength"),"4000");
  await page.locator("#native-run").click();
  await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
  assert.equal(lastNative,null);
@@ -298,6 +304,15 @@ try{
  await page.locator("#theme").click();
  await page.locator('input[name=native-mode][value=research]').check();
  assert.equal(await page.locator("#native-run").isDisabled(),true);
+ await page.locator("#native-provider").selectOption("tinyfish");
+ assert.equal(await page.locator("#native-effort").inputValue(),"");
+ assert.equal(await page.locator("#native-run").isDisabled(),true);
+ await page.locator("#native-effort").selectOption("max");
+ assert.ok((await page.locator("#native-pricing").textContent()).includes("45 minutes"));
+ await page.locator("#native-run").click();
+ assert.ok((await page.getByRole("dialog").textContent()).includes("$3/run"));
+ await page.keyboard.press("Escape");
+ await page.getByRole("dialog").waitFor({state:"hidden"});
  data.native.find(p=>p.id==="exa").efforts={deep:"Deep"};
  await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
  await page.locator("#native-provider").selectOption("exa");

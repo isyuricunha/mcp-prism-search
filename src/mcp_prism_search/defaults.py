@@ -27,9 +27,13 @@ class Defaults(BaseModel):
     deep_max_pages: int = Field(default=5, ge=1, le=10)
     vertical_source: Literal["wikipedia", "hackernews"] = "wikipedia"
     vertical_max_results: int = Field(default=5, ge=1, le=20)
-    answer_provider: Literal["explicit", "tavily", "exa", "youcom", "brave"] = "explicit"
-    research_provider: Literal["explicit", "tavily", "exa", "youcom", "brave", "jina"] = "explicit"
-    research_effort: Literal["lite", "standard", "deep"] = "lite"
+    answer_provider: Literal[
+        "explicit", "tavily", "exa", "youcom", "brave", "tinyfish",
+    ] = "explicit"
+    research_provider: Literal[
+        "explicit", "tavily", "exa", "youcom", "brave", "jina", "tinyfish",
+    ] = "explicit"
+    research_effort: Literal["lite", "standard", "deep", "max", "exhaustive"] = "lite"
     fetch_timeout: int = Field(default=15, ge=1, le=120)
     deep_concurrency: int = Field(default=5, ge=1, le=12)
     news_cache_ttl: int = Field(default=1800, ge=1, le=604800)

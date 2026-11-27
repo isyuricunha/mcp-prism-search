@@ -70,7 +70,7 @@ You.com keyless MCP passed follow-up discovery and search using SDK v2.
 
 ## Native synthesis
 
-The [native AI tools and AI-enhanced search policy](native-ai.md) support Tavily, Exa, You.com, Brave and Jina. Ordinary search remains retrieval-only by default. Administrator opt-in permits native AI alongside search; standalone synthesis requires explicit per-call consent.
+The [native AI tools and AI-enhanced search policy](native-ai.md) support Tavily, Exa, You.com, Brave, Jina and explicit TinyFish Answer/Research. Ordinary search remains retrieval-only by default. Administrator opt-in permits native AI alongside search; standalone synthesis requires explicit per-call consent.
 
 Automatic routing uses the last 32 observed outcomes per provider for
 health ordering; aggregate counters still retain lifetime counts. This

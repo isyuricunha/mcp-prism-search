@@ -66,8 +66,9 @@ are not guarantees; inspect the linked current price and account limits.
 |---|---|---|---|---|
 | Tavily | Basic answer, same call | Yes | Mini / Pro | [1 credit basic search; mini 4–110, pro 15–250 credits](https://docs.tavily.com/documentation/api-credits) |
 | Exa | Auto + output schema, same call | Yes | Deep Lite / Deep | [Search and synthesis pricing](https://exa.ai/pricing) |
-| You.com | Answer + web results, same call | Yes | Lite / Standard / Deep | [Answer and research pricing](https://you.com/pricing) |
+| You.com | Answer + web results, same call | Yes | Lite / Standard / Deep / Exhaustive | [Answer and research pricing](https://you.com/pricing) |
 | Brave | Answers, extra call | Yes | Research mode (deep) | [Usage-based search and token pricing](https://api-dashboard.search.brave.com/documentation/services/answers) |
+| TinyFish | Explicit only | TinyAnswer (account entitlement) | Deep / Max | [Search free; research $2/$3 per completed run](https://www.tinyfish.ai/pricing) |
 | Jina | DeepSearch lite, extra call | No separate basic answer API | Lite / Deep | [Token-based usage](https://jina.ai/deepsearch) |
 
 No documented keyless synthesis endpoint was confirmed. The ordinary
@@ -92,16 +93,17 @@ search policy. Use a configured, enabled provider. Examples:
 ```
 
 The first calls `web_answer`; the second calls `web_research`.
-Exa, Tavily and Jina support lite/deep; You.com supports lite/standard/deep;
-Brave research uses deep. Answer mode is not supported by Jina because
+Exa, Tavily and Jina support lite/deep; You.com supports lite/standard/deep/exhaustive;
+Brave research uses deep; TinyFish supports deep/max. Answer mode is not supported by Jina because
 its documented synthesis API is DeepSearch. You.com Answer accepts at most
 400 characters. Standalone outputs retain up to 24,000 characters and
 100 sources. Source indices are preserved where provided; grounding
 references or retrieved results are labeled separately from inline
 citations. Invalid source URLs are not presented as clickable links.
 
-Requests are bounded (45 seconds for standalone answer, 60/90/150 seconds
-for research effort, and provider timeout for enhanced search). A timeout
+Requests are bounded (normally 45 seconds for standalone answer, 60/90/150
+seconds for research effort, with longer explicit provider-specific deadlines
+documented below, and provider timeout for enhanced search). A timeout
 does not guarantee upstream work stopped or that it did not incur charges.
 Keep provider spending controls enabled; Prism does not impose a billing
 quota. Metrics use provider:answer / provider:research labels; a combined
@@ -115,3 +117,26 @@ provider synthesis; revocation does not cancel work already submitted upstream.
 The dashboard requires an explicit provider when its default is explicit.
 If the configured effort is unsupported by the chosen provider, select a
 supported effort before submitting; no higher tier is chosen automatically.
+
+
+### TinyFish
+
+TinySearch and TinyFetch are advertised as free within their published
+limits. TinyAnswer uses the same personal API key but requires account
+entitlement; its API documents a possible insufficient-balance error, so
+do not assume a free quota. TinyAnswer accepts 1–2,000 characters.
+TinyResearch Deep costs $2 and Max $3 per completed run (5–20 and 5–45
+minutes typical). Both are explicit-only; automatic AI search never
+starts these operations. Use allow_cost=true only after reviewing pricing.
+See [TinyAnswer](https://docs.tinyfish.ai/api-reference/answer-a-question)
+and [TinyResearch](https://docs.tinyfish.ai/tinyresearch/reference).
+
+TinyResearch holds the request open, consumes the documented final_result
+event (not provisional drafts), and attempts cancellation of unfinished
+runs with a known ID on failure or cancellation. The overall deadline is
+46 minutes; configure MCP client and proxy timeouts accordingly. Closing
+the browser or losing a connection does not guarantee upstream cancellation
+or prevent billing. Check the TinyFish dashboard before retrying. No
+automatic resubmission or fallback. TinyAnswer timeout is 70 seconds.
+You.com Exhaustive is supported with a 330-second deadline; Frontier and
+Exa Agent need a separate asynchronous job lifecycle and are not exposed.

@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 Mode = Literal["answer", "research"]
-Effort = Literal["lite", "standard", "deep"]
+Effort = Literal["lite", "standard", "deep", "max", "exhaustive"]
 
 
 class Source(BaseModel):

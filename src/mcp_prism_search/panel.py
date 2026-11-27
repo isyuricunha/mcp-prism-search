@@ -91,7 +91,7 @@ class Query(BaseModel):
 class NativeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=4000)
-    provider: Literal["tavily", "exa", "youcom", "brave", "jina"] | None = None
+    provider: Literal["tavily", "exa", "youcom", "brave", "jina", "tinyfish"] | None = None
     mode: Literal["answer", "research"]
     allow_cost: bool = Field(default=False, strict=True)
     effort: Effort | None = None
