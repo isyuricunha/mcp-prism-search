@@ -562,3 +562,25 @@ def test_text_media_type_does_not_accept_explicit_binary_from_filename():
     assert not is_plain_text_content("application/notjson", "https://example.org/data")
     assert is_plain_text_content("application/problem+json; charset=utf-8", "https://example.org")
     assert is_plain_text_content("application/octet-stream", "https://example.org/file.md")
+
+
+def test_fetch_http_errors_do_not_consume_or_decode_body(monkeypatch):
+    class Unreadable(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            pytest.fail("Non-success response body must not be consumed")
+            yield b""
+
+    async def resolve(url):
+        return "93.184.216.34", 443
+
+    monkeypatch.setattr(fetch, "resolve_safe_address", resolve)
+
+    async def exercise():
+        transport = httpx.MockTransport(lambda req: httpx.Response(
+            429, headers={"content-encoding": "gzip"}, stream=Unreadable()))
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await fetch._get_with_validated_redirects(client, "https://example.org", 1024)
+
+    raw = asyncio.run(exercise())
+    assert raw.status_code == 429 and raw.content == b""
+    assert fetch._response_to_fetch_response("https://example.org", raw, 1000).error == "HTTP 429"

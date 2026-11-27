@@ -153,6 +153,10 @@ async def _get_with_validated_redirects(
                 validate_url_shape(next_url)
                 current_url = next_url
                 continue
+            if not 200 <= response.status_code < 300:
+                return RawFetchedResponse(
+                    response.status_code, response.headers, b"", current_url, None,
+                )
             content_encoding = response.headers.get("content-encoding", "identity")
             if content_encoding.lower() not in {"identity", ""}:
                 raise UnsafeUrlError("Server returned unsupported compressed content")
