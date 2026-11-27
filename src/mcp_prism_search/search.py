@@ -180,11 +180,11 @@ def resolve_duckduckgo_redirect_url(href: str) -> str:
 def normalize_url_for_dedupe(url: str) -> str:
     parsed = urlparse(url)
     scheme = parsed.scheme.lower()
-    netloc = parsed.netloc.lower()
+    host = httpx.URL(url).raw_host.decode("ascii").lower()
+    netloc = "[" + host + "]" if ":" in host else host
     # Explicit default ports identify the same HTTP resource.
-    if (scheme == "http" and parsed.port == 80
-            or scheme == "https" and parsed.port == 443):
-        netloc = netloc.rsplit(":", 1)[0]
+    if parsed.port is not None and parsed.port != (80 if scheme == "http" else 443):
+        netloc += f":{parsed.port}"
     path = parsed.path or ""
     if path == "/" and not parsed.query:
         path = ""

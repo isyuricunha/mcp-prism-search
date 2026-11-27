@@ -64,3 +64,9 @@ def test_context_bounded_ranking_is_idempotent_for_cache_validation():
     final = _final_results([first, second], request)
     assert final[0].url == second.url
     assert _final_results(final, request) == final
+
+
+def test_dedupe_idna_unicode_and_ascii_hostnames():
+    unicode_row = row("Reference", "https://bücher.example/ref", "Evidence")
+    ascii_row = row("Reference", "https://xn--bcher-kva.example:443/ref", "Evidence")
+    assert rank_results([unicode_row, ascii_row], "reference") == [unicode_row]
