@@ -477,7 +477,7 @@ try{
  assert.equal(bodyAbort.count,1);assert.equal(bodyAbort.remaining,0);
  assert.ok(bodyAbort.error.includes("Cannot reach"));
  await nav("Connection");
- for(const invalid of ["https://example.com:0/mcp","https://example.com/"+String.fromCharCode(92)+"mcp","https://example.com/mcp a"]){
+ for(const invalid of ["https://example.com:0/mcp","https://example.com/"+String.fromCharCode(92)+"mcp","https://example.com/mcp a","https:example.com/mcp","https:///example.com/mcp","https://example.com/"+"a".repeat(8192)]){
   await page.locator("#endpoint").fill(invalid);
   assert.equal(await page.locator("#copy-config").isDisabled(),true);
  }
