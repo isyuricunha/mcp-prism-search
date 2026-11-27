@@ -429,3 +429,12 @@ def test_fetch_dns_uses_same_idna_hostname_as_tls(monkeypatch):
     security.validate_resolved_addresses(url)
     assert asyncio.run(security.resolve_safe_address(url)) == ("93.184.216.34", 443)
     assert names == [("xn--fa-hia.example", 443)] * 2
+
+
+@pytest.mark.parametrize("addresses", [[], ["not-an-ip"], ["8.8.8.8", "not-an-ip"]])
+def test_fetch_fails_closed_on_invalid_resolver_output(monkeypatch, addresses):
+    monkeypatch.setattr(security, "_resolve_hostname", lambda *args: addresses)
+    with pytest.raises(security.UnsafeUrlError):
+        security.validate_resolved_addresses("https://example.org")
+    with pytest.raises(security.UnsafeUrlError):
+        asyncio.run(security.resolve_safe_address("https://example.org"))

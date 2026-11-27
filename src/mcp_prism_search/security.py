@@ -124,15 +124,27 @@ def _resolve_hostname(hostname: str, port: int) -> list[str]:
     return addresses
 
 
+def _safe_addresses(hostname: str, port: int) -> list[str]:
+    addresses = _resolve_hostname(hostname, port)
+    if not addresses:
+        raise UnsafeUrlError("DNS returned no addresses")
+    for address in addresses:
+        try:
+            ip_address(address)
+        except ValueError:
+            raise UnsafeUrlError("DNS returned an invalid address") from None
+        if is_unsafe_ip(address):
+            raise UnsafeUrlError(f"DNS resolved to unsafe IP address: {address}")
+    return addresses
+
+
 def validate_resolved_addresses(url: str) -> None:
     validate_url_shape(url)
     parsed = urlparse(url)
     hostname = httpx.URL(url).raw_host.decode("ascii")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
-    for resolved_ip in _resolve_hostname(hostname, port):
-        if is_unsafe_ip(resolved_ip):
-            raise UnsafeUrlError(f"DNS resolved to unsafe IP address: {resolved_ip}")
+    _safe_addresses(hostname, port)
 
 
 async def validate_fetch_url(url: str) -> None:
@@ -151,7 +163,5 @@ async def resolve_safe_address(url: str) -> tuple[str, int]:
     parsed = urlparse(url)
     hostname = httpx.URL(url).raw_host.decode("ascii")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    addresses = await asyncio.to_thread(_resolve_hostname, hostname, port)
-    if any(is_unsafe_ip(address) for address in addresses):
-        raise UnsafeUrlError("DNS returned an unsafe address")
+    addresses = await asyncio.to_thread(_safe_addresses, hostname, port)
     return addresses[0], port
