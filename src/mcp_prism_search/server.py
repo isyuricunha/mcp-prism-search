@@ -248,6 +248,15 @@ async def _cache_prune_loop() -> None:
             LOGGER.warning("Background cache pruning failed", exc_info=True)
 
 
+async def _run_stdio_async() -> None:
+    prune_task = asyncio.create_task(_cache_prune_loop())
+    try:
+        await mcp.run_stdio_async()
+    finally:
+        prune_task.cancel()
+        await asyncio.gather(prune_task, return_exceptions=True)
+
+
 async def _run_http_async(
     settings: HttpSettings | None = None,
 ) -> None:
@@ -757,7 +766,7 @@ def _run() -> None:
 
     if _get_env_bool("MCP_WEBUI_ENABLED", False):
         raise RuntimeError("Web dashboard requires MCP_TRANSPORT=http")
-    mcp.run(transport="stdio")
+    asyncio.run(_run_stdio_async())
 
 
 if __name__ == "__main__":

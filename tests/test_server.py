@@ -199,3 +199,28 @@ def test_bearer_scheme_is_case_insensitive_but_token_is_not():
                              (b"Basic fixture-Token", 401)]:
         response = asyncio.run(_call_middleware(middleware, [(b"authorization", header)]))
         assert response[0]["status"] == expected
+
+
+def test_stdio_lifecycle_runs_and_cancels_periodic_pruning(monkeypatch):
+    from mcp_prism_search import server
+
+    async def verify():
+        started = asyncio.Event()
+        stopped = asyncio.Event()
+
+        async def prune():
+            started.set()
+            try:
+                await asyncio.Future()
+            finally:
+                stopped.set()
+
+        async def stdio():
+            await started.wait()
+
+        monkeypatch.setattr(server, "_cache_prune_loop", prune)
+        monkeypatch.setattr(server.mcp, "run_stdio_async", stdio)
+        await server._run_stdio_async()
+        assert stopped.is_set()
+
+    asyncio.run(verify())
