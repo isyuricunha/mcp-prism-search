@@ -90,6 +90,10 @@ CAPABILITIES = {
 class NativeError(ValueError):
     """Sanitized error safe for clients."""
 
+    def __init__(self, message: str, *, outcome: str = "error") -> None:
+        super().__init__(message)
+        self.outcome = outcome
+
 
 # Limit paid operations independently from general web search; no retries/fanout.
 _slots: asyncio.Semaphore | None = None

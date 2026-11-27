@@ -116,10 +116,10 @@ async def combined_search(
         raise
     except httpx.HTTPStatusError as exc:
         outcome = f"HTTP {exc.response.status_code}"
-        raise native.NativeError(outcome) from None
+        raise native.NativeError(outcome, outcome=outcome) from None
     except (TimeoutError, httpx.TimeoutException):
         outcome = "timeout"
-        raise native.NativeError(outcome) from None
+        raise native.NativeError(outcome, outcome=outcome) from None
     except native.NativeError:
         raise
     except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, RecursionError):

@@ -515,9 +515,9 @@ async def _search_one(
                     answer_status[name] = str(exc)
                     # A failed combined call may already have consumed credits.
                     # Never issue a second request to the same paid provider.
-                    record(name, None, "combined request failed")
-                    runtime.record_metric(name, "error", monotonic() - start)
-                    return [], f"{name}: error (combined request failed)"
+                    record(name, None, exc.outcome)
+                    runtime.record_metric(name, exc.outcome, monotonic() - start)
+                    return [], f"{name}: error ({exc.outcome})"
                 if not raw:
                     raw = []
         if raw is None:

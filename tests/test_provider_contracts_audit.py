@@ -245,3 +245,25 @@ def test_mwmbl_malformed_response(monkeypatch):
     mock_http(monkeypatch, lambda req: httpx.Response(200, json={"error": "failure"}))
     with pytest.raises(ValueError, match="Invalid Mwmbl"):
         asyncio.run(mwmbl.search(SearchRequest(query="test"), 5, 5))
+
+
+@pytest.mark.parametrize("outcome", ["timeout", "HTTP 429", "HTTP 503"])
+def test_combined_failure_metrics(monkeypatch, outcome):
+    from mcp_prism_search import ai_search, native, runtime, search
+
+    metrics = []
+
+    async def fail(*args):
+        raise native.NativeError(outcome, outcome=outcome)
+
+    monkeypatch.setattr(ai_search, "combined_search", fail)
+    monkeypatch.setattr(runtime, "record_metric", lambda *args: metrics.append(args))
+    monkeypatch.setattr("mcp_prism_search.providers.record", lambda *args: None)
+    status = {}
+    result, message = asyncio.run(search._search_one(
+        "exa", SearchRequest(query="test"), 5, 5, {}, status,
+    ))
+    assert result == []
+    assert outcome in message
+    assert status["exa"] == outcome
+    assert metrics[0][:2] == ("exa", outcome)
