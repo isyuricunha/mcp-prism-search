@@ -589,3 +589,16 @@ def test_panel_remote_https_required(panel, tmp_path):
         assert response.status_code == 200
         assert "secure" in response.headers["Set-Cookie"].lower()
         assert client.get("/api/overview").status_code == 200
+
+
+def test_panel_session_expires(tmp_path, monkeypatch):
+    import mcp_prism_search.panel as panel_module
+
+    monkeypatch.setattr(panel_module, "SESSION_TTL", 0)
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "index.html").write_text("index")
+    app = create_app(PASSWORD, PanelStore(tmp_path / "admin"), assets)
+    with TestClient(app, base_url="http://localhost") as client:
+        sign_in(client)
+        assert client.get("/api/overview").status_code == 401
