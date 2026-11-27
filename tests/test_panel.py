@@ -483,3 +483,22 @@ def test_panel_accepts_full_unicode_query_in_escaped_json(panel, monkeypatch):
     assert client.post("/api/search", headers={
         **HEADERS, "Content-Type": "application/json",
     }, content=" " * 65537).status_code == 400
+
+
+@pytest.mark.parametrize("value", ["abc def", "abc" + chr(0x1F600), "abc" + chr(127)])
+def test_panel_rejects_credentials_that_cannot_be_sent_as_api_keys(panel, value):
+    client, store, _ = panel
+    sign_in(client)
+    assert client.put("/api/providers/tinyfish", headers=HEADERS,
+                      json={"enabled": True, "credential": value}).status_code == 400
+    assert "TINYFISH_API_KEY" not in store.credentials
+
+
+def test_whitespace_only_environment_key_is_not_configured(panel, monkeypatch):
+    client, _, _ = panel
+    monkeypatch.setenv("TINYFISH_API_KEY", "   ")
+    sign_in(client)
+    row = next(p for p in client.get("/api/overview").json()["providers"]
+               if p["id"] == "tinyfish")
+    assert not row["credential"] and not row["configured"] and not row["available"]
+    assert row["managed"]

@@ -175,7 +175,7 @@ def create_app(password: str, store: PanelStore, assets: Path,
                 "enabled": name in available, "available": name in available,
                 "configured": providers.configured(spec),
                 "enabled_locked": runtime.disabled_by_env(name),
-                "credential": bool(env and runtime.setting(env)),
+                "credential": bool(env and providers.configured(spec)),
                 "managed": bool(env and os.getenv(env)),
                 "editable": bool(env and env != "SEARXNG_URL"), "env": env,
             })
@@ -253,8 +253,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
             return error("Provider is disabled by the server environment")
         if data.credential is not None:
             data.credential = data.credential.strip()
-            if not data.credential or any(ord(c) < 32 or ord(c) == 127 for c in data.credential):
-                return error("Enter a non-empty API key without control characters")
+            if not data.credential or any(not 33 <= ord(c) <= 126 for c in data.credential):
+                return error("Enter a non-empty ASCII API key without whitespace")
         if data.credential is not None and data.remove:
             return error("Choose replace or remove, not both")
         if (data.credential is not None or data.remove) and (
