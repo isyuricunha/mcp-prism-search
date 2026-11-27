@@ -184,13 +184,15 @@ SSE_MAX_EVENT_CHARS = 1_000_000
 
 async def _sse_data(response):
     """Bound line and event buffering, and honor SSE data-field framing."""
-    decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    decoder = codecs.getincrementaldecoder("utf-8-sig")("strict")
     pending = ""
     fields = []
     size = 0
     trailing_cr = False
     async for chunk in response.aiter_bytes(chunk_size=4096):
         text = decoder.decode(chunk)
+        if not text:
+            continue
         if trailing_cr and text.startswith("\n"):
             text = text[1:]
         trailing_cr = text.endswith("\r")

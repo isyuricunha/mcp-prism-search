@@ -521,3 +521,11 @@ def test_combined_ai_cancellation_is_not_upstream_failure(configure, monkeypatch
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(ai_search.combined_search("tavily", SearchRequest(query="test"), 5, 5))
     assert len(metrics) == 1 and metrics[0][:2] == ("tavily:answer", "cancelled")
+
+
+def test_sse_reader_ignores_initial_utf8_bom():
+    async def collect():
+        response = httpx.Response(200, content=bytes.fromhex("efbbbf") + b"data: ok\n\n")
+        return [item async for item in native._sse_data(response)]
+
+    assert asyncio.run(collect()) == ["ok"]
