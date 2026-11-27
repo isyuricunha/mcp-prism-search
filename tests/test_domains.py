@@ -157,3 +157,20 @@ def test_domain_filter_rejects_embedded_control_characters():
 
     with pytest.raises(ValueError, match="Invalid domain"):
         normalize_domain("exam\nple.org")
+
+
+def test_preferred_partition_evaluates_each_url_once():
+    from mcp_prism_search.domains import apply_domain_controls
+
+    items = ["https://a.example/1", "https://b.example/2", "https://a.example/3"]
+    calls = []
+
+    def get_url(item):
+        calls.append(item)
+        return item
+
+    assert apply_domain_controls(
+        items, get_url=get_url, allowed_domains=[], blocked_domains=[],
+        preferred_domains=["a.example"],
+    ) == [items[0], items[2], items[1]]
+    assert calls == items

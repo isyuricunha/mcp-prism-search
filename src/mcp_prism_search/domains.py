@@ -107,16 +107,11 @@ def apply_domain_controls[T](
         ]
 
     if preferred_domains:
-        preferred_items = [
-            item
-            for item in controlled_items
-            if url_matches_domains(get_url(item), preferred_domains)
-        ]
-        other_items = [
-            item
-            for item in controlled_items
-            if not url_matches_domains(get_url(item), preferred_domains)
-        ]
+        preferred_items, other_items = [], []
+        for item in controlled_items:
+            target = (preferred_items if url_matches_domains(get_url(item), preferred_domains)
+                      else other_items)
+            target.append(item)
         controlled_items = [*preferred_items, *other_items]
 
     return controlled_items
