@@ -310,3 +310,11 @@ def test_prune_does_not_delete_replacement_written_after_scan(tmp_path, monkeypa
     monkeypatch.setattr(module, "_delete_cache_file", replace)
     stats = prune_cache(config=_prune_config(tmp_path))
     assert stats.deleted_files == 0 and path.read_text() == "fresh value"
+
+
+@pytest.mark.parametrize("confirmation", ["true", 1, "false", None])
+def test_clear_requires_literal_boolean(tmp_path, confirmation):
+    path = tmp_path / "search" / "entry.json"
+    _write_cache_file(path, created_at=time.time())
+    result = clear_cache(namespace="search", confirm=confirmation, root_dir=tmp_path)
+    assert result.error and path.exists()

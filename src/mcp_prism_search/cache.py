@@ -412,7 +412,7 @@ def clear_cache(
             deleted_bytes=0,
             error="namespace must be search, fetch, or all",
         )
-    if not confirm:
+    if confirm is not True:
         return CacheClearStats(
             namespace=namespace,
             deleted_files=0,

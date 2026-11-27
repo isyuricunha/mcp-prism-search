@@ -676,7 +676,7 @@ async def cache_clear(
     ],
     confirm: Annotated[
         bool,
-        Field(description=ARGUMENT_DESCRIPTIONS["confirm"]),
+        Field(strict=True, description=ARGUMENT_DESCRIPTIONS["confirm"]),
     ],
 ) -> dict[str, Any]:
     """Clear one cache namespace, or all namespaces, when confirm is true."""
