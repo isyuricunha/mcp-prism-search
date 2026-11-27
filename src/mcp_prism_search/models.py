@@ -69,7 +69,7 @@ class StrictBaseModel(BaseModel):
 class SearchRequestBase(StrictBaseModel):
     """Fields shared by ddg_search and ddg_deep_search requests."""
 
-    query: str = Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["query"])
+    query: str = Field(min_length=1, max_length=4000, description=ARGUMENT_DESCRIPTIONS["query"])
     max_results: int = Field(
         default=10,
         ge=1,
@@ -89,14 +89,17 @@ class SearchRequestBase(StrictBaseModel):
     )
     blocked_domains: list[str] = Field(
         default_factory=list,
+        max_length=50,
         description=ARGUMENT_DESCRIPTIONS["blocked_domains"],
     )
     allowed_domains: list[str] = Field(
         default_factory=list,
+        max_length=50,
         description=ARGUMENT_DESCRIPTIONS["allowed_domains"],
     )
     preferred_domains: list[str] = Field(
         default_factory=list,
+        max_length=50,
         description=ARGUMENT_DESCRIPTIONS["preferred_domains"],
     )
 
@@ -119,7 +122,7 @@ class SearchRequest(SearchRequestBase):
 
 
 class FetchRequest(StrictBaseModel):
-    url: str = Field(min_length=1, description=ARGUMENT_DESCRIPTIONS["url"])
+    url: str = Field(min_length=1, max_length=8192, description=ARGUMENT_DESCRIPTIONS["url"])
     max_chars: int = Field(
         default=12000,
         ge=1000,

@@ -208,3 +208,14 @@ def test_character_limit_reports_truncation(content_type):
     )
     response = fetch._response_to_fetch_response("https://example.org", raw, 1000)
     assert response.success and response.truncated and len(response.content) == 1000
+
+
+def test_request_limits_bound_query_url_and_domain_lists():
+    from mcp_prism_search.models import FetchRequest, SearchRequest
+
+    with pytest.raises(ValueError):
+        SearchRequest(query="x" * 4001)
+    with pytest.raises(ValueError):
+        SearchRequest(query="query", allowed_domains=["example.org"] * 51)
+    with pytest.raises(ValueError):
+        FetchRequest(url="https://example.org/" + "x" * 8192)
