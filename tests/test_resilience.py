@@ -219,3 +219,13 @@ def test_request_limits_bound_query_url_and_domain_lists():
         SearchRequest(query="query", allowed_domains=["example.org"] * 51)
     with pytest.raises(ValueError):
         FetchRequest(url="https://example.org/" + "x" * 8192)
+
+
+@pytest.mark.parametrize("address", ["fe80::1%eth0", "100.64.0.1", "192.0.2.1", "224.0.0.1"])
+def test_non_public_ip_addresses_are_not_fetchable(address):
+    assert security.is_unsafe_ip(address)
+
+
+def test_redirect_url_length_is_bounded():
+    with pytest.raises(security.UnsafeUrlError, match="safety limit"):
+        security.validate_url_shape("https://example.org/" + "x" * 8192)

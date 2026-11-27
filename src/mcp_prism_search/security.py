@@ -46,7 +46,9 @@ def is_unsafe_ip(value: str) -> bool:
     mapped = getattr(ip, "ipv4_mapped", None)
     if mapped is not None:
         return is_unsafe_ip(str(mapped))
-    if any(ip in network for network in BLOCKED_NETWORKS):
+    if getattr(ip, "scope_id", None) is not None:
+        return True
+    if not ip.is_global or any(ip in network for network in BLOCKED_NETWORKS):
         return True
     return any(
         (
@@ -61,6 +63,8 @@ def is_unsafe_ip(value: str) -> bool:
 
 
 def validate_url_shape(url: str) -> None:
+    if len(url) > 8192:
+        raise UnsafeUrlError("URL exceeds the safety limit")
     if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
         raise UnsafeUrlError("Whitespace and control characters are not allowed in URLs")
     try:
