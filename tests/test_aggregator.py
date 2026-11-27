@@ -192,3 +192,19 @@ def test_hackernews_fallback_requires_valid_story_id(monkeypatch):
         ]})), **kw))
     rows = asyncio.run(hackernews.search(SearchRequest(query="test"), 1, 5))
     assert len(rows) == 1 and rows[0].url.endswith("id=42")
+
+
+def test_bing_rss_invalid_rows_do_not_consume_result_limit(monkeypatch):
+    from mcp_prism_search.providers import bing_rss
+
+    original = httpx.AsyncClient
+    xml = """<rss><channel>
+      <item><title>Bad</title><link>httpx://evil.example</link></item>
+      <item><title>Bad port</title><link>https://example.org:wrong</link></item>
+      <item><title></title><link>https://example.org/empty</link></item>
+      <item><title>Good</title><link>https://example.org/good</link></item>
+      </channel></rss>"""
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, text=xml)), **kw))
+    rows = asyncio.run(bing_rss.search(SearchRequest(query="test"), 1, 5))
+    assert [row.title for row in rows] == ["Good"]

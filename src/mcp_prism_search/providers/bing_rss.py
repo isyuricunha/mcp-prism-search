@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 import defusedxml.ElementTree as ET  # untrusted feed: XXE-safe parser
 import httpx
 
@@ -21,7 +23,14 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         title = (item.findtext("title") or "").strip()
         link = (item.findtext("link") or "").strip()
         description = (item.findtext("description") or "").strip()
-        if not link.startswith("http"):
+        try:
+            parsed = urlparse(link)
+            if (not title or parsed.scheme not in {"http", "https"}
+                    or not parsed.hostname or parsed.username is not None
+                    or parsed.password is not None or parsed.port == 0
+                    or any(c.isspace() or ord(c) < 32 for c in link)):
+                continue
+        except ValueError:
             continue
         results.append(
             SearchResult(
