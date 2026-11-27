@@ -50,9 +50,9 @@ class Login(BaseModel):
 
 class Update(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    enabled: bool
+    enabled: bool = Field(strict=True)
     credential: str | None = Field(default=None, min_length=1, max_length=4096)
-    remove: bool = False
+    remove: bool = Field(default=False, strict=True)
 
 
 class Settings(BaseModel):
@@ -239,6 +239,10 @@ def create_app(password: str, store: PanelStore, assets: Path,
         data = await body(request, Update)
         if data.enabled and runtime.disabled_by_env(name):
             return error("Provider is disabled by the server environment")
+        if data.credential is not None:
+            data.credential = data.credential.strip()
+            if not data.credential or any(ord(c) < 32 or ord(c) == 127 for c in data.credential):
+                return error("Enter a non-empty API key without control characters")
         if data.credential is not None and data.remove:
             return error("Choose replace or remove, not both")
         if (data.credential is not None or data.remove) and (

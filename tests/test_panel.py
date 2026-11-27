@@ -305,3 +305,17 @@ def test_playground_limits_match_mcp(panel, monkeypatch):
     assert client.post("/api/search", headers=HEADERS, json={
         "query": "test", "providers": ["keenable"] * 21,
     }).status_code == 400
+
+
+@pytest.mark.parametrize("payload", [
+    {"enabled": "false"}, {"enabled": True, "remove": "true"},
+    {"enabled": True, "credential": "   "},
+    {"enabled": True, "credential": "one\ntwo"},
+])
+def test_provider_update_rejects_ambiguous_values(panel, payload):
+    client, store, _ = panel
+    sign_in(client)
+    assert client.put("/api/providers/tinyfish", headers=HEADERS,
+                      json=payload).status_code == 400
+    assert "TINYFISH_API_KEY" not in store.credentials
+    assert "tinyfish" not in store.flags
