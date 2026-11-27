@@ -284,3 +284,25 @@ def test_fetch_cache_rejects_mismatched_or_unsafe_url(tmp_path, monkeypatch, bad
     response = asyncio.run(fetch.web_fetch(url, cache=store))
     assert not response.cached and not response.success
     assert not list(store.cache_dir.glob("*.json"))
+
+
+def test_tinyfish_stops_when_page_has_only_duplicate_urls(monkeypatch):
+    from mcp_prism_search.models import SearchRequest
+    from mcp_prism_search.providers import tinyfish
+
+    monkeypatch.setenv("TINYFISH_API_KEY", "fixture-key")
+    original = httpx.AsyncClient
+    calls = []
+
+    def handler(req):
+        page = int(req.url.params["page"])
+        calls.append(page)
+        return httpx.Response(200, json={"results": [
+            {"title": "Example", "url": f"https://example.org/#page{page}"},
+            {"title": "Malformed", "url": "https://[bad"},
+        ]})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: original(
+        transport=httpx.MockTransport(handler), **kw))
+    results = asyncio.run(tinyfish.search(SearchRequest(query="query"), 10, 5))
+    assert len(results) == 1 and calls == [0, 1]

@@ -26,6 +26,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
     if request.blocked_domains:
         params["exclude_domains"] = ",".join(request.blocked_domains)
 
+    from mcp_prism_search.search import _dedupe_results, normalize_url_for_dedupe
+
     results: list[SearchResult] = []
     seen: set[str] = set()
     async with httpx.AsyncClient(
@@ -35,6 +37,8 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
             response = await client.get(SEARCH_URL, params={**params, "page": page})
             response.raise_for_status()
             rows = response.json()["results"]
+            if not isinstance(rows, list):
+                raise ValueError("Invalid TinyFish search results")
             if not rows:
                 break
             previous_count = len(results)
@@ -43,14 +47,19 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
                     continue
                 url = str(item.get("url") or "")
                 title = normalize_whitespace(str(item.get("title") or ""))
-                if not url.startswith(("http://", "https://")) or not title or url in seen:
+                if not title:
                     continue
-                seen.add(url)
-                results.append(SearchResult(
-                    title=title,
-                    url=url,
+                candidate = SearchResult(
+                    title=title, url=url,
                     snippet=normalize_whitespace(str(item.get("snippet") or "")),
-                ))
+                )
+                if not _dedupe_results([candidate]):
+                    continue
+                identity = normalize_url_for_dedupe(url)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                results.append(candidate)
                 if len(results) >= count:
                     return results
             if len(results) == previous_count:
