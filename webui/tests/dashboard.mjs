@@ -13,6 +13,7 @@ const page=await context.newPage();
 const errors=[];let lastSearch=null;let lastNative=null;
 page.on("pageerror",e=>errors.push(e.message));
 let logged=false, updates=0, cleared=0;
+let holdSettings=null;
 // Deliberate response latency exposes stale DOM/fixture assertions on fast runners.
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function responseFor(endpoint, predicate=()=>true){
@@ -40,7 +41,7 @@ await page.route("http://prism-test.invalid/**",async route=>{
    else if(!logged){status=401;body={error:"Authentication required"};}
    else if(pathname==="/api/overview")body=data;
    else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);p.enabled=d.enabled;p.available=d.enabled;if(d.remove)p.credential=false;}
-   else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;}
+   else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;if(holdSettings)await holdSettings;}
    else if(pathname==="/api/defaults"){
      if(route.request().method()==="PUT"){for(const [id,value] of Object.entries(route.request().postDataJSON().values)){data.defaults.fields.find(f=>f.id===id).value=value;}}
      body=data.defaults;
@@ -130,7 +131,15 @@ try{
  assert.equal(await page.locator("#timeout").inputValue(),"23");
  await page.locator("#preferred-label").click();
  await page.locator('input[name=preferred-engine][value=freeserp]').check();
+ let releaseSettings;
+ holdSettings=new Promise(resolve=>{releaseSettings=resolve;});
  await page.getByRole("button",{name:"Save settings"}).click();
+ try{
+  await page.waitForFunction(()=>document.querySelector("#timeout").disabled);
+  await page.evaluate(()=>refresh());
+  assert.equal(await page.locator("#timeout").isDisabled(),true);
+  assert.equal(await page.locator("#reset-settings").isDisabled(),true);
+ }finally{releaseSettings();holdSettings=null;}
  await page.waitForFunction(()=>document.querySelector("#settings-feedback").textContent.includes("Settings saved"));
  assert.equal(data.settings.preferred,"freeserp");assert.equal(data.settings.timeout,23);
  // Server-driven defaults are not duplicated by the browser.

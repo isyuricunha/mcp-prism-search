@@ -451,6 +451,7 @@ async function cacheAction(kind,namespace="all"){
 $("prune").addEventListener("click",()=>cacheAction("prune"));
 $("clear-cache").addEventListener("click",()=>cacheAction("clear"));
 function renderSettings(force=false){
+  if(!state||settingsPending)return;
   const settings=state.settings;
   if(settingsDirty&&!force){
     for(const key of ["timeout","search_ttl","fetch_ttl"]){
