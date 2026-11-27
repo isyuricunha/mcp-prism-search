@@ -11,8 +11,9 @@ has not configured.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mcp_prism_search import runtime
 from mcp_prism_search.models import SearchRequest, SearchResult
@@ -41,8 +42,10 @@ class ProviderHealth:
     ok: int = 0
     empty: int = 0
     errors: int = 0
+    recent: deque[str] = field(default_factory=lambda: deque(maxlen=32))
 
     def bump(self, outcome: str) -> None:
+        self.recent.append(outcome)
         if outcome == "ok":
             self.ok += 1
         elif outcome == "empty":
@@ -57,6 +60,8 @@ class ProviderHealth:
     @property
     def score(self) -> float:
         """Simple health score used to order the auto fallback chain."""
+        if self.recent:
+            return self.recent.count("ok") / len(self.recent)
         if self.total == 0:
             return 1.0  # untried providers start optimistic
         return self.ok / self.total

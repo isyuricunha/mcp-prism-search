@@ -109,3 +109,8 @@ Search queries are limited to 4,000 characters, domain preference lists to
 50 entries each, and fetch URLs (including redirects) to 8,192 characters.
 Internationalized domains are normalized to ASCII IDNA and malformed domain
 preferences are rejected. Explicit search windows suppress native AI synthesis.
+
+The MCP discovery schemas advertise the core request size limits. Legacy
+deep search reports progress as individual pages finish and preserves
+successful pages when another page fails. Cache maintenance skips entries
+that have been replaced since its scan.

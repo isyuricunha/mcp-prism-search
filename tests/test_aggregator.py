@@ -159,3 +159,16 @@ def test_corrected_provider_contract(module, data, check, monkeypatch):
     rows = asyncio.run(module.search(SearchRequest(query="needle", time_filter="month"), 5, 2))
     assert rows[0].title == "A"
     assert rows[0].snippet == "B"
+
+
+def test_provider_health_recovers_after_recent_successes():
+    from mcp_prism_search.providers.base import ProviderHealth
+
+    health = ProviderHealth()
+    for _ in range(100):
+        health.bump("error")
+    assert health.score == 0
+    for _ in range(32):
+        health.bump("ok")
+    assert health.score == 1 and health.total == 132
+    assert len(health.recent) == 32
