@@ -140,3 +140,7 @@ or prevent billing. Check the TinyFish dashboard before retrying. No
 automatic resubmission or fallback. TinyAnswer timeout is 70 seconds.
 You.com Exhaustive is supported with a 330-second deadline; Frontier and
 Exa Agent need a separate asynchronous job lifecycle and are not exposed.
+
+Dashboard consent is rechecked against the current provider, price and effort
+after the confirmation dialog. Session expiry aborts the browser wait and
+clears prior results; upstream work may continue and may still be billed.

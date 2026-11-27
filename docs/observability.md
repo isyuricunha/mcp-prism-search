@@ -60,3 +60,7 @@ References: [MCP logging migration](https://blog.modelcontextprotocol.io/posts/2
 [Anthropic research observability](https://www.anthropic.com/research/multi-agent-research-system),
 [Python logging cookbook](https://docs.python.org/3/howto/logging-cookbook.html),
 [OpenTelemetry Python exporters](https://opentelemetry.io/docs/languages/python/exporters/).
+
+Log history reports writer health separately from availability. The panel can
+filter all retained events by request ID, resumes polling when visible, and
+uses the last applied metadata filter rather than unfinished search text.

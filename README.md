@@ -507,3 +507,5 @@ TinyFish TinyAnswer and TinyResearch are available through the explicit native t
 ### Operational logs
 
 Structured stderr events and the optional dashboard Logs page provide sanitized operational history, correlation, filters and JSON export. See [observability and optional OpenTelemetry](docs/observability.md).
+
+Cache entries are bounded to 8 MiB each; oversized replacements are not published.

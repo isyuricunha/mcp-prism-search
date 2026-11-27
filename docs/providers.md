@@ -81,3 +81,6 @@ configured. The panel derives activation from the same registry used by
 MCP routing. Paste a key, enable the switch, and save; saving a key with
 the switch off leaves the provider disabled. Removing a stored key also
 persists the disabled flag. Environment locks remain authoritative.
+
+Legacy DDGS requests also honor disabled registered DDGS backends. Automatic
+legacy routing fails closed if it cannot guarantee the exclusion.

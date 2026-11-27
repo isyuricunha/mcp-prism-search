@@ -344,6 +344,15 @@ try{
  await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
  assert.equal(lastNative,null);
  await page.locator("#native-run").click();
+ const exa=data.native.find(p=>p.id==="exa"),originalPricing=exa.pricing;
+ exa.pricing="Updated pricing";
+ await page.evaluate(()=>refresh());
+ await page.getByRole("dialog").getByRole("button",{name:"Continue",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector("#native-feedback").textContent.includes("confirm again"));
+ assert.equal(lastNative,null);
+ exa.pricing=originalPricing;
+ await page.evaluate(()=>refresh());
+ await page.locator("#native-run").click();
  let releaseNative;
  holdNative=new Promise(resolve=>{releaseNative=resolve;});
  const answerResponse=responseFor("/api/native",d=>d.mode==="answer");

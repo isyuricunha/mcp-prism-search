@@ -823,6 +823,13 @@ $("native-form").addEventListener("submit",async event=>{
   if(mode==="research"&&!$("native-effort").value){feedback("native-feedback","Choose a supported research effort.",true);return;}
   if(!await confirmAction("Use provider AI?",providerName(provider)+" may spend API credits. "+capability.pricing+(mode==="research"?" "+($("native-effort").selectedOptions[0]?.textContent||"")+"."+(capability.research_wait_note?" "+capability.research_wait_note:""):""),"Continue",false))return;
   if(nativePending)return;
+  const current=state?.native?.find(p=>p.id===provider&&p.available&&p[mode]);
+  if(!current||current.pricing!==capability.pricing||nativeMode()!==mode||
+      $("native-provider").value!==provider||$("native-query").value.trim()!==query||
+      (mode==="research"&&($("native-effort").value!==effort||
+        current.efforts?.[effort]!==capability.efforts?.[effort]))){
+    feedback("native-feedback","Provider or request changed. Review the current options and confirm again.",true);return;
+  }
   const epoch=authEpoch;
   nativePending=true;busyCount++;
   const inputs=[...$("native-form").querySelectorAll("textarea,select,input,button")].filter(n=>!n.disabled);
