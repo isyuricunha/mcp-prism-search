@@ -380,3 +380,55 @@ def test_dashboard_build_identity(panel, monkeypatch, installed, kind, commit):
     assert server["version"] == installed
     assert server["build_kind"] == kind
     assert server["commit"] == commit
+
+
+
+def test_provider_activation_requires_configuration_and_removal_disables(panel, monkeypatch):
+    client, store, directory = panel
+    monkeypatch.delenv("TINYFISH_API_KEY", raising=False)
+    sign_in(client)
+
+    def row():
+        return next(p for p in client.get("/api/overview").json()["providers"]
+                    if p["id"] == "tinyfish")
+
+    assert not row()["configured"] and not row()["enabled"] and not row()["available"]
+    assert "tinyfish" not in providers.resolve_chain("all", "general")
+    assert client.put("/api/providers/tinyfish", headers=HEADERS,
+                      json={"enabled": True}).status_code == 400
+    assert "tinyfish" not in store.flags
+    assert client.put("/api/providers/tinyfish", headers=HEADERS,
+                      json={"enabled": True, "credential": "test-key"}).status_code == 200
+    assert row()["configured"] and row()["enabled"] and row()["available"]
+    assert "tinyfish" in providers.resolve_chain("all", "general")
+    assert client.put("/api/providers/tinyfish", headers=HEADERS,
+                      json={"enabled": True, "remove": True}).status_code == 200
+    assert not row()["configured"] and not row()["enabled"] and not row()["available"]
+    assert not PanelStore(directory).flags["tinyfish"]
+    assert "tinyfish" not in providers.resolve_chain("all", "general")
+    # A new environment key does not override an explicit persisted disable.
+    monkeypatch.setenv("TINYFISH_API_KEY", "fixture-env-key")
+    assert row()["configured"] and not row()["enabled"]
+    assert client.put("/api/providers/tinyfish", headers=HEADERS,
+                      json={"enabled": True}).status_code == 200
+    assert row()["available"]
+
+
+def test_searxng_requires_configured_instance(panel, monkeypatch):
+    client, _, _ = panel
+    monkeypatch.delenv("SEARXNG_URL", raising=False)
+    sign_in(client)
+    assert client.put("/api/providers/searxng", headers=HEADERS,
+                      json={"enabled": True}).status_code == 400
+    monkeypatch.setenv("SEARXNG_URL", "https://search.example.org")
+    assert client.put("/api/providers/searxng", headers=HEADERS,
+                      json={"enabled": True}).status_code == 200
+    assert "searxng" in providers.available_providers()
+
+
+def test_unconfigured_explicit_provider_is_mcp_error(panel, monkeypatch):
+    from mcp_prism_search import server
+
+    monkeypatch.delenv("TINYFISH_API_KEY", raising=False)
+    with pytest.raises(server.ToolError):
+        asyncio.run(server.web_search("test", provider="tinyfish"))

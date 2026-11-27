@@ -75,3 +75,9 @@ The [native AI tools and AI-enhanced search policy](native-ai.md) support Tavily
 Automatic routing uses the last 32 observed outcomes per provider for
 health ordering; aggregate counters still retain lifetime counts. This
 allows recovered engines to regain priority after successful searches.
+
+Providers requiring a key or instance URL are effectively disabled until
+configured. The panel derives activation from the same registry used by
+MCP routing. Paste a key, enable the switch, and save; saving a key with
+the switch off leaves the provider disabled. Removing a stored key also
+persists the disabled flag. Environment locks remain authoritative.

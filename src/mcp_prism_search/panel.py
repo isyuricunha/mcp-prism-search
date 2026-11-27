@@ -168,7 +168,8 @@ def create_app(password: str, store: PanelStore, assets: Path,
                 "id": name, "kind": spec.kind, "description": spec.description,
                 "display_name": spec.display_name or name, "docs_url": spec.docs_url,
                 "signup_url": spec.signup_url, "usage_note": spec.usage_note,
-                "enabled": runtime.enabled(name), "available": name in available,
+                "enabled": name in available, "available": name in available,
+                "configured": providers.configured(spec),
                 "enabled_locked": runtime.disabled_by_env(name),
                 "credential": bool(env and runtime.setting(env)),
                 "managed": bool(env and os.getenv(env)),
@@ -253,7 +254,15 @@ def create_app(password: str, store: PanelStore, assets: Path,
             not spec.needs or spec.needs == "SEARXNG_URL" or os.getenv(spec.needs)
         ):
             return error("Credential is not editable")
-        enabled = store.flags.get(name, True) if runtime.disabled_by_env(name) else data.enabled
+        # Persist configuration and activation together; removing a key disables
+        # the provider, including requests from older dashboard clients.
+        if data.remove:
+            enabled = False
+        else:
+            configured = providers.configured(spec) or data.credential is not None
+            if data.enabled and not configured:
+                return error("Configure the provider before enabling it")
+            enabled = store.flags.get(name, True) if runtime.disabled_by_env(name) else data.enabled
         store.update(name, spec.needs, enabled, data.credential, data.remove)
         return JSONResponse({"ok": True})
 

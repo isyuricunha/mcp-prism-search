@@ -40,7 +40,7 @@ await page.route("http://prism-test.invalid/**",async route=>{
    if(pathname==="/api/login") logged=true;
    else if(!logged){status=401;body={error:"Authentication required"};}
    else if(pathname==="/api/overview"){if(failOverview){failOverview=false;status=503;body={error:"Unavailable"};}else body=data;}
-   else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);p.enabled=d.enabled;p.available=d.enabled;if(d.remove)p.credential=false;}
+   else if(pathname.startsWith("/api/providers/")){updates++;const id=decodeURIComponent(pathname.split("/").pop());const d=route.request().postDataJSON();const p=data.providers.find(x=>x.id===id);if(d.credential)p.credential=true;if(d.remove)p.credential=false;p.configured=!p.env||p.credential;p.enabled=d.enabled&&p.configured&&!p.enabled_locked;p.available=p.enabled;}
    else if(pathname==="/api/settings"){Object.assign(data.settings,route.request().postDataJSON());body=data.settings;if(holdSettings)await holdSettings;}
    else if(pathname==="/api/defaults"){
      if(route.request().method()==="PUT"){for(const [id,value] of Object.entries(route.request().postDataJSON().values)){data.defaults.fields.find(f=>f.id===id).value=value;}}
@@ -142,6 +142,27 @@ try{
  assert.equal(await row.locator("input[type=password]").inputValue(),"draft-key");
  await row.locator("input[type=password]").fill("");
  tiny.enabled_locked=false;
+ // Missing configuration is off and cannot be enabled without a key.
+ tiny.credential=false;tiny.configured=false;tiny.enabled=false;tiny.available=false;
+ await page.evaluate(()=>refresh());
+ assert.equal(await row.getByRole("switch").isChecked(),false);
+ assert.equal(await row.getByRole("switch").isDisabled(),true);
+ assert.ok((await row.locator(".badge").textContent()).includes("Setup required"));
+ await row.locator("input[type=password]").fill("fixture-key");
+ assert.equal(await row.getByRole("switch").isDisabled(),false);
+ await row.getByRole("switch").check();
+ await row.locator("input[type=password]").fill("");
+ assert.equal(await row.getByRole("switch").isChecked(),false);
+ assert.equal(await row.getByRole("switch").isDisabled(),true);
+ await row.locator("input[type=password]").fill("fixture-key");
+ await row.getByRole("switch").check();
+ await row.getByRole("button",{name:"Save",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('[data-provider="tinyfish"] .badge').textContent==="Available");
+ await row.getByRole("button",{name:"Remove key"}).click();
+ await page.getByRole("dialog").getByRole("button",{name:"Remove key",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('[data-provider="tinyfish"] .badge').textContent==="Setup required");
+ assert.equal(await row.getByRole("switch").isChecked(),false);
+ assert.equal(await row.getByRole("switch").isDisabled(),true);
  await nav("Settings");await page.locator("#timeout").fill("23");
  await page.locator("#refresh").click();await page.waitForFunction(()=>!document.querySelector("#refresh").disabled);
  assert.equal(await page.locator("#timeout").inputValue(),"23");

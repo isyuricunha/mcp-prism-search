@@ -237,6 +237,9 @@ function filterProviders() {
   $("provider-count").textContent=visible+" / "+(state?.providers.length||0);
   $("provider-empty").hidden=visible!==0; $("provider-list").hidden=visible===0;
 }
+function providerConfigured(p){
+  return p.configured ?? (!p.env||p.credential);
+}
 function draftFor(p) {
   const existing=providerDrafts.get(p.id);
   if (!existing || (!existing.credential && existing.enabled===existing.baseline)) {
@@ -245,6 +248,7 @@ function draftFor(p) {
   const draft = providerDrafts.get(p.id);
   if(p.enabled_locked){draft.enabled=p.enabled;draft.baseline=p.enabled;}
   if (!p.editable || p.managed) draft.credential = "";
+  if(!providerConfigured(p)&&!draft.credential.trim())draft.enabled=false;
   return draft;
 }
 function renderProviders() {
@@ -260,7 +264,7 @@ function renderProviders() {
     const row=element("article","","provider-row"); row.dataset.provider=p.id;
     const head=element("div","","provider-head"), title=element("div","","stack");
     title.append(element("h3",info[0]),element("span",p.id+" · "+providerType(p),"provider-meta"));
-    head.append(title,element("span",p.available?"Available":p.enabled?"Setup required":"Disabled","badge"+(p.available?" ready":"")));
+    head.append(title,element("span",p.available?"Available":p.enabled_locked?"Disabled":!providerConfigured(p)?"Setup required":"Disabled","badge"+(p.available?" ready":"")));
     const links=element("div","","actions provider-links");
     if(info[2]) links.append(link("Website / docs",info[2]));
     if(info[3]) links.append(link("Get API key",info[3]));
@@ -283,9 +287,12 @@ function renderProviders() {
       const field=element("div","","key-field field"), label=element("label",info[0]+" API key");
       input=document.createElement("input");input.id="key-"+p.id;label.htmlFor=input.id;input.type="password";input.autocomplete="new-password";input.maxLength=4096;input.value=draft.credential;
       input.placeholder=p.credential?"New key (leave blank to keep)":"Paste API key";
-      const hint=element("span",p.credential?"Stored securely. Existing value is never displayed.":"No stored API key. Get one from the provider.","muted small");hint.id="hint-"+p.id;input.setAttribute("aria-describedby",hint.id);
+      const hint=element("span",p.credential?"Stored securely. Existing value is never displayed.":"No stored API key. Paste a key, then enable the provider and save.","muted small");hint.id="hint-"+p.id;input.setAttribute("aria-describedby",hint.id);
       field.append(label,input,hint);form.append(field);
-      input.addEventListener("input",()=>{draft.credential=input.value;syncDraft();});
+      input.addEventListener("input",()=>{
+        draft.credential=input.value;
+        syncDraft();
+      });
     }
     const save=element("button","Save","tonal");save.type="submit";save.id="save-"+p.id;form.append(save);
     const local=element("p","","feedback row-feedback");local.setAttribute("role","status");local.id="provider-feedback-"+p.id;
@@ -293,10 +300,13 @@ function renderProviders() {
     if(previous)feedback(local,previous.message,previous.error);
     let remove=null;
     function syncDraft() {
+      const canEnable=providerConfigured(p)||!!draft.credential.trim();
+      if(!canEnable||p.enabled_locked)toggle.checked=false;
       draft.enabled=toggle.checked;
-      const dirty=draft.enabled!==p.enabled||!!draft.credential;
+      const dirty=draft.enabled!==p.enabled||!!draft.credential.trim();
       save.disabled=!dirty||providerPending.has(p.id);
-      toggle.disabled=providerPending.has(p.id)||!!p.enabled_locked; if(input)input.disabled=providerPending.has(p.id);
+      toggle.disabled=providerPending.has(p.id)||!!p.enabled_locked||!canEnable;
+      if(input)input.disabled=providerPending.has(p.id);
       if(remove)remove.disabled=providerPending.has(p.id);
       row.classList.toggle("dirty",dirty);
     }
@@ -306,7 +316,7 @@ function renderProviders() {
       feedback(local,"");
       try {
         const payload={enabled:draft.enabled};
-        if(removeKey)payload.remove=true;else if(draft.credential)payload.credential=draft.credential.trim();
+        if(removeKey){payload.remove=true;payload.enabled=false;}else if(draft.credential)payload.credential=draft.credential.trim();
         if(!removeKey&&draft.credential&&!payload.credential)throw new Error("Enter a non-empty API key.");
         await api("providers/"+encodeURIComponent(p.id),"PUT",payload);
         providerDrafts.delete(p.id);providerMessages.set(p.id,{message:"Saved. New searches use these settings.",error:false});
@@ -317,7 +327,7 @@ function renderProviders() {
     toggle.addEventListener("change",syncDraft);
     form.addEventListener("submit",event=>{event.preventDefault();if(!save.disabled)update();});
     if(p.editable&&p.credential&&!p.managed){
-      remove=action("Remove key",async()=>{if(await confirmAction("Remove API key","Remove the stored key for "+info[0]+". Searches using it may become unavailable.","Remove key"))await update(true);},"danger");form.append(remove);
+      remove=action("Remove key",async()=>{if(await confirmAction("Remove API key","Remove the stored key for "+info[0]+". The provider will be disabled until you configure and enable it again.","Remove key"))await update(true);},"danger");form.append(remove);
     }
     if(p.enabled_locked)row.append(element("p","Disabled by MCP_DISABLED_PROVIDERS in the server environment.","notice"));
     if(p.managed)row.append(element("p","Managed by "+p.env+". Change this value in the server environment.","notice"));

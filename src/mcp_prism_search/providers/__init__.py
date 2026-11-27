@@ -131,12 +131,22 @@ def general_provider_ids() -> list[str]:
     return [name for name, spec in SPECS.items() if spec.kind == "general"]
 
 
+def configured(spec: ProviderSpec) -> bool:
+    """Whether the provider has all required local configuration."""
+    return not spec.needs or bool((runtime.setting(spec.needs) or "").strip())
+
+
+def enabled(spec: ProviderSpec) -> bool:
+    """Effective activation, not just the administrator's stored preference."""
+    return configured(spec) and runtime.enabled(spec.name)
+
+
 def available_providers(kind: str | None = None) -> dict[str, ProviderSpec]:
     if not SPECS:
         build_registry()
     result = {}
     for name, spec in SPECS.items():
-        if not runtime.enabled(name) or (spec.needs and not runtime.setting(spec.needs)):
+        if not enabled(spec):
             continue
         if kind and spec.kind != kind:
             continue
