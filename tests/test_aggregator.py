@@ -285,3 +285,18 @@ def test_httpx_provider_timeout_uses_timeout_status(registry, monkeypatch):
     monkeypatch.setattr(providers, "run_provider", timeout)
     rows, status = asyncio.run(search._search_one("keenable", SearchRequest(query="test"), 1, 5))
     assert not rows and status == "keenable: error (timeout)"
+
+
+def test_invalid_rows_are_not_counted_as_provider_success(registry, monkeypatch):
+    register, _ = registry
+    register("keenable", [result("https://a.test/", title=" "),
+                          result("https://a.test/\\bad")])
+    from mcp_prism_search import runtime
+
+    metrics = []
+    monkeypatch.setattr(runtime, "record_metric", lambda *args: metrics.append(args))
+    rows, status = asyncio.run(search._search_one(
+        "keenable", SearchRequest(query="needle"), 5, 5))
+    assert rows == [] and status == "keenable: empty"
+    assert HEALTH["keenable"].empty == 1
+    assert metrics[0][1] == "empty"

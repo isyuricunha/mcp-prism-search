@@ -509,18 +509,9 @@ async def _search_one(
         if raw is None:
             async with asyncio.timeout(timeout):
                 raw = await run_provider(name, request, count, timeout)
-        valid = []
-        for item in raw:
-            try:
-                url = urlparse(item.url)
-                if (url.scheme in {"http", "https"} and url.hostname
-                        and url.username is None and url.password is None
-                        and url.port != 0 and not any(c.isspace() for c in item.url)):
-                    valid.append(item)
-            except ValueError:
-                continue
+        valid = _dedupe_results(raw)
         filtered = apply_domain_controls(
-            _dedupe_results(valid),
+            valid,
             get_url=lambda item: item.url,
             allowed_domains=request.allowed_domains,
             blocked_domains=request.blocked_domains,
