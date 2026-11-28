@@ -32,8 +32,9 @@ Mwmbl, You.com keyless, configured optional APIs and DuckDuckGo HTML as last res
 Wikipedia and Hacker News are separate vertical tools.
 
 - [Keenable](https://docs.keenable.ai/): public search with `max_results`.
-- [FreeSerp](https://freeserp.ai/serp-scraper-api): use `index=web`, not the
-  default homepage index.
+- [FreeSerp](https://freeserp.ai/docs.php): use `index=web`, not the
+  default homepage index. Explicit `engine_fallback` / site-index responses
+  are treated as failed web retrieval, not cached web documents.
 - [Mwmbl](https://developer.mwmbl.org/): v2 API, anonymous quota of 1,000
   requests/month and 1 request/second per IP. Requests are paced per process.
 - [SearXNG](https://docs.searxng.org/dev/search_api.html): configured instance;

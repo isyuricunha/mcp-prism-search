@@ -267,3 +267,19 @@ def test_combined_failure_metrics(monkeypatch, outcome):
     assert outcome in message
     assert status["exa"] == outcome
     assert metrics[0][:2] == ("exa", outcome)
+
+
+
+@pytest.mark.parametrize("metadata", [
+    {"ok": True, "index": "web", "engine_fallback": True},
+    {"ok": True, "index": "sites"},
+    {"ok": False},
+])
+def test_freeserp_rejects_nonweb_or_failed_success_envelope(monkeypatch, metadata):
+    from mcp_prism_search.providers import freeserp
+
+    mock_http(monkeypatch, lambda req: httpx.Response(200, json={
+        **metadata, "results": [{"url": "https://example.org", "title": "Homepage"}],
+    }))
+    with pytest.raises(ValueError, match="FreeSerp"):
+        asyncio.run(freeserp.search(SearchRequest(query="test"), 5, 5))

@@ -18,6 +18,13 @@ async def search(request: SearchRequest, count: int, timeout: int) -> list[Searc
         response = await bounded_request(client, "GET", SEARCH_URL, params=params)
         data = response.json()
 
+    if isinstance(data, dict):
+        # The API can return successful HTTP responses containing site profiles
+        # instead of web documents when its Global engine is unavailable.
+        if data.get("engine_fallback") is True or data.get("index") in ("sites", "main"):
+            raise ValueError("FreeSerp web index unavailable")
+        if data.get("ok") is False:
+            raise ValueError("Invalid FreeSerp response")
     rows = data.get("results") if isinstance(data, dict) else data
     if not isinstance(rows, list):
         raise ValueError("Invalid FreeSerp response")
