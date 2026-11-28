@@ -1,0 +1,134 @@
+{
+  "keenable > freeserp > youcom_keyless": {
+    "development": {
+      "mrr10": 0.773333,
+      "target_ndcg10": 0.80996,
+      "hit1": 0.68,
+      "hit5": 0.88,
+      "hit10": 0.92,
+      "attempts": 1,
+      "adapter_ms": 614.078,
+      "success": 1
+    },
+    "holdout": {
+      "mrr10": 0.626095,
+      "target_ndcg10": 0.697544,
+      "hit1": 0.48,
+      "hit5": 0.84,
+      "hit10": 0.92,
+      "attempts": 1,
+      "adapter_ms": 558.1096,
+      "success": 1
+    }
+  },
+  "keenable > youcom_keyless > freeserp": {
+    "development": {
+      "mrr10": 0.773333,
+      "target_ndcg10": 0.80996,
+      "hit1": 0.68,
+      "hit5": 0.88,
+      "hit10": 0.92,
+      "attempts": 1,
+      "adapter_ms": 614.078,
+      "success": 1
+    },
+    "holdout": {
+      "mrr10": 0.626095,
+      "target_ndcg10": 0.697544,
+      "hit1": 0.48,
+      "hit5": 0.84,
+      "hit10": 0.92,
+      "attempts": 1,
+      "adapter_ms": 558.1096,
+      "success": 1
+    }
+  },
+  "freeserp > keenable > youcom_keyless": {
+    "development": {
+      "mrr10": 0.179667,
+      "target_ndcg10": 0.202341,
+      "hit1": 0.16,
+      "hit5": 0.2,
+      "hit10": 0.28,
+      "attempts": 1,
+      "adapter_ms": 1174.534,
+      "success": 1
+    },
+    "holdout": {
+      "mrr10": 0.408,
+      "target_ndcg10": 0.436423,
+      "hit1": 0.32,
+      "hit5": 0.52,
+      "hit10": 0.52,
+      "attempts": 1,
+      "adapter_ms": 1542.6588,
+      "success": 1
+    }
+  },
+  "freeserp > youcom_keyless > keenable": {
+    "development": {
+      "mrr10": 0.179667,
+      "target_ndcg10": 0.202341,
+      "hit1": 0.16,
+      "hit5": 0.2,
+      "hit10": 0.28,
+      "attempts": 1,
+      "adapter_ms": 1174.534,
+      "success": 1
+    },
+    "holdout": {
+      "mrr10": 0.408,
+      "target_ndcg10": 0.436423,
+      "hit1": 0.32,
+      "hit5": 0.52,
+      "hit10": 0.52,
+      "attempts": 1,
+      "adapter_ms": 1542.6588,
+      "success": 1
+    }
+  },
+  "youcom_keyless > keenable > freeserp": {
+    "development": {
+      "mrr10": 0.863492,
+      "target_ndcg10": 0.895849,
+      "hit1": 0.8,
+      "hit5": 0.92,
+      "hit10": 1,
+      "attempts": 1.28,
+      "adapter_ms": 1144.066,
+      "success": 1
+    },
+    "holdout": {
+      "mrr10": 0.733048,
+      "target_ndcg10": 0.777835,
+      "hit1": 0.64,
+      "hit5": 0.84,
+      "hit10": 0.92,
+      "attempts": 1.28,
+      "adapter_ms": 1107.81,
+      "success": 1
+    }
+  },
+  "youcom_keyless > freeserp > keenable": {
+    "development": {
+      "mrr10": 0.648492,
+      "target_ndcg10": 0.68323,
+      "hit1": 0.6,
+      "hit5": 0.68,
+      "hit10": 0.8,
+      "attempts": 1.28,
+      "adapter_ms": 1321.2208,
+      "success": 1
+    },
+    "holdout": {
+      "mrr10": 0.692,
+      "target_ndcg10": 0.717511,
+      "hit1": 0.64,
+      "hit5": 0.76,
+      "hit10": 0.8,
+      "attempts": 1.28,
+      "adapter_ms": 1314.7788,
+      "success": 1
+    }
+  }
+}

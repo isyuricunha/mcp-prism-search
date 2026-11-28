@@ -84,6 +84,13 @@ preferred domains remain authoritative.
 One run per build: the observed throughput improvement is not a controlled
 multi-run estimate. This single-provider fixture does not measure RRF cost.
 
+**Concurrent identical keyless searches** (32 clients, cold cache,
+three 50 ms simulated providers): upstream requests fell from 96 to 3;
+all 32 requests succeeded and 31 reused the newly cached result.
+The selected-provider synthetic MCP load test completed 960/960 requests
+with peak cgroup memory of 70.34 MiB, 111.35 cold req/s and
+345.94 warm req/s.
+
 These are dated measurements, not performance guarantees. The relevance
 corpus measures known-source retrieval, not exhaustive semantic relevance.
 See [methodology and results](benchmarks/README.md) for per-provider scores,

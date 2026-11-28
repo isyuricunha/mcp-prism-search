@@ -17,25 +17,34 @@ def options():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--mode", choices=("single", "selected"), default="single")
     return parser.parse_args()
 
 
 FIXTURE = """
 import asyncio
+import os
 from dataclasses import replace
 from mcp_prism_search import providers
 from mcp_prism_search.models import SearchResult
 from mcp_prism_search.server import main
-async def fixture(request,count,timeout):
+async def fixture(request,count,timeout,engine="keenable"):
     await asyncio.sleep(.02)
     return [
         SearchResult(title=f"{request.query} reference {i}",
-                     url=f"https://example.org/docs/{i}",
+                     url=(f"https://example.org/docs/{i}" if i < 5 or engine == "keenable"
+                          else f"https://{engine}.example.org/docs/{i}"),
                      snippet="Deterministic evidence " * 20)
         for i in range(min(count, 10))
     ]
 providers.build_registry()
-providers.SPECS["keenable"]=replace(providers.SPECS["keenable"],search=fixture)
+names = ["keenable", "freeserp", "youcom_keyless"] if os.environ.get(
+    "PRISM_BENCH_MODE") == "selected" else ["keenable"]
+def bind(name):
+    async def adapter(request, count, timeout):
+        return await fixture(request, count, timeout, name)
+    return adapter
+providers.SPECS = {name: replace(providers.SPECS[name], search=bind(name)) for name in names}
 main()
 """
 
@@ -75,6 +84,8 @@ async def main(args):
         args=[
             "run",
             "--rm",
+            "--pull",
+            "never",
             "-i",
             "--name",
             name,
@@ -88,6 +99,8 @@ async def main(args):
             "MCP_CACHE_DIR=/tmp/prism-bench-cache",
             "-e",
             "MCP_AI_SEARCH_ENABLED=false",
+            "-e",
+            f"PRISM_BENCH_MODE={args.mode}",
             "-e",
             "MCP_LOG_LEVEL=WARNING",
             "--entrypoint",
@@ -112,7 +125,11 @@ async def main(args):
                         "web_search",
                         {
                             "query": f"fixture {concurrency} document {i}",
-                            "provider": "keenable",
+                            **(
+                                {"provider": "keenable"}
+                                if args.mode == "single"
+                                else {"providers": ["keenable", "freeserp", "youcom_keyless"]}
+                            ),
                             "max_results": 10,
                             "include_answers": False,
                         },
@@ -151,7 +168,13 @@ async def main(args):
         for concurrency in [1, 4, 8, 16]:
             await phase(concurrency, False)
             await phase(concurrency, True)
-    report = {"image": args.image, "fixture_delay_ms": 20, "idle": idle, "phases": phases}
+    report = {
+        "image": args.image,
+        "mode": args.mode,
+        "fixture_delay_ms": 20,
+        "idle": idle,
+        "phases": phases,
+    }
     with args.report.open("x", encoding="utf-8") as handle:
         handle.write(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report))

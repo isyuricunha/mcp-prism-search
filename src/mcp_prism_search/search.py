@@ -603,6 +603,11 @@ def _ordered_final_results(
     return apply_search_domain_controls(_dedupe_results(bounded), request)
 
 
+# Only active retrieval leaders are retained; loop identity prevents sharing
+# asyncio primitives between independently running event loops.
+_SEARCH_FLIGHTS: dict[tuple, asyncio.Event] = {}
+
+
 async def aggregated_search(
     query: str,
     *,
@@ -621,7 +626,7 @@ async def aggregated_search(
 ) -> SearchResponse:
     """Search one provider, a health-ordered fallback chain or a parallel selection."""
     from mcp_prism_search import runtime
-    from mcp_prism_search.providers import resolve_chain
+    from mcp_prism_search.providers import available_providers, resolve_chain
 
     defaults = effective_defaults()
     inherited_selection = provider is None and providers is None and kind == "general"
@@ -699,52 +704,91 @@ async def aggregated_search(
         _providers=sorted(chain) if mode in {"auto", "keyless"} else chain,
     )
     # A cached retrieval-only winner must not suppress the requested AI preference.
-    cached = None if enhanced else cache.get(payload, ttl_seconds=search_ttl_for_query(query))
-    if cached is not None:
-        try:
-            result = SearchResponse.model_validate(cached).model_copy(update={"cached": True})
-            # Only retrieval results from the current request and allowed chain
-            # are cacheable. Older or corrupted envelopes must not return AI.
-            if (result.query.strip() == request.query and result.results
-                    and not result.error and not result.answers and not result.answer_attempts
-                    and result.provider in {*chain, mode}
-                    and _ordered_final_results(result.results, request) == result.results):
-                runtime.record_cache(True)
-                return result
-            cache.delete(payload)
-        except ValueError:
-            cache.delete(payload)
+    ttl = search_ttl_for_query(query)
 
-    if not enhanced:
-        runtime.record_cache(False)
-    timeout = get_ddg_timeout_seconds()
-    count = provider_request_size(request)
-    actual = None
-    merged: list[SearchResult] = []
-    if parallel:
-        batches = await asyncio.gather(
-            *(run_one(name, count, timeout) for name in chain)
+    def read_cached():
+        cached = None if enhanced else cache.get(payload, ttl_seconds=ttl)
+        if cached is not None:
+            try:
+                result = SearchResponse.model_validate(cached).model_copy(update={"cached": True})
+                # Only retrieval results from the current request and allowed chain
+                # are cacheable. Older or corrupted envelopes must not return AI.
+                if (result.query.strip() == request.query and result.results
+                        and not result.error and not result.answers and not result.answer_attempts
+                        and result.provider in {*chain, mode}
+                        and _ordered_final_results(result.results, request) == result.results):
+                    runtime.record_cache(True)
+                    return result
+                cache.delete(payload)
+            except ValueError:
+                cache.delete(payload)
+
+        return None
+
+    cached_response = read_cached()
+    if cached_response is not None:
+        return cached_response
+
+    # Coalesce only free/keyless retrieval with a writable positive-TTL cache.
+    # Never share an AI answer or a potentially billable operation.
+    available = available_providers(kind)
+    flight_key = None
+    leader = None
+    if (not enhanced and cache.disabled_reason is None and cache.ttl_seconds > 0
+            and (ttl is None or ttl > 0)
+            and all(name in available and not available[name].needs for name in chain)):
+        key = (asyncio.get_running_loop(), cache.path_for(payload).absolute(),
+               cache.ttl_seconds, ttl, tuple(chain))
+        existing = _SEARCH_FLIGHTS.get(key)
+        if existing is not None:
+            await existing.wait()
+            # Administrative disablement may have changed while waiting.
+            if all(name in available_providers(kind) for name in chain):
+                cached_response = read_cached()
+                if cached_response is not None:
+                    return cached_response
+            # Failed, cancelled or uncacheable leaders do not poison followers.
+            # Each follower retains its original independent retrieval semantics.
+        else:
+            leader = asyncio.Event()
+            _SEARCH_FLIGHTS[key] = leader
+            flight_key = key
+
+    try:
+        if not enhanced:
+            runtime.record_cache(False)
+        timeout = get_ddg_timeout_seconds()
+        count = provider_request_size(request)
+        actual = None
+        merged: list[SearchResult] = []
+        if parallel:
+            batches = await asyncio.gather(
+                *(run_one(name, count, timeout) for name in chain)
+            )
+            attempts.extend(status for _, status in batches)
+            merged = reciprocal_rank_fusion([rows for rows, _ in batches])
+        else:
+            for name in chain:
+                rows, status = await run_one(name, count, timeout)
+                attempts.append(status)
+                if rows:
+                    merged = rows
+                    actual = name
+                    break
+
+        results = _ordered_final_results(merged, request)
+        answer_status = {n: answer_status[n] for n in chain if n in answer_status}
+        result = response(
+            results, None if results else "; ".join(attempts) or "No search results", actual
         )
-        attempts.extend(status for _, status in batches)
-        merged = reciprocal_rank_fusion([rows for rows, _ in batches])
-    else:
-        for name in chain:
-            rows, status = await run_one(name, count, timeout)
-            attempts.append(status)
-            if rows:
-                merged = rows
-                actual = name
-                break
-
-    results = _ordered_final_results(merged, request)
-    answer_status = {n: answer_status[n] for n in chain if n in answer_status}
-    result = response(
-        results, None if results else "; ".join(attempts) or "No search results", actual
-    )
-    # Do not cache degraded parallel responses or failures.
-    if enhanced and not attempted_enhanced:
-        runtime.record_cache(False)
-    if (not attempted_enhanced and results
-            and (not parallel or all(": ok (" in s for s in attempts))):
-        cache.set(payload, _cacheable_search_response(result))
-    return result
+        # Do not cache degraded parallel responses or failures.
+        if enhanced and not attempted_enhanced:
+            runtime.record_cache(False)
+        if (not attempted_enhanced and results
+                and (not parallel or all(": ok (" in s for s in attempts))):
+            cache.set(payload, _cacheable_search_response(result))
+        return result
+    finally:
+        if leader is not None and flight_key is not None:
+            _SEARCH_FLIGHTS.pop(flight_key, None)
+            leader.set()

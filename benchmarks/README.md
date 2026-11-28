@@ -120,3 +120,70 @@ No paid provider was contacted. No claim of broad search superiority is made.
 - [ir-measures retrieval evaluation measures](https://ir-measur.es/en/latest/measures.html).
 - [You.com MCP documentation and public allowance](https://you.com/docs/agents/mcp-server).
 - [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+
+
+## Concurrent identical searches and selected-provider load
+
+```bash
+.venv/bin/python benchmarks/duplicates.py
+.venv/bin/python benchmarks/routing.py --capture /tmp/prism-bench/capture.jsonl
+.venv/bin/python benchmarks/load.py --mode selected --image prism-benchmark:local \
+  --report /tmp/prism-bench/selected-load.json
+```
+
+The duplicate workload calls the real aggregator directly with three
+synthetic keyless providers, each delaying 50 ms. Every burst starts with
+a unique cold key. The baseline is commit `950aeff`; the candidate
+coordinates identical pending retrievals on the same loop and cache key.
+No external network or paid services are used.
+
+| Identical requests | Provider calls before | Provider calls after |
+|---:|---:|---:|
+| 4, single provider | 4 | 1 |
+| 16, single provider | 16 | 1 |
+| 32, single provider | 32 | 1 |
+| 4, three providers | 12 | 3 |
+| 16, three providers | 48 | 3 |
+| 32, three providers | 96 | 3 |
+
+Followers re-read the normal cache after the leader finishes. This does
+not cache failures or partial parallel responses, suppress cancellation, or
+share keyed/AI operations. Failed or cancelled leaders release followers
+to perform independent retrieval. This is process/event-loop local,
+not distributed locking. Requests without a positive TTL bypass it.
+
+The selected MCP load fixture has three independent adapters, each with
+10 results (five shared URLs), 20 ms delay, 2 CPU cores, 512 MiB memory
+and no network. At concurrency 1/4/8/16, all 960 calls succeeded and all
+480 expected warm calls hit cache. Maximum observed cold/warm throughput
+was 111.35/345.94 req/s; peak cgroup memory was 70.34 MiB.
+This is a new workload baseline, not a controlled comparison to the
+earlier single-provider load. The older candidate image was unavailable.
+Docker loads require a locally built image and never implicitly pull it.
+
+## Static fallback replay
+
+All six permutations of the three providers are evaluated on the same
+50-query capture. Adapter elapsed times include failed attempts and are
+summed until the first nonempty result. This is a static replay, not a
+live measurement of the adaptive health mechanism.
+
+| First choice, second choice | Mean MRR@10 | Mean adapter ms | Mean attempts |
+|---|---:|---:|---:|
+| Keenable, FreeSerp | 0.700 | 586 | 1.00 |
+| FreeSerp, Keenable | 0.294 | 1359 | 1.00 |
+| You.com, Keenable | 0.798 | 1126 | 1.28 |
+
+All three orders reached a nonempty result on all 50 cases. You.com first
+improves known-target ranking but consumes more requests and had 14 captured
+failures. Keenable returned 50/50 results. The production preference order
+is unchanged until broader relevance, quota and availability evidence exists.
+
+Aggregate results:
+- [Duplicate workload](results/duplicate-requests-v3.json)
+- [Selected MCP load](results/selected-load-v3.json)
+- [Static fallback replay](results/routing-v3.json)
+
+Synchronization reference: [Python asyncio synchronization primitives](https://docs.python.org/3/library/asyncio-sync.html).
+
+- [Selected MCP load, final-code repeat](results/selected-load-v3-repeat.json)

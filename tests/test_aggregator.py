@@ -429,3 +429,183 @@ def test_rrf_consensus_and_stable_ties(registry, tmp_path):
 def test_rrf_duplicate_within_provider_is_not_extra_vote():
     a, b = [result(f"https://{name}.test/") for name in "ab"]
     assert search.reciprocal_rank_fusion([[a, a, a, b], [b]]) == [b, a]
+
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+def test_identical_keyless_misses_coalesce(registry, tmp_path, parallel):
+    register, calls = registry
+    register("keenable", [result("https://a.test")])
+    register("freeserp", [result("https://b.test")])
+    cache = JsonFileCache(tmp_path, "search", 3600)
+    specs = providers.SPECS
+    from dataclasses import replace
+
+    for name, spec in list(specs.items()):
+        async def delayed(request, count, timeout, original=spec.search):
+            await asyncio.sleep(.02)
+            return await original(request, count, timeout)
+        specs[name] = replace(spec, search=delayed)
+
+    async def run():
+        kwargs = {"providers": list(specs)} if parallel else {"provider": "keenable"}
+        return await asyncio.gather(*(search.aggregated_search(
+            "same query", cache=cache, include_answers=False, **kwargs
+        ) for _ in range(16)))
+
+    rows = asyncio.run(run())
+    assert all(row.results == rows[0].results for row in rows)
+    assert sum(row.cached for row in rows) == 15
+    assert len(calls) == (2 if parallel else 1)
+    assert not search._SEARCH_FLIGHTS
+
+
+def test_cancelled_keyless_leader_releases_followers(registry, tmp_path):
+    register, calls = registry
+    register("keenable", [result("https://a.test")])
+    from dataclasses import replace
+    spec = providers.SPECS["keenable"]
+
+    async def run():
+        entered = asyncio.Event()
+        count = 0
+
+        async def delayed(request, size, timeout):
+            nonlocal count
+            count += 1
+            if count == 1:
+                entered.set()
+                await asyncio.Future()
+            return await spec.search(request, size, timeout)
+
+        providers.SPECS["keenable"] = replace(spec, search=delayed)
+        cache = JsonFileCache(tmp_path, "search", 3600)
+        kwargs = dict(provider="keenable", cache=cache, include_answers=False)
+        leader = asyncio.create_task(search.aggregated_search("same", **kwargs))
+        await entered.wait()
+        follower = asyncio.create_task(search.aggregated_search("same", **kwargs))
+        await asyncio.sleep(0)
+        leader.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await leader
+        response = await asyncio.wait_for(follower, 1)
+        assert response.results and not response.cached
+        assert count == 2
+
+    asyncio.run(run())
+    assert not search._SEARCH_FLIGHTS
+
+
+def test_coalescing_does_not_share_failed_leader(registry, tmp_path):
+    register, calls = registry
+    register("keenable", fail=True)
+    from dataclasses import replace
+    spec = providers.SPECS["keenable"]
+
+    async def delayed(request, count, timeout):
+        await asyncio.sleep(.01)
+        return await spec.search(request, count, timeout)
+
+    providers.SPECS["keenable"] = replace(spec, search=delayed)
+    cache = JsonFileCache(tmp_path, "search", 3600)
+
+    async def run():
+        return await asyncio.gather(*(search.aggregated_search(
+            "same", provider="keenable", cache=cache, include_answers=False
+        ) for _ in range(4)))
+
+    rows = asyncio.run(run())
+    assert len(calls) == 4
+    assert all(row.error and not row.cached for row in rows)
+    assert not search._SEARCH_FLIGHTS
+
+
+
+@pytest.mark.parametrize("paid,ttl", [(True, 3600), (False, 0)])
+def test_coalescing_excludes_keyed_and_zero_ttl(registry, tmp_path, monkeypatch, paid, ttl):
+    register, calls = registry
+    register("keenable", [result("https://a.test")])
+    from dataclasses import replace
+    spec = providers.SPECS["keenable"]
+
+    async def delayed(request, count, timeout):
+        await asyncio.sleep(.02)
+        return await spec.search(request, count, timeout)
+
+    monkeypatch.setenv("PRISM_TEST_PROVIDER_KEY", "fixture")
+    providers.SPECS["keenable"] = replace(
+        spec, search=delayed, needs="PRISM_TEST_PROVIDER_KEY" if paid else None,
+    )
+    cache = JsonFileCache(tmp_path, "search", ttl)
+
+    async def run():
+        return await asyncio.gather(*(search.aggregated_search(
+            "same", provider="keenable", cache=cache, include_answers=False
+        ) for _ in range(4)))
+
+    rows = asyncio.run(run())
+    assert len(calls) == 4
+    assert all(row.results and not row.cached for row in rows)
+    assert not search._SEARCH_FLIGHTS
+
+
+def test_cancelled_follower_does_not_cancel_keyless_leader(registry, tmp_path):
+    register, calls = registry
+    register("keenable", [result("https://a.test")])
+    from dataclasses import replace
+    spec = providers.SPECS["keenable"]
+
+    async def run():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def delayed(request, count, timeout):
+            entered.set()
+            await release.wait()
+            return await spec.search(request, count, timeout)
+
+        providers.SPECS["keenable"] = replace(spec, search=delayed)
+        cache = JsonFileCache(tmp_path, "search", 3600)
+        kwargs = dict(provider="keenable", cache=cache, include_answers=False)
+        leader = asyncio.create_task(search.aggregated_search("same", **kwargs))
+        await entered.wait()
+        follower = asyncio.create_task(search.aggregated_search("same", **kwargs))
+        await asyncio.sleep(0)
+        follower.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await follower
+        assert not leader.done()
+        release.set()
+        assert (await leader).results
+        assert (await search.aggregated_search("same", **kwargs)).cached
+
+    asyncio.run(run())
+    assert len(calls) == 1
+    assert not search._SEARCH_FLIGHTS
+
+
+def test_coalescing_respects_distinct_domain_controls(registry, tmp_path):
+    register, calls = registry
+    register("keenable", [result("https://a.test"), result("https://b.test")])
+    from dataclasses import replace
+    spec = providers.SPECS["keenable"]
+
+    async def delayed(request, count, timeout):
+        await asyncio.sleep(.02)
+        return await spec.search(request, count, timeout)
+
+    providers.SPECS["keenable"] = replace(spec, search=delayed)
+    cache = JsonFileCache(tmp_path, "search", 3600)
+
+    async def run():
+        return await asyncio.gather(*(search.aggregated_search(
+            "same", provider="keenable", cache=cache, include_answers=False,
+            allowed_domains=[name],
+        ) for name in ("a.test", "b.test")))
+
+    rows = asyncio.run(run())
+    assert len(calls) == 2
+    assert [[row.url for row in response.results] for response in rows] == [
+        ["https://a.test"], ["https://b.test"],
+    ]
+    assert not search._SEARCH_FLIGHTS

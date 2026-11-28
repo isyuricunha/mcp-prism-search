@@ -1,0 +1,136 @@
+{
+  "fixture_delay_ms": 50,
+  "baseline_commit": "950aeff",
+  "baseline": [
+    {
+      "concurrency": 1,
+      "parallel": false,
+      "upstream_calls": 1,
+      "success": 1,
+      "cache_hits": 0,
+      "elapsed_ms": 53.31
+    },
+    {
+      "concurrency": 1,
+      "parallel": true,
+      "upstream_calls": 3,
+      "success": 1,
+      "cache_hits": 0,
+      "elapsed_ms": 52.35
+    },
+    {
+      "concurrency": 4,
+      "parallel": false,
+      "upstream_calls": 4,
+      "success": 4,
+      "cache_hits": 0,
+      "elapsed_ms": 53.77
+    },
+    {
+      "concurrency": 4,
+      "parallel": true,
+      "upstream_calls": 12,
+      "success": 4,
+      "cache_hits": 0,
+      "elapsed_ms": 59.08
+    },
+    {
+      "concurrency": 16,
+      "parallel": false,
+      "upstream_calls": 16,
+      "success": 16,
+      "cache_hits": 0,
+      "elapsed_ms": 66.28
+    },
+    {
+      "concurrency": 16,
+      "parallel": true,
+      "upstream_calls": 48,
+      "success": 16,
+      "cache_hits": 0,
+      "elapsed_ms": 93.63
+    },
+    {
+      "concurrency": 32,
+      "parallel": false,
+      "upstream_calls": 32,
+      "success": 32,
+      "cache_hits": 0,
+      "elapsed_ms": 79.53
+    },
+    {
+      "concurrency": 32,
+      "parallel": true,
+      "upstream_calls": 96,
+      "success": 32,
+      "cache_hits": 0,
+      "elapsed_ms": 117.04
+    }
+  ],
+  "candidate": [
+    {
+      "concurrency": 1,
+      "parallel": false,
+      "upstream_calls": 1,
+      "success": 1,
+      "cache_hits": 0,
+      "elapsed_ms": 53.58
+    },
+    {
+      "concurrency": 1,
+      "parallel": true,
+      "upstream_calls": 3,
+      "success": 1,
+      "cache_hits": 0,
+      "elapsed_ms": 52.07
+    },
+    {
+      "concurrency": 4,
+      "parallel": false,
+      "upstream_calls": 1,
+      "success": 4,
+      "cache_hits": 3,
+      "elapsed_ms": 53.32
+    },
+    {
+      "concurrency": 4,
+      "parallel": true,
+      "upstream_calls": 3,
+      "success": 4,
+      "cache_hits": 3,
+      "elapsed_ms": 54.75
+    },
+    {
+      "concurrency": 16,
+      "parallel": false,
+      "upstream_calls": 1,
+      "success": 16,
+      "cache_hits": 15,
+      "elapsed_ms": 60.63
+    },
+    {
+      "concurrency": 16,
+      "parallel": true,
+      "upstream_calls": 3,
+      "success": 16,
+      "cache_hits": 15,
+      "elapsed_ms": 68.65
+    },
+    {
+      "concurrency": 32,
+      "parallel": false,
+      "upstream_calls": 1,
+      "success": 32,
+      "cache_hits": 31,
+      "elapsed_ms": 73.95
+    },
+    {
+      "concurrency": 32,
+      "parallel": true,
+      "upstream_calls": 3,
+      "success": 32,
+      "cache_hits": 31,
+      "elapsed_ms": 85.83
+    }
+  ]
+}

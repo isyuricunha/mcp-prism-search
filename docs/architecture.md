@@ -271,3 +271,15 @@ from the core registry and configuration model. See [dashboard design and operat
 ## Optional native synthesis
 
 The native synthesis adapter serves explicit MCP tools and the authenticated panel. An opt-in AI search policy permits provider-generated answers alongside retrieval. Combined endpoints avoid duplicate generation calls; separate APIs remain optional. Synthesis is bounded, not cached, and cannot bypass administrator authorization. No local LLM or automatic synthesis retry. See [native AI](native-ai.md).
+
+
+### Concurrent keyless cache misses
+
+Identical aggregated retrieval-only requests with a positive cache TTL
+coordinate on a process-local, event-loop-scoped in-flight key. The leader
+performs retrieval; followers wait and revalidate the cached response.
+The registry contains only active leaders and releases followers in a
+finally block, including cancellation. No shared background task or distributed
+lock is introduced. Keyed providers and eligible native AI operations bypass
+coordination. A missing cache entry after the wait permits independent
+retrieval; errors and degraded parallel responses are not newly cached.
