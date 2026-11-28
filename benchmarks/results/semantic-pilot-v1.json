@@ -1,0 +1,46 @@
+{
+  "queries_collected": 50,
+  "queries_judged": 10,
+  "documents_judged": 118,
+  "grades": {
+    "0": 21,
+    "1": 52,
+    "2": 45
+  },
+  "availability": {
+    "keenable": {
+      "attempts": 50,
+      "nonempty": 50
+    },
+    "freeserp": {
+      "attempts": 50,
+      "nonempty": 50
+    }
+  },
+  "scores": {
+    "keenable": {
+      "precision5": 0.98,
+      "pooled_recall5": 0.525006,
+      "mrr5": 1.0,
+      "ndcg5": 0.85264
+    },
+    "freeserp": {
+      "precision5": 0.7,
+      "pooled_recall5": 0.347228,
+      "mrr5": 0.925,
+      "ndcg5": 0.322333
+    },
+    "lexical": {
+      "precision5": 0.82,
+      "pooled_recall5": 0.423021,
+      "mrr5": 0.933333,
+      "ndcg5": 0.539168
+    },
+    "rrf": {
+      "precision5": 0.9,
+      "pooled_recall5": 0.477387,
+      "mrr5": 1.0,
+      "ndcg5": 0.651227
+    }
+  }
+}

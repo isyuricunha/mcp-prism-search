@@ -1,0 +1,402 @@
+[
+  {
+    "id": "s01",
+    "query": "Why does the Moon show the same face to Earth?",
+    "intent": "Explain tidal locking and matching rotation/orbital periods.",
+    "language": "en",
+    "category": "science",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s02",
+    "query": "Como funciona a fotossíntese nas plantas?",
+    "intent": "Explicar conversão de luz, água e dióxido de carbono em açúcares e oxigênio.",
+    "language": "pt",
+    "category": "science",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s03",
+    "query": "How does a heat pump warm a house in winter?",
+    "intent": "Explain heat transfer and refrigerant cycle in heating mode.",
+    "language": "en",
+    "category": "science",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s04",
+    "query": "Por que o céu é azul e o pôr do sol é vermelho?",
+    "intent": "Explicar espalhamento de Rayleigh e caminho óptico.",
+    "language": "pt",
+    "category": "science",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s05",
+    "query": "What is the difference between correlation and causation?",
+    "intent": "Distinguish association from causal inference with a useful example.",
+    "language": "en",
+    "category": "education",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s06",
+    "query": "Como calcular a área de um círculo?",
+    "intent": "Mostrar fórmula e significado do raio.",
+    "language": "pt",
+    "category": "education",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s07",
+    "query": "How did the printing press change literacy in Europe?",
+    "intent": "Discuss historical spread of books, cost and literacy.",
+    "language": "en",
+    "category": "history",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s08",
+    "query": "Quais foram as causas da Revolução Farroupilha?",
+    "intent": "Explicar contexto político e econômico do conflito no Brasil.",
+    "language": "pt",
+    "category": "history",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s09",
+    "query": "How do mangrove forests protect coastlines?",
+    "intent": "Explain roots, sediment, waves and coastal erosion.",
+    "language": "en",
+    "category": "environment",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s10",
+    "query": "Qual a diferença entre reciclagem e reutilização?",
+    "intent": "Distinguir as duas práticas com exemplos.",
+    "language": "pt",
+    "category": "environment",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s11",
+    "query": "Why does bread dough need time to rise?",
+    "intent": "Explain yeast fermentation and gas in dough.",
+    "language": "en",
+    "category": "food",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s12",
+    "query": "Como armazenar feijão cozido na geladeira com segurança?",
+    "intent": "Orientações de conservação, refrigeração e prazo com base em segurança alimentar.",
+    "language": "pt",
+    "category": "food",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s13",
+    "query": "How does public key encryption differ from symmetric encryption?",
+    "intent": "Compare keys and use cases with accurate explanation.",
+    "language": "en",
+    "category": "technology",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s14",
+    "query": "Qual a diferença entre memória RAM e armazenamento SSD?",
+    "intent": "Explicar função, persistência e velocidade.",
+    "language": "pt",
+    "category": "technology",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s15",
+    "query": "How does a bicycle derailleur change gears?",
+    "intent": "Explain chain position and shifting mechanism.",
+    "language": "en",
+    "category": "mechanics",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s16",
+    "query": "Como funciona o freio ABS de um carro?",
+    "intent": "Explicar prevenção de travamento, sensores e controle.",
+    "language": "pt",
+    "category": "mechanics",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s17",
+    "query": "What is the purpose of a central bank?",
+    "intent": "Explain monetary policy, financial stability and typical functions.",
+    "language": "en",
+    "category": "economics",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s18",
+    "query": "O que é inflação e como ela afeta o poder de compra?",
+    "intent": "Explicar aumento geral de preços e efeito sobre poder de compra.",
+    "language": "pt",
+    "category": "economics",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s19",
+    "query": "How do bees communicate the location of food?",
+    "intent": "Explain waggle dance direction and distance.",
+    "language": "en",
+    "category": "nature",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s20",
+    "query": "Por que as aves migratórias viajam longas distâncias?",
+    "intent": "Explicar motivos sazonais, alimento e reprodução.",
+    "language": "pt",
+    "category": "nature",
+    "judgment_pilot": true
+  },
+  {
+    "id": "s21",
+    "query": "What causes ocean tides?",
+    "intent": "Explain lunar and solar gravity and variation.",
+    "language": "en",
+    "category": "science",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s22",
+    "query": "Como funciona a destilação da água?",
+    "intent": "Explicar evaporação, condensação e separação.",
+    "language": "pt",
+    "category": "science",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s23",
+    "query": "How to read a topographic map contour lines?",
+    "intent": "Explain elevation and contour spacing.",
+    "language": "en",
+    "category": "education",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s24",
+    "query": "Como identificar o sujeito de uma oração em português?",
+    "intent": "Explicar sujeito e exemplos gramaticais.",
+    "language": "pt",
+    "category": "education",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s25",
+    "query": "Why did the Roman Republic become an empire?",
+    "intent": "Explain political, military and institutional transition.",
+    "language": "en",
+    "category": "history",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s26",
+    "query": "Qual a importância da Semana de Arte Moderna de 1922?",
+    "intent": "Explicar contexto e contribuição para modernismo brasileiro.",
+    "language": "pt",
+    "category": "history",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s27",
+    "query": "What is the difference between weather and climate?",
+    "intent": "Explain short-term conditions versus long-term patterns.",
+    "language": "en",
+    "category": "environment",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s28",
+    "query": "Como a compostagem transforma resíduos orgânicos em adubo?",
+    "intent": "Explicar decomposição e condições de compostagem.",
+    "language": "pt",
+    "category": "environment",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s29",
+    "query": "Why do onions make your eyes water?",
+    "intent": "Explain chemical irritant released when cutting onions.",
+    "language": "en",
+    "category": "food",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s30",
+    "query": "Como fazer arroz soltinho na panela?",
+    "intent": "Instruções práticas de preparo de arroz branco.",
+    "language": "pt",
+    "category": "food",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s31",
+    "query": "Why does DNS need caching?",
+    "intent": "Explain resolver caches, TTL and latency.",
+    "language": "en",
+    "category": "technology",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s32",
+    "query": "Como funciona a autenticação de dois fatores?",
+    "intent": "Explicar fatores de autenticação e proteção adicional.",
+    "language": "pt",
+    "category": "technology",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s33",
+    "query": "How does a four-stroke combustion engine work?",
+    "intent": "Explain intake, compression, power and exhaust strokes.",
+    "language": "en",
+    "category": "mechanics",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s34",
+    "query": "Qual a diferença entre motor elétrico e motor a combustão?",
+    "intent": "Comparar conversão de energia, funcionamento e características.",
+    "language": "pt",
+    "category": "mechanics",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s35",
+    "query": "What is compound interest and how is it calculated?",
+    "intent": "Explain interest on interest and formula or example.",
+    "language": "en",
+    "category": "economics",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s36",
+    "query": "Como funciona um orçamento doméstico mensal?",
+    "intent": "Explicar receitas, despesas, planejamento e reservas.",
+    "language": "pt",
+    "category": "economics",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s37",
+    "query": "Why do leaves change color in autumn?",
+    "intent": "Explain chlorophyll and seasonal pigment changes.",
+    "language": "en",
+    "category": "nature",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s38",
+    "query": "Qual a importância das abelhas para a polinização?",
+    "intent": "Explicar transporte de pólen e reprodução vegetal.",
+    "language": "pt",
+    "category": "nature",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s39",
+    "query": "What causes earthquakes at plate boundaries?",
+    "intent": "Explain stress, fault rupture and tectonic plates.",
+    "language": "en",
+    "category": "science",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s40",
+    "query": "Como funcionam as estações do ano?",
+    "intent": "Explicar inclinação do eixo terrestre e órbita.",
+    "language": "pt",
+    "category": "science",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s41",
+    "query": "What makes a primary historical source different from a secondary source?",
+    "intent": "Define both and give relevant examples.",
+    "language": "en",
+    "category": "education",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s42",
+    "query": "Como calcular porcentagem de desconto em um produto?",
+    "intent": "Mostrar fórmula ou exemplo de desconto percentual.",
+    "language": "pt",
+    "category": "education",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s43",
+    "query": "What was the Silk Road and why was it important?",
+    "intent": "Explain trade routes and exchange across Eurasia.",
+    "language": "en",
+    "category": "history",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s44",
+    "query": "Como surgiu o samba no Brasil?",
+    "intent": "Explicar raízes culturais e desenvolvimento histórico.",
+    "language": "pt",
+    "category": "history",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s45",
+    "query": "How do solar panels generate electricity?",
+    "intent": "Explain photovoltaic effect and basic conversion.",
+    "language": "en",
+    "category": "environment",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s46",
+    "query": "O que é uma bacia hidrográfica?",
+    "intent": "Explicar área de drenagem, rios e divisores de água.",
+    "language": "pt",
+    "category": "environment",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s47",
+    "query": "Why does milk curdle when acid is added?",
+    "intent": "Explain casein coagulation and acidity.",
+    "language": "en",
+    "category": "food",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s48",
+    "query": "Qual a diferença entre fermento biológico e químico?",
+    "intent": "Distinguir mecanismos e usos culinários.",
+    "language": "pt",
+    "category": "food",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s49",
+    "query": "What is the difference between a process and a thread in an operating system?",
+    "intent": "Explain address spaces, execution and resource sharing.",
+    "language": "en",
+    "category": "technology",
+    "judgment_pilot": false
+  },
+  {
+    "id": "s50",
+    "query": "Como funciona o controle de versão em Git?",
+    "intent": "Explicar commits, histórico, branches e repositórios.",
+    "language": "pt",
+    "category": "technology",
+    "judgment_pilot": false
+  }
+]

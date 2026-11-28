@@ -609,3 +609,38 @@ def test_coalescing_respects_distinct_domain_controls(registry, tmp_path):
         ["https://a.test"], ["https://b.test"],
     ]
     assert not search._SEARCH_FLIGHTS
+
+
+
+def test_coalesced_follower_revalidates_administrative_disablement(registry, tmp_path, monkeypatch):
+    register, calls = registry
+    register("keenable", [result("https://a.test")])
+    from dataclasses import replace
+    spec = providers.SPECS["keenable"]
+
+    async def run():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def delayed(request, count, timeout):
+            entered.set()
+            await release.wait()
+            return await spec.search(request, count, timeout)
+
+        providers.SPECS["keenable"] = replace(spec, search=delayed)
+        cache = JsonFileCache(tmp_path, "search", 3600)
+        kwargs = dict(provider="keenable", cache=cache, include_answers=False)
+        leader = asyncio.create_task(search.aggregated_search("same", **kwargs))
+        await entered.wait()
+        follower = asyncio.create_task(search.aggregated_search("same", **kwargs))
+        await asyncio.sleep(0)
+        monkeypatch.setenv("MCP_DISABLED_PROVIDERS", "keenable")
+        release.set()
+        assert (await leader).results  # in-flight leader may finish
+        response = await follower
+        assert response.error and not response.cached and not response.results
+        assert not (await search.aggregated_search("same", **kwargs)).results
+
+    asyncio.run(run())
+    assert len(calls) == 1
+    assert not search._SEARCH_FLIGHTS

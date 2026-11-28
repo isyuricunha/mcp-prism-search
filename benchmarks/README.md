@@ -187,3 +187,98 @@ Aggregate results:
 Synchronization reference: [Python asyncio synchronization primitives](https://docs.python.org/3/library/asyncio-sync.html).
 
 - [Selected MCP load, final-code repeat](results/selected-load-v3-repeat.json)
+
+
+## Semantic corpus and graded pilot
+
+`corpus-semantic-v1.json` adds 50 informational queries (25 English,
+25 Portuguese) to the 50 known-source queries. Topics cover science,
+education, history, environment, food, technology, mechanics, economics
+and nature. Each query has a predefined information need. Collection
+uses Keenable and FreeSerp only: 50 calls per engine, 100/100 nonempty.
+You.com was excluded to respect its shared daily free allowance.
+
+Ten predefined pilot cases are marked in the corpus. Their pool is the
+union of the first five documents from both provider rankings, the
+previous lexical scoring on the same deduplicated lists, and RRF.
+Canonical URLs are hashed; titles and up to 400 snippet characters are
+presented in hash order, without provider identities or rank positions.
+One assistant reviewer assigned 0 (irrelevant, misleading or no useful
+evidence), 1 (partial or relevant but incomplete), or 2 (directly
+informative) based on those excerpts. This is not human consensus, full-page
+verification, or a gold-standard judgment set. There are 118 judged
+documents (21/52/45 grades 0/1/2); the other 40 queries are unjudged.
+
+Precision@5 counts grades >=1 over five positions. Pooled recall@5
+divides the relevant returned documents by relevant judged documents
+in that query's pool, not all relevant web pages. MRR@5 uses the first
+grade >=1. nDCG@5 uses gain 2^grade-1 and ideal ordering of the judged
+pool. All four compared runs' top five documents are judged.
+The methodology follows pooled evaluation concepts; see
+[NIST's discussion of pooling bias](https://www.nist.gov/publications/bias-and-limits-pooling-large-collections).
+
+| Ranking | P@5 | Pooled R@5 | MRR@5 | nDCG@5 |
+|---|---:|---:|---:|---:|
+| Keenable | 0.980 | 0.525 | 1.000 | 0.853 |
+| FreeSerp | 0.700 | 0.347 | 0.925 | 0.322 |
+| Lexical | 0.820 | 0.423 | 0.933 | 0.539 |
+| RRF | 0.900 | 0.477 | 1.000 | 0.651 |
+
+RRF is better than the previous lexical fusion in this pilot, but Keenable
+alone scores higher. No routing or RRF weighting changes follow from the
+small sample. More independent, full-page relevance judgments are needed.
+The historical 50-query known-source and new semantic metrics are separate.
+
+```bash
+# New live capture and blind pool; explicit opt-in, 100 keyless requests.
+.venv/bin/python benchmarks/semantic.py --collect-keyless \
+  --capture /tmp/prism-bench/semantic.jsonl --pool /tmp/prism-bench/pool.json
+# Grade each document in the pool: {"query-id": {"document-hash": 0 or 1 or 2}}.
+# Score an exact capture using its matching judgments:
+.venv/bin/python benchmarks/semantic.py --capture /tmp/prism-bench/semantic.jsonl \
+  --qrels /tmp/prism-bench/qrels.json --report /tmp/prism-bench/semantic-report.json
+```
+
+The checked-in qrels are only for the original capture, which is retained
+locally (third-party snippets are not committed). New captures may drift
+and require new judgments even when URLs are unchanged. The evaluator
+rejects missing/extra judgments and incomplete/duplicate captures.
+
+- [Graded pilot results](results/semantic-pilot-v1.json)
+- [Pilot qrels](qrels-semantic-pilot-v1.json)
+
+## External MCP comparison
+
+Eight known-source queries, five returned documents per call, using an
+official FreeSerp remote MCP connection and a separate Prism stdio session
+with explicit provider selections. All 24 MCP calls returned nonempty
+results; the selected mode uses two upstreams rather than one. The
+sequence rotates per query; upstream edge caching and local-vs-remote
+transport still affect timing. Session startup is excluded from per-call
+latency. No paid calls and no external server code are installed.
+
+| System | MRR@5 | Hit@5 | Median ms | Max ms |
+|---|---:|---:|---:|---:|
+| FreeSerp MCP | 0.250 | 0.250 | 587.27 | 913.06 |
+| Prism / FreeSerp | 0.250 | 0.250 | 737.97 | 4179.09 |
+| Prism / Keenable + FreeSerp | 0.688 | 0.750 | 725.30 | 3865.20 |
+
+This is a small live pilot, not a statistically controlled speed comparison.
+FreeSerp's native MCP and REST share a backend. The earlier You.com direct
+MCP pilot remains in the historical report (eight queries, 8/8 nonempty,
+MRR 0.750). Its independently collected results are not a same-response
+comparison to this experiment.
+
+```bash
+.venv/bin/python benchmarks/external.py --live-keyless \
+  --report /tmp/prism-bench/external.json
+```
+
+- [External MCP pilot](results/external-mcp-v1.json)
+- [Official FreeSerp API and MCP contract](https://freeserp.ai/docs.php)
+- [Official You.com MCP contract](https://you.com/docs/agents/mcp-server)
+
+Other projects, such as [DuckDuckGo MCP](https://github.com/nickclyde/duckduckgo-mcp-server)
+and [SearXNG MCP](https://github.com/ihor-sokoliuk/mcp-searxng), were reviewed
+for their documented interfaces, not benchmarked. No claim about their
+relative performance or quality is made.

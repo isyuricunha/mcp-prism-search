@@ -54,8 +54,8 @@ flowchart LR
 ## Benchmarks
 
 Quality and performance are measured independently. The reproducible
-[benchmark suite](benchmarks/README.md) includes a fixed 50-query corpus
-(English and Portuguese), captured-response replay, rank comparisons and
+[benchmark suite](benchmarks/README.md) includes 100 fixed queries in English and Portuguese (50 known-source
+and 50 semantic), captured-response replay, rank comparisons and
 network-isolated MCP load tests.
 
 **2026-11-27 — relevance evaluation (150 live keyless provider requests):**
@@ -90,6 +90,32 @@ all 32 requests succeeded and 31 reused the newly cached result.
 The selected-provider synthetic MCP load test completed 960/960 requests
 with peak cgroup memory of 70.34 MiB, 111.35 cold req/s and
 345.94 warm req/s.
+
+**Semantic relevance pilot** (10 preselected information-seeking queries,
+118 graded pooled documents, title/snippet evidence, one reviewer):
+
+| Ranking | Precision@5 | Pooled recall@5 | nDCG@5 |
+|---|---:|---:|---:|
+| Keenable | 0.98 | 0.525 | 0.853 |
+| FreeSerp | 0.70 | 0.347 | 0.322 |
+| Previous lexical fusion | 0.82 | 0.423 | 0.539 |
+| RRF (two providers) | 0.90 | 0.477 | 0.651 |
+
+The 50 additional queries were collected from both keyless providers
+(100/100 nonempty responses); only 10 are graded so far. This pilot is not
+an exhaustive relevance evaluation. Recall is limited to the judged pool.
+
+**External MCP pilot** (eight known-source queries, top five results):
+
+| System | MRR@5 | Target found | Nonempty |
+|---|---:|---:|---:|
+| Official FreeSerp MCP | 0.250 | 2/8 | 8/8 |
+| Prism using FreeSerp | 0.250 | 2/8 | 8/8 |
+| Prism, Keenable + FreeSerp | 0.688 | 6/8 | 8/8 |
+
+The external service and Prism's FreeSerp adapter share the same upstream;
+the two-provider comparison tests aggregation, not independent search-index
+quality. No general superiority claim follows from this small pilot.
 
 These are dated measurements, not performance guarantees. The relevance
 corpus measures known-source retrieval, not exhaustive semantic relevance.
